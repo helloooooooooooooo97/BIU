@@ -99,8 +99,10 @@ import {
   COMMENTS_COLLECTION_PATH,
   DATA_COLLECTION_PATH,
   EDITOR_BLOCKS_COLLECTION_PATH,
+  MCP_COLLECTION_PATH,
   PAGES_COLLECTION_PATH,
   PLUGINS_COLLECTION_PATH,
+  SKILLS_COLLECTION_PATH,
   TAGS_COLLECTION_PATH,
   TRASH_COLLECTION_PATH,
   VIEWS_COLLECTION_PATH,
@@ -907,13 +909,21 @@ export class DatabaseService extends Service implements Database {
     q: string,
     overlay = true,
   ) {
-    const key = `${spec.path}\t${query.trash ? 1 : 0}\t${q}\t${overlay ? 1 : 0}\t${JSON.stringify(query.filter ?? {})}\t${(query.ids ?? []).join(',')}`
+    const actorSuffix =
+      spec.path === SKILLS_COLLECTION_PATH || spec.path === MCP_COLLECTION_PATH
+        ? `\t${resolveScopedWorkspaceId(this.ctx)}\t${currentAccountId()}`
+        : ''
+    const key = `${spec.path}\t${query.trash ? 1 : 0}\t${q}\t${overlay ? 1 : 0}\t${JSON.stringify(query.filter ?? {})}\t${(query.ids ?? []).join(',')}${actorSuffix}`
     return shareInflight(this.inflightMatches, key, () => this.matchCollectionRowsNow(spec, query, filter, q, overlay))
   }
 
   private scanCollectionRows(spec: CollectionSpec, query: CollectionListQuery, overlay: boolean) {
     const load = specListQuery(query)
-    const key = `${spec.path}\t${load.trash ? 1 : 0}\t${load.q ?? ''}\t${overlay ? 1 : 0}\t${JSON.stringify(load.filter ?? {})}\t${(load.ids ?? []).join(',')}`
+    const actorSuffix =
+      spec.path === SKILLS_COLLECTION_PATH || spec.path === MCP_COLLECTION_PATH
+        ? `\t${resolveScopedWorkspaceId(this.ctx)}\t${currentAccountId()}`
+        : ''
+    const key = `${spec.path}\t${load.trash ? 1 : 0}\t${load.q ?? ''}\t${overlay ? 1 : 0}\t${JSON.stringify(load.filter ?? {})}\t${(load.ids ?? []).join(',')}${actorSuffix}`
     return shareInflight(this.inflightScans, key, () => this.scanCollectionRowsNow(spec, load, overlay))
   }
 
@@ -1915,7 +1925,12 @@ export class DatabaseService extends Service implements Database {
     const raw = parseContent(content)
     const current = await spec.get(parts[1]!)
     if (!current) throw new Error(`unknown record: ${spec.path}/${parts[1]}`)
-    this.assertLiveRecord(spec, current.id, 'resource:update', current)
+    const rawKeys = Object.keys(raw)
+    const personalEnableOnly =
+      (spec.path === SKILLS_COLLECTION_PATH || spec.path === MCP_COLLECTION_PATH) &&
+      rawKeys.length > 0 &&
+      rawKeys.every((key) => key === 'enabled')
+    this.assertLiveRecord(spec, current.id, personalEnableOnly ? 'resource:read' : 'resource:update', current)
     const bannerPatch = takeBannerPatch(raw)
     if ('tag' in raw && schema.fields.tag) {
       if (!schema.fields.tag.writable || schema.fields.tag.computed) throw new Error(`field not writable: tag`)
@@ -1989,7 +2004,8 @@ export class DatabaseService extends Service implements Database {
     if (moving && resource) authorization!.move(actor!, resource, parent)
     const viewOnly = !bannerPatch.present && Object.keys(patch).length > 0 &&
       Object.keys(patch).every((key) => ['views', 'propViews', 'layouts'].includes(key))
-    if (!viewOnly) await this.stampActor(spec.path, record.id)
+    const skipSharedMeta = viewOnly || personalEnableOnly
+    if (!skipSharedMeta) await this.stampActor(spec.path, record.id)
     if ('emoji' in patch) {
       const meta = this.tags.writeRecordMeta(spec.path, record.id, {
         emoji: String(patch.emoji ?? ''),
@@ -2006,8 +2022,8 @@ export class DatabaseService extends Service implements Database {
       this.tags.writeRecordBanner(spec.path, record.id, bannerPatch.value)
       this.notifyContent(`${spec.path}/${record.id}`)
     }
-    if (!viewOnly) this.indexTagRecord(spec, this.decorateRecord(spec, record))
-    this.refreshContentRefs(spec, this.withBanner(spec, record), !viewOnly)
+    if (!skipSharedMeta) this.indexTagRecord(spec, this.decorateRecord(spec, record))
+    this.refreshContentRefs(spec, this.withBanner(spec, record), !skipSharedMeta)
     if (viewOnly) this.notifyViewCatalog(`${spec.path}/${record.id}`)
     else this.bump(spec.path)
     const beforeSnap: Record<string, unknown> = {}
@@ -2017,7 +2033,7 @@ export class DatabaseService extends Service implements Database {
       afterSnap[key] = record[key] ?? null
     }
     const title = String(record.title ?? record.name ?? record.id).trim() || record.id
-    if (!viewOnly && Object.keys(patch).length) {
+    if (!skipSharedMeta && Object.keys(patch).length) {
       await this.ctx.get('contentTurns')?.recordUpdate(`${spec.path}/${record.id}`, title, beforeSnap, afterSnap)
       this.logMemberActivity({
         action: 'record.update',

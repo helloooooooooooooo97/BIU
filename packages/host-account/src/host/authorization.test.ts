@@ -358,26 +358,11 @@ test('isLockedMemberView fails closed when no lock checker is registered', () =>
   )
 })
 
-test('mcp and notices are strictly personal-only and reject all sharing operations', () => {
+test('notices stays personal-only while mcp supports standard 3-state sharing', () => {
   const { store, auth, workspace, ada, bob, actor } = setup()
   const asAda = <T>(op: () => T) => runWithAccount(ada.id, () => runWithRequestWorkspace(workspace.id, op))
 
-  for (const col of ['/mcp'] as const) {
-    const rec = { type: 'record' as const, workspaceId: workspace.id, collection: col, recordId: 'r1' }
-    auth.attach(actor(ada.id), rec, { accessMode: 'private' })
-
-    assert.equal(auth.authorize(actor(ada.id), 'resource:read', rec).allowed, true)
-    assert.equal(auth.authorize(actor(ada.id), 'resource:update', rec).allowed, true)
-    assert.equal(auth.authorize(actor(ada.id), 'resource:share', rec).allowed, false)
-    assert.equal(auth.authorize(actor(ada.id), 'resource:manage-permissions', rec).allowed, false)
-    assert.equal(auth.authorize(actor(bob.id), 'resource:read', rec).allowed, false)
-
-    // Unattached records must fail closed without throwing SQLite errors
-    const unattached = { type: 'record' as const, workspaceId: workspace.id, collection: col, recordId: 'missing-policy' }
-    assert.equal(auth.authorize(actor(ada.id), 'resource:read', unattached).allowed, false)
-  }
-
-  // /notices rows are tenant-scoped by NoticesStore without resource_policies rows
+  // /notices stays strictly personal-only (tenant-scoped without resource_policies rows)
   const ownNotice = {
     type: 'record' as const,
     workspaceId: workspace.id,
@@ -388,27 +373,37 @@ test('mcp and notices are strictly personal-only and reject all sharing operatio
   assert.equal(auth.authorize(actor(ada.id), 'resource:read', ownNotice).allowed, true)
   assert.equal(auth.authorize(actor(ada.id), 'resource:update', ownNotice).allowed, true)
   assert.equal(auth.authorize(actor(ada.id), 'resource:share', ownNotice).allowed, false)
+  assert.equal(auth.authorize(actor(ada.id), 'resource:manage-permissions', ownNotice).allowed, false)
   assert.equal(auth.authorize(actor(bob.id), 'resource:read', ownNotice).allowed, false)
+  assert.throws(() => asAda(() => store.shareWithEmail(ada.id, '/notices', 'n1', bob.email, 'viewer')), /不支持分享/)
+  assert.throws(() => asAda(() => store.setRecordAccessMode(ada.id, '/notices', 'n1', 'members', 'viewer')), /不支持分享/)
+  assert.throws(() => asAda(() => store.createGuestInvite(ada.id, '/notices', 'n1', 'viewer')), /不支持分享/)
+  assert.throws(
+    () =>
+      asAda(() =>
+        store.batchUpdateRecordPermissions(ada.id, {
+          collection: '/notices',
+          recordIds: ['n1'],
+          mode: 'grant',
+          subjects: [{ subjectType: 'account', subjectId: bob.id }],
+          role: 'viewer',
+        }),
+      ),
+    /不支持分享/,
+  )
 
-  for (const col of ['/mcp'] as const) {
+  // /mcp supports standard 3-state sharing (private -> shared -> workspace)
+  const mcpRec = { type: 'record' as const, workspaceId: workspace.id, collection: '/mcp', recordId: 'srv-1' }
+  auth.attach(actor(ada.id), mcpRec, { accessMode: 'private' })
+  assert.equal(auth.authorize(actor(ada.id), 'resource:share', mcpRec).allowed, true)
+  assert.equal(auth.authorize(actor(bob.id), 'resource:read', mcpRec).allowed, false)
 
-    assert.throws(() => asAda(() => store.shareWithEmail(ada.id, col, 'r1', bob.email, 'viewer')), /不支持分享/)
-    assert.throws(() => asAda(() => store.setRecordAccessMode(ada.id, col, 'r1', 'members', 'viewer')), /不支持分享/)
-    assert.throws(() => asAda(() => store.createGuestInvite(ada.id, col, 'r1', 'viewer')), /不支持分享/)
-    assert.throws(
-      () =>
-        asAda(() =>
-          store.batchUpdateRecordPermissions(ada.id, {
-            collection: col,
-            recordIds: ['r1'],
-            mode: 'grant',
-            subjects: [{ subjectType: 'account', subjectId: bob.id }],
-            role: 'viewer',
-          }),
-        ),
-      /不支持分享/,
-    )
-  }
+  asAda(() => store.shareWithEmail(ada.id, '/mcp', 'srv-1', bob.email, 'viewer', 'internal'))
+  assert.equal(auth.authorize(actor(bob.id), 'resource:read', mcpRec).allowed, true)
+  assert.equal(auth.authorize(actor(bob.id), 'resource:update', mcpRec).allowed, false)
+
+  asAda(() => store.setRecordAccessMode(ada.id, '/mcp', 'srv-1', 'members', 'editor'))
+  assert.equal(auth.authorize(actor(bob.id), 'resource:update', mcpRec).allowed, true)
 })
 
 test('agents clamp non-owner sharing to read-only viewer role', () => {

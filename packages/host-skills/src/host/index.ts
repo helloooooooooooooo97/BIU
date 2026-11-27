@@ -1,8 +1,8 @@
 import type { CollectionUpdateOptions } from '@biu/type-file-system'
-import { existsSync, mkdirSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { Service, type Context } from 'cordis'
-import { currentRequestWorkspaceId } from '@biu/host-plugin-loader/data-dir'
+import { currentAccountId, currentRequestWorkspaceId } from '@biu/host-plugin-loader/data-dir'
 import { getRuntimePolicy } from '@biu/host-plugin-loader/runtime'
 import { skillsCollection } from './collection.ts'
 import {
@@ -22,9 +22,14 @@ export type SkillSummary = {
   source: string
 }
 
+function sanitizeAccountSegment(id: string): string {
+  return id.trim().replace(/[^a-zA-Z0-9_-]/g, '')
+}
+
 export class SkillsService extends Service {
   private defaultStore: SkillsStore
   private workspaceStores = new Map<string, SkillsStore>()
+  private userEnabledCache = new Map<string, Map<string, boolean>>()
 
   constructor(ctx: Context) {
     super(ctx, 'skills')
@@ -32,11 +37,28 @@ export class SkillsService extends Service {
     ctx.effect(() => {
       const offDeleted = ctx.on('workspace/deleted', ({ workspaceId }) => {
         const safe = String(workspaceId ?? '').trim().replace(/[^a-zA-Z0-9_-]/g, '')
-        if (safe) this.workspaceStores.delete(safe)
+        if (safe) {
+          this.workspaceStores.delete(safe)
+          for (const key of [...this.userEnabledCache.keys()]) {
+            if (key.startsWith(`${safe}\0`)) this.userEnabledCache.delete(key)
+          }
+        }
+      })
+      const offRevoked = ctx.on('tenant/revoked', ({ accountId, workspaceId }) => {
+        const safeAcc = sanitizeAccountSegment(String(accountId ?? ''))
+        const safeWs = workspaceId ? sanitizeSkillWorkspaceId(String(workspaceId)) : ''
+        for (const key of [...this.userEnabledCache.keys()]) {
+          const [ws, acc] = key.split('\0')
+          if (safeAcc && acc !== safeAcc) continue
+          if (safeWs && ws !== safeWs) continue
+          this.userEnabledCache.delete(key)
+        }
       })
       return () => {
         offDeleted()
+        offRevoked()
         this.workspaceStores.clear()
+        this.userEnabledCache.clear()
       }
     }, 'skills.workspace-cleanup')
     ctx.inject(['systemPrompt'], (inner) => {
@@ -100,8 +122,88 @@ export class SkillsService extends Service {
     }).allowed
   }
 
+  private userEnabledScope(): {
+    wsId: string
+    accountId: string
+    rawWorkspaceId: string
+    rawAccountId: string
+  } | null {
+    if (getRuntimePolicy().authzMode !== 'rbac') return null
+    const rawWorkspaceId = currentRequestWorkspaceId().trim()
+    const rawAccountId = currentAccountId().trim()
+    const wsId = rawWorkspaceId ? sanitizeSkillWorkspaceId(rawWorkspaceId) : ''
+    const accountId = rawAccountId ? sanitizeAccountSegment(rawAccountId) : ''
+    if (!wsId || !accountId) return null
+    return { wsId, accountId, rawWorkspaceId, rawAccountId }
+  }
+
+  private userEnabledFilePath(wsId: string, accountId: string): string {
+    return join(workspaceSkillRoot(wsId), '.user-enabled', `${accountId}.json`)
+  }
+
+  private loadUserEnabledMap(wsId: string, accountId: string): Map<string, boolean> {
+    const key = `${wsId}\0${accountId}`
+    const hit = this.userEnabledCache.get(key)
+    if (hit) return hit
+    const map = new Map<string, boolean>()
+    const filePath = this.userEnabledFilePath(wsId, accountId)
+    try {
+      if (existsSync(filePath)) {
+        const raw = JSON.parse(readFileSync(filePath, 'utf8')) as Record<string, unknown>
+        if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
+          for (const [k, v] of Object.entries(raw)) {
+            if (typeof v === 'boolean') map.set(k, v)
+          }
+        }
+      }
+    } catch {
+      /* 忽略损坏或尚未初始化的个人开关文件 */
+    }
+    this.userEnabledCache.set(key, map)
+    return map
+  }
+
+  private writeUserEnabled(wsId: string, accountId: string, skillId: string, enabled: boolean) {
+    const map = this.loadUserEnabledMap(wsId, accountId)
+    map.set(skillId, enabled)
+    const dir = join(workspaceSkillRoot(wsId), '.user-enabled')
+    mkdirSync(dir, { recursive: true })
+    writeFileSync(this.userEnabledFilePath(wsId, accountId), JSON.stringify(Object.fromEntries(map), null, 2), 'utf8')
+  }
+
+  private isSkillOwner(id: string, workspaceId: string, accountId: string): boolean {
+    const account = this.ctx.get('account' as never) as
+      | {
+          store?: {
+            collectionRecordOwners?: (ws: string, collection: string) => Map<string, string>
+          }
+        }
+      | undefined
+    const owners = account?.store?.collectionRecordOwners?.(workspaceId, '/skills')
+    if (!owners) return true
+    const ownerId = owners.get(id)
+    if (!ownerId) return false
+    return ownerId === accountId
+  }
+
+  private resolveEnabled(skill: SkillRecord): boolean {
+    const scope = this.userEnabledScope()
+    if (!scope) return skill.enabled
+    const map = this.loadUserEnabledMap(scope.wsId, scope.accountId)
+    if (map.has(skill.id)) return map.get(skill.id)!
+    if (this.isSkillOwner(skill.id, scope.rawWorkspaceId, scope.rawAccountId)) {
+      return skill.enabled
+    }
+    return false
+  }
+
+  private withAccountEnabled(skill: SkillRecord): SkillRecord {
+    const enabled = this.resolveEnabled(skill)
+    return enabled === skill.enabled ? skill : { ...skill, enabled }
+  }
+
   list(): SkillRecord[] {
-    return this.activeStore()?.list() ?? []
+    return (this.activeStore()?.list() ?? []).map((skill) => this.withAccountEnabled(skill))
   }
 
   listEnabled() {
@@ -118,7 +220,8 @@ export class SkillsService extends Service {
   }
 
   recordOrNull(id: string) {
-    return this.activeStore()?.get(id) ?? null
+    const skill = this.activeStore()?.get(id) ?? null
+    return skill ? this.withAccountEnabled(skill) : null
   }
 
   /** 只读派生：这条技能目录里已落盘的文件（相对路径，已排序）。 */
@@ -139,7 +242,7 @@ export class SkillsService extends Service {
   record(id: string) {
     const skill = this.requireStore().get(id)
     if (!skill) throw new Error(`unknown skill: ${id}`)
-    return skill
+    return this.withAccountEnabled(skill)
   }
 
   read(id: string) {
@@ -157,14 +260,18 @@ export class SkillsService extends Service {
 
   create(input: Parameters<SkillsStore['create']>[0]) {
     const created = this.requireStore().create(input)
+    const scope = this.userEnabledScope()
+    if (scope) this.writeUserEnabled(scope.wsId, scope.accountId, created.id, created.enabled)
     this.changed()
-    return created
+    return this.withAccountEnabled(created)
   }
 
   import(input: SkillImportInput) {
     const created = this.requireStore().import(input)
+    const scope = this.userEnabledScope()
+    if (scope) this.writeUserEnabled(scope.wsId, scope.accountId, created.id, created.enabled)
     this.changed()
-    return created
+    return this.withAccountEnabled(created)
   }
 
   migrateLegacyDirectories() {
@@ -192,18 +299,48 @@ export class SkillsService extends Service {
   }
 
   patch(id: string, patch: { name?: unknown; description?: unknown; source?: unknown; enabled?: unknown; notes?: unknown; tags?: unknown; emoji?: unknown }, options?: CollectionUpdateOptions) {
+    const scope = this.userEnabledScope()
+    if (scope && patch.enabled !== undefined) {
+      const { enabled, ...sharedPatch } = patch
+      const existing = this.requireStore().get(id)
+      if (!existing) throw new Error(`unknown skill: ${id}`)
+      this.writeUserEnabled(scope.wsId, scope.accountId, id, enabled !== false)
+      const next = Object.keys(sharedPatch).length
+        ? this.requireStore().patch(id, sharedPatch, options)
+        : existing
+      this.changed()
+      return this.withAccountEnabled(next)
+    }
     const next = this.requireStore().patch(id, patch, options)
     this.changed()
-    return next
+    return this.withAccountEnabled(next)
   }
 
   setEnabled(id: string, enabled: boolean) {
+    const scope = this.userEnabledScope()
+    if (scope) {
+      if (!this.canReadSkill(id)) throw new Error(`permission denied: skill ${id}`)
+      const existing = this.requireStore().get(id)
+      if (!existing) throw new Error(`unknown skill: ${id}`)
+      this.writeUserEnabled(scope.wsId, scope.accountId, id, enabled)
+      this.changed()
+      return this.withAccountEnabled(existing)
+    }
     return this.patch(id, { enabled })
   }
 
   remove(id: string) {
     const removed = this.requireStore().remove(id)
-    if (removed) this.changed()
+    if (removed) {
+      const ws = currentRequestWorkspaceId().trim()
+      const safeWs = ws ? sanitizeSkillWorkspaceId(ws) : ''
+      if (safeWs) {
+        for (const [key, map] of this.userEnabledCache) {
+          if (key.startsWith(`${safeWs}\0`)) map.delete(id)
+        }
+      }
+      this.changed()
+    }
     return removed
   }
 

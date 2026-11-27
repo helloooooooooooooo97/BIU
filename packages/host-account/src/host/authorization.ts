@@ -131,7 +131,7 @@ const POLICY_SELECT = `workspace_id, collection, record_id, owner_account_id, ac
 
 export const ROLE_RANK: Record<ResourceRole, number> = { viewer: 1, commenter: 2, editor: 3, manager: 4, owner: 5 }
 
-const PERSONAL_ONLY_COLLECTIONS = new Set(['/notices', '/mcp'])
+const PERSONAL_ONLY_COLLECTIONS = new Set(['/notices'])
 const READ_ONLY_SHARE_COLLECTIONS = new Set(['/agents'])
 
 export const ROLE_CAPABILITIES: Record<ResourceRole, ReadonlySet<Capability>> = {
