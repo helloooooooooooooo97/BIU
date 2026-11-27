@@ -2886,6 +2886,25 @@ test('index rows follow the user records each person can read and omit share', a
   assert.equal(bobStamps.items.length, 0)
   const adaStamps = await runWithAccount(ada.id, () => db.list('/tags', { tagId: hiddenId }))
   assert.equal(adaStamps.items.length, 1)
+
+  // Tags are first-class shareable public data: they expose shareScope/shareRole and can be shared directly even before stamping
+  const tagStat = await runWithAccount(ada.id, () => db.stat('/tags'))
+  if (tagStat.kind === 'collection') {
+    assert.ok(tagStat.schema.fields.shareScope)
+    assert.ok(tagStat.schema.fields.shareRole)
+  }
+  const directWorkspaceTag = await runWithAccount(ada.id, () =>
+    db.create('/tags', [{ title: '直接空间标签' }], { scope: 'workspace' }),
+  )
+  const directWorkspaceTagId = String(directWorkspaceTag.items[0]!.value.id)
+  const bobTagsAfterDirect = await runWithAccount(bob.id, () => db.list('/tags'))
+  assert.deepEqual(bobTagsAfterDirect.items.map((row) => row.id).sort(), [shownId, directWorkspaceTagId].sort())
+  assert.equal(bobTagsAfterDirect.items.find((row) => row.id === directWorkspaceTagId)?.shareScope, '空间')
+  // Unshared tag stamped on a visible page stays read-only for Bob (cannot update)
+  await assert.rejects(
+    () => runWithAccount(bob.id, () => db.update(`/tags/${shownId}`, { title: '试图篡改' })),
+    /unknown record|permission denied/i,
+  )
 })
 
 test('comments follow target document permissions across viewer, commenter, editor, and owner roles', async () => {
