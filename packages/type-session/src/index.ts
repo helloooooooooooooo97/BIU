@@ -400,12 +400,12 @@ export function lastSpokenAt(events: SessionEvent[]): number {
   return 0
 }
 
-export function deriveEventTitle(events: SessionEvent[], fallbackId: string): string {
+function deriveEventTitle(events: SessionEvent[]): string {
   for (let i = events.length - 1; i >= 0; i -= 1) {
     const event = events[i]
     if (event?.type === 'user/message' && event.text.trim()) return event.text.slice(0, 48)
   }
-  return fallbackId.slice(0, 8)
+  return ''
 }
 
 export function sessionDisplayTitle(record: {
@@ -416,7 +416,7 @@ export function sessionDisplayTitle(record: {
 }): string {
   const named = record.config?.title?.trim()
   if (named) return named.slice(0, 80)
-  const fromChat = deriveEventTitle(record.events, '')
+  const fromChat = deriveEventTitle(record.events)
   if (fromChat) return fromChat
   if (record.mascot) return nameFromSessionMascot(record.mascot)
   return record.id.slice(0, 8)
