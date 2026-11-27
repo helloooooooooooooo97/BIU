@@ -3,7 +3,6 @@ import {
   getCachedMarkdownHtml,
   parseMarkdownLive,
   parseMarkdownSync,
-  renderMarkdownHtml,
   resetMarkdownRenderForTests,
   splitStreamingMarkdown,
   stabilizeStreamingMarkdown,
@@ -26,14 +25,6 @@ describe('markdown-render', () => {
     const html = parseMarkdownSync('hi<script>alert(1)</script>')
     expect(html).not.toContain('<script')
     expect(html).toContain('hi')
-  })
-
-  it('renderMarkdownHtml reuses cache without reparse', async () => {
-    const text = 'hello **world**'
-    const first = await renderMarkdownHtml(text)
-    const second = await renderMarkdownHtml(text)
-    expect(second).toBe(first)
-    expect(second).toContain('<strong>world</strong>')
   })
 
   it('second ensure is cache hit (virtual list remount path)', () => {

@@ -9,13 +9,6 @@ import type {
   ThinkingMode,
 } from '../shared/model-catalog.ts'
 
-const pillCls = (on: boolean) =>
-  `rounded-md border px-2 py-[3px] text-[length:var(--biu-font-size-2)] leading-none transition-colors ${
-    on
-      ? 'border-(--biu-color-text) bg-(--biu-color-text-soft) text-(--biu-color-text)'
-      : 'border-(--biu-color-border) text-(--biu-color-text-subtle) hover:bg-(--biu-color-bg-hover) hover:text-(--biu-color-text)'
-  }`
-
 export type ModelModePatch = Partial<ModelModeValues>
 
 function knobs(caps: ModelCapabilities): ModelKnob[] {
@@ -34,70 +27,6 @@ function patchKnob(knob: ModelKnob, value: string): ModelModePatch {
   if (knob.id === 'speed') return { speed: value as SpeedMode }
   if (knob.id === 'effort') return { effort: value as ReasoningEffort }
   return { context: value as ContextWindow }
-}
-
-export function ModelModeControls(props: {
-  capabilities: ModelCapabilities
-  mode: ModelModeValues
-  disabled?: boolean
-  onChange: (next: ModelModePatch) => void
-}) {
-  const { capabilities, mode, disabled, onChange } = props
-  const items = knobs(capabilities)
-  if (!items.length) return null
-  return (
-    <div className="flex flex-col gap-2" data-testid="model-mode-controls">
-      {items.map((knob) => {
-        const current = valueOf(knob, mode)
-        if (knob.kind === 'toggle') {
-          return (
-            <div key={knob.id} className="flex items-center gap-2">
-              <span className="w-10 shrink-0 text-[length:var(--biu-font-size-1)] text-(--biu-color-text-subtle)">{knob.label}</span>
-              <div className="flex gap-1">
-                <button
-                  type="button"
-                  className={pillCls(current === knob.off)}
-                  disabled={disabled}
-                  data-testid={`${knob.id}-off`}
-                  onClick={() => onChange(patchKnob(knob, knob.off))}
-                >
-                  关
-                </button>
-                <button
-                  type="button"
-                  className={pillCls(current === knob.on)}
-                  disabled={disabled}
-                  data-testid={`${knob.id}-on`}
-                  onClick={() => onChange(patchKnob(knob, knob.on))}
-                >
-                  开
-                </button>
-              </div>
-            </div>
-          )
-        }
-        return (
-          <div key={knob.id} className="flex items-center gap-2">
-            <span className="w-10 shrink-0 text-[length:var(--biu-font-size-1)] text-(--biu-color-text-subtle)">{knob.label}</span>
-            <div className="flex gap-1">
-              {knob.options.map((item) => (
-                <button
-                  key={item.value}
-                  type="button"
-                  className={pillCls(current === item.value)}
-                  disabled={disabled}
-                  data-testid={`${knob.id}-${item.value}`}
-                  onClick={() => onChange(patchKnob(knob, item.value))}
-                >
-                  {item.label}
-                </button>
-              ))}
-            </div>
-          </div>
-        )
-      })}
-    </div>
-  )
 }
 
 export function modelModeSuffix(mode: ModelModeValues, caps: ModelCapabilities) {

@@ -126,9 +126,3 @@ export function setHudReplyId(id: string | null) {
   hudReplyId = id
   for (const listener of hudReplyListeners) listener()
 }
-
-export function clipHudText(text: string, max = 80) {
-  const one = text.replace(/\s+/g, ' ').trim()
-  if (one.length <= max) return one
-  return `${one.slice(0, max)}…`
-}

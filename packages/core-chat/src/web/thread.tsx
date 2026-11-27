@@ -37,7 +37,7 @@ import { LiveDispatchTable } from './live-dispatch-table.tsx'
 import { ContentEditsTable } from './content-edits-table.tsx'
 import { UsageInline } from './usage-inline.tsx'
 import { formatDuration, turnBarHasMeta, turnBarStats } from './live-hud.ts'
-import { TurnStatsMeta } from './live-hud.tsx'
+import { MetaItem, TurnStatsMeta } from './live-hud.tsx'
 import {
   bumpRevealStart,
   captureChatScroll,
@@ -76,31 +76,8 @@ function findScrollParent(el: HTMLElement | null): HTMLElement | null {
   return null
 }
 
-function formatTok(n: number) {
-  return formatTokens(n)
-}
-
 function stepLabel(step: number) {
   return `Step ${step + 1}`
-}
-
-function MetaItem({
-  icon,
-  value,
-  title,
-}: {
-  icon: ReactNode
-  value: ReactNode
-  title: string
-}) {
-  return (
-    <span className="chat-reply-meta-item" title={title}>
-      <span className="chat-reply-meta-icon" aria-hidden>
-        {icon}
-      </span>
-      <span className="chat-reply-meta-value">{value}</span>
-    </span>
-  )
 }
 
 const StepBar = memo(function StepBar({ stat, replyId }: { stat: ChatStepStat; replyId: string }) {
@@ -128,8 +105,8 @@ const StepBar = memo(function StepBar({ stat, replyId }: { stat: ChatStepStat; r
         <MetaItem icon={<WrenchScrewdriverIcon className="size-3" />} value={stat.toolCount} title={`本步 ${stat.toolCount} 个工具`} />
         <MetaItem
           icon={<LanguageIcon className="size-3" />}
-          value={formatTok(stat.messageChars)}
-          title={`本步 Message ${formatTok(stat.messageChars)} 字`}
+          value={formatTokens(stat.messageChars)}
+          title={`本步 Message ${formatTokens(stat.messageChars)} 字`}
         />
         {stat.durationMs != null ? (
           <MetaItem
