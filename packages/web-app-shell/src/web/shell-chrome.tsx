@@ -2526,24 +2526,6 @@ export function ShellSettingsAppearance() {
   )
 }
 
-export function ShellSettingsAbout() {
-  return (
-    <section className="settings-account" data-testid="settings-about">
-      <header className="settings-account-head">
-        <h3 className="settings-account-title">关于</h3>
-        <p className="settings-muted settings-account-lead">版本与开源许可信息。</p>
-      </header>
-      <div className="settings-account-row is-stacked">
-        <p className="settings-account-label">BIU</p>
-        <p className="settings-muted settings-account-hint">Apache License 2.0。</p>
-        <p className="settings-muted settings-account-hint">
-          public/grok-bot/ 角色素材归 xAI，不随 Apache-2.0 授权。详见 NOTICE.md。
-        </p>
-      </div>
-    </section>
-  )
-}
-
 const KBD_LABEL: Record<string, string> = {
   cmd: '⌘',
   shift: '⇧',

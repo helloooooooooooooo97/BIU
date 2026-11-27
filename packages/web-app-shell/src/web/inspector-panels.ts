@@ -92,10 +92,6 @@ export function pruneOpenedForCollections(opened: string[], collections: Array<{
   })
 }
 
-export function inspectorTabIsOpen(tabId: string, opened: string[]) {
-  return opened.some((id) => slotTabId(id) === tabId)
-}
-
 export function nextRepeatableTabId(tabId: string) {
   return `${tabId}::${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`
 }
@@ -109,18 +105,6 @@ export function resolveInspectorTab(current: string, allowed: string[], opened: 
     ? opened.filter((id) => allowed.includes(id) || allowed.includes(slotTabId(id)))
     : [...opened]
   return hanging[0] ?? ''
-}
-
-/** 切回 session：本机刚点过的栏优先，再才用后端记下的 tab。 */
-export function rememberedInspectorTab(opened: string[], cached?: string, stored?: string) {
-  if (cached && opened.includes(cached)) return cached
-  if (stored && opened.includes(stored)) return stored
-  const hint = cached || stored || ''
-  if (hint) {
-    const bySlot = opened.find((id) => slotTabId(id) === slotTabId(hint))
-    if (bySlot) return bySlot
-  }
-  return hint
 }
 
 /** 右侧检查器最多常驻保活的面板数量（LRU）。超出后自动卸载最久未访问的非激活面板。 */

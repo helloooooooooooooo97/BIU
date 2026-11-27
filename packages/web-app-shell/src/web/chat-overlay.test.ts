@@ -34,7 +34,6 @@ import {
   shouldCloseOverlayOnOutside,
   getOverlayAutohide,
   setOverlayAutohide,
-  setOverlayPinned,
   clampOverlayWinGeom,
   defaultOverlayWinGeom,
   overlayLayoutGeom,

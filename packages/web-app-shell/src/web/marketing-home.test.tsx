@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
-import { MarketingHome } from './marketing-home.tsx'
+import { MarketingHome } from './marketing-site/home.tsx'
 import { MarketingSite } from './marketing-site/index.tsx'
 import { BrandMark, resetBrandConfigCache } from './marketing-site/brand-mark.tsx'
 import { SITE_LOCALE_KEY } from './marketing-site/locale.tsx'
@@ -839,7 +839,7 @@ test('品牌页：粗细可以调到 0（等于隐藏线条），且不被可见
 
   // 图标场景同样尊重 0：用户要隐藏，不该被最小可见宽度救回来。
   render(
-    <BrandMark strokeWidth={0} lineWidth={0} scene="icon" />,
+    <BrandMark strokeWidth={0} lineWidth={0} />,
   )
   for (const w of Array.from(screen.getByRole('img').querySelectorAll('[stroke-width]')).map((n) => n.getAttribute('stroke-width'))) {
     assert.equal(w, '0', '图标场景下 0 也必须是 0')

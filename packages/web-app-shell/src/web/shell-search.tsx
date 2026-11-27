@@ -172,25 +172,6 @@ export function matchActionWhen(record: Record<string, unknown>, when?: Record<s
   return true
 }
 
-export function previewRunningRecord(record: Record<string, unknown>, when?: Record<string, unknown>) {
-  if (!when || typeof when.running !== 'boolean') return record
-  const running = when.running === false
-  if (Object.is(record.running, running)) return record
-  return { ...record, running }
-}
-
-export function previewHitRecord(record: Record<string, unknown>, action: SearchAction) {
-  if (action.id === 'uninstall' || action.id === 'delete' || action.id === 'remove') {
-    if (record.installed === false && record.running !== true && record.enabled !== true) return record
-    return { ...record, installed: false, running: false, enabled: false }
-  }
-  if (action.id === 'pack') {
-    if (record.installed === true) return record
-    return { ...record, installed: true }
-  }
-  return previewRunningRecord(record, action.when)
-}
-
 export function visibleRowActions(actions: SearchAction[] | undefined, record: Record<string, unknown> | undefined) {
   const row = record ?? {}
   return placedRowActions(actions).filter((action) => matchActionWhen(row, action.when))

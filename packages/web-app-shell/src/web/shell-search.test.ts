@@ -12,7 +12,6 @@ import {
   tagsFromRecord,
   pluginRecordEnabled,
   visibleRowActions,
-  previewHitRecord,
   isGlobalSearchHotkey,
 } from './shell-search.tsx'
 
@@ -192,19 +191,6 @@ test('search hit actions use collection chrome.Actions when registered', () => {
   assert.match(src, /<Actions/)
   assert.doesNotMatch(src, /if \(next !== record\) setRecord\(next\)/)
   assert.match(src, /addEventListener\('fsdb:change'/)
-})
-
-test('previewHitRecord drops start/stop after uninstall', () => {
-  const row = { id: 'p1', installed: true, running: true, enabled: true, sandbox: true }
-  const next = previewHitRecord(row, { id: 'uninstall', label: '卸载', when: { installed: true } })
-  assert.equal(next.installed, false)
-  assert.equal(next.running, false)
-  const start = { id: 'start', label: '运行', when: { installed: true, running: false } }
-  const stop = { id: 'stop', label: '停止', when: { installed: true, running: true } }
-  assert.deepEqual(
-    visibleRowActions([start, stop, { id: 'pack', label: '打包', when: { sandbox: true } }], next).map((item) => item.id),
-    ['pack'],
-  )
 })
 
 test('⌘⇧F always opens global search; ⌘F skips the page editor', () => {

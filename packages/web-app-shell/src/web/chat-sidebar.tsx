@@ -13,7 +13,6 @@ import { ChatCount } from '@biu/biu-ui/chat-count'
 import { SidebarFold } from '@biu/biu-ui/sidebar-fold'
 import { useActiveWorkspaceLocation } from './shell-chrome.tsx'
 import {
-  PINNED_GROUP_KEY,
   bindSessionView,
   buildSidebarSections,
   sessionAppPath,
@@ -363,7 +362,7 @@ export const ChatSidebar = memo(function ChatSidebar({
     const group = sections
       .flatMap((section) => section.groups ?? [])
       .find((item) => item.sessions.some((row) => row.id === routeSessionId))
-    if (!group || group.key === PINNED_GROUP_KEY) return
+    if (!group) return
     expandProjectGroup(group.key)
   }, [routeSessionId, sections, expandProjectGroup])
 
