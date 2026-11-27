@@ -1,5 +1,6 @@
 import { readStorageString, writeStorageString } from '@biu/biu-ui/client-storage'
 import { apiFetch } from '@biu/biu-ui/api-client'
+import { KeyedSingleflight, registerWorkspaceCache } from '@biu/biu-ui/cache'
 import { PAGE_PREFS_EVENT } from './fsdb-events.ts'
 
 export type PageWidth = 'max' | 'full'
@@ -60,9 +61,10 @@ export function parsePagePrefs(value: unknown, fallback: PagePrefs = DEFAULT_PRE
 
 function readCachedPagePrefs(): PagePrefs {
   try {
-    const raw = readStorageString(KEY)
+    const raw = readStorageString(KEY, { scope: 'workspace' }) ?? readStorageString(KEY)
     if (raw) return parsePagePrefs(JSON.parse(raw) as unknown)
-    return { ...DEFAULT_PREFS, wide: readStorageString(LEGACY_WIDTH_KEY) === 'full' }
+    const legacy = readStorageString(LEGACY_WIDTH_KEY, { scope: 'workspace' }) ?? readStorageString(LEGACY_WIDTH_KEY)
+    return { ...DEFAULT_PREFS, wide: legacy === 'full' }
   } catch {
     return { ...DEFAULT_PREFS }
   }
@@ -70,44 +72,38 @@ function readCachedPagePrefs(): PagePrefs {
 
 function writeCachedPagePrefs(next: PagePrefs) {
   try {
-    writeStorageString(KEY, JSON.stringify(next))
-    writeStorageString(LEGACY_WIDTH_KEY, next.wide ? 'full' : 'max')
+    writeStorageString(KEY, JSON.stringify(next), { scope: 'workspace' })
+    writeStorageString(LEGACY_WIDTH_KEY, next.wide ? 'full' : 'max', { scope: 'workspace' })
   } catch {
     /* ignore */
   }
 }
 
 const PROFILE_GET_HOLD_MS = 400
-let profileInflight: Promise<Record<string, unknown> | null> | null = null
+const profileSingleflight = new KeyedSingleflight<string, Record<string, unknown> | null>()
 
 /** One in-flight GET /api/profile for theme, page prefs, and the collection browser. */
 export async function getWorkspaceProfile(): Promise<Record<string, unknown> | null> {
-  if (profileInflight) return profileInflight
-  let request: Promise<Record<string, unknown> | null>
-  request = (async () => {
-    const res = await apiFetch('/api/profile')
-    if (!res.ok) return null
-    const data = (await res.json()) as unknown
-    return data && typeof data === 'object' && !Array.isArray(data) ? (data as Record<string, unknown>) : null
-  })().then(
-    (body) => {
-      setTimeout(() => {
-        if (profileInflight === request) profileInflight = null
-      }, PROFILE_GET_HOLD_MS)
-      return body
+  return profileSingleflight.run(
+    'profile',
+    async () => {
+      const res = await apiFetch('/api/profile')
+      if (!res.ok) return null
+      const data = (await res.json()) as unknown
+      return data && typeof data === 'object' && !Array.isArray(data) ? (data as Record<string, unknown>) : null
     },
-    (error) => {
-      if (profileInflight === request) profileInflight = null
-      throw error
+    {
+      holdMs: PROFILE_GET_HOLD_MS,
+      shouldHold: (body) => body !== null,
     },
   )
-  profileInflight = request
-  return request
 }
 
 export function resetWorkspaceProfileGet() {
-  profileInflight = null
+  profileSingleflight.clear()
 }
+
+registerWorkspaceCache('page-width-profile', resetWorkspaceProfileGet)
 
 async function postPagePrefs(next: PagePrefs) {
   if (typeof fetch === 'undefined') return

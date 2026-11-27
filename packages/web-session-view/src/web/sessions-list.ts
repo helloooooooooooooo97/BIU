@@ -1,6 +1,7 @@
 /** 打开会话只拉最近 100 轮。和 SESSION_TAIL_TURNS 同值，单独放这个文件是为了入口能早打 GET。 */
 import { readStorageString } from '@biu/biu-ui/client-storage'
 import { apiFetch } from '@biu/biu-ui/api-client'
+import { KeyedSingleflight, registerWorkspaceCache } from '@biu/biu-ui/cache'
 import { mostRecentSessionId } from './session-groups.ts'
 
 export const SESSION_LOAD_TURNS = 100
@@ -8,44 +9,34 @@ export const SESSION_LOAD_TURNS = 100
 const SESSIONS_LIST_HOLD_MS = 400
 const SESSION_TURNS_HOLD_MS = 400
 
-let sessionsListInflight: Promise<unknown[] | null> | null = null
-const sessionTurnsInflight = new Map<string, Promise<{ status: number; body: unknown } | null>>()
+const sessionsListSingleflight = new KeyedSingleflight<string, unknown[] | null>()
+const sessionTurnsSingleflight = new KeyedSingleflight<string, { status: number; body: unknown } | null>()
 
 export function resetSessionsListGet() {
-  sessionsListInflight = null
-  sessionTurnsInflight.clear()
+  sessionsListSingleflight.clear()
+  sessionTurnsSingleflight.clear()
 }
+
+registerWorkspaceCache('web-session-view-list', resetSessionsListGet)
 
 /** One in-flight GET /api/agents for boot seed, constructor, applyRoute, and fsdb:change. */
 export async function getSessionsList<T = Record<string, unknown>>(opts?: {
   refresh?: boolean
 }): Promise<T[] | null> {
-  if (opts?.refresh) sessionsListInflight = null
-  if (sessionsListInflight) return sessionsListInflight as Promise<T[] | null>
-  let request: Promise<unknown[] | null>
-  request = (async () => {
-    const res = await apiFetch('/api/agents')
-    if (!res.ok) return null
-    const body = (await res.json()) as { sessions?: unknown[] }
-    return Array.isArray(body.sessions) ? body.sessions : []
-  })().then(
-    (body) => {
-      if (body) {
-        setTimeout(() => {
-          if (sessionsListInflight === request) sessionsListInflight = null
-        }, SESSIONS_LIST_HOLD_MS)
-      } else if (sessionsListInflight === request) {
-        sessionsListInflight = null
-      }
-      return body
+  if (opts?.refresh) sessionsListSingleflight.delete('list')
+  return sessionsListSingleflight.run(
+    'list',
+    async () => {
+      const res = await apiFetch('/api/agents')
+      if (!res.ok) return null
+      const body = (await res.json()) as { sessions?: unknown[] }
+      return Array.isArray(body.sessions) ? body.sessions : []
     },
-    (error) => {
-      if (sessionsListInflight === request) sessionsListInflight = null
-      throw error
+    {
+      holdMs: SESSIONS_LIST_HOLD_MS,
+      shouldHold: (body) => body !== null,
     },
-  )
-  sessionsListInflight = request
-  return request as Promise<T[] | null>
+  ) as Promise<T[] | null>
 }
 
 export async function getSessionTurns<T = Record<string, unknown>>(
@@ -53,32 +44,19 @@ export async function getSessionTurns<T = Record<string, unknown>>(
   opts?: { refresh?: boolean },
 ): Promise<{ status: number; body: T } | null> {
   if (!sessionId) return null
-  if (opts?.refresh) sessionTurnsInflight.delete(sessionId)
-  const pending = sessionTurnsInflight.get(sessionId)
-  if (pending) return pending as Promise<{ status: number; body: T } | null>
-  let request: Promise<{ status: number; body: unknown } | null>
-  request = (async () => {
-    const res = await apiFetch(`/api/agents/${sessionId}?turns=${SESSION_LOAD_TURNS}`)
-    const body = (await res.json().catch(() => ({}))) as unknown
-    return { status: res.status, body }
-  })().then(
-    (got) => {
-      if (got && got.status >= 200 && got.status < 300) {
-        setTimeout(() => {
-          if (sessionTurnsInflight.get(sessionId) === request) sessionTurnsInflight.delete(sessionId)
-        }, SESSION_TURNS_HOLD_MS)
-      } else if (sessionTurnsInflight.get(sessionId) === request) {
-        sessionTurnsInflight.delete(sessionId)
-      }
-      return got
+  if (opts?.refresh) sessionTurnsSingleflight.delete(sessionId)
+  return sessionTurnsSingleflight.run(
+    sessionId,
+    async () => {
+      const res = await apiFetch(`/api/agents/${sessionId}?turns=${SESSION_LOAD_TURNS}`)
+      const body = (await res.json().catch(() => ({}))) as unknown
+      return { status: res.status, body }
     },
-    (error) => {
-      if (sessionTurnsInflight.get(sessionId) === request) sessionTurnsInflight.delete(sessionId)
-      throw error
+    {
+      holdMs: SESSION_TURNS_HOLD_MS,
+      shouldHold: (got) => Boolean(got && got.status >= 200 && got.status < 300),
     },
-  )
-  sessionTurnsInflight.set(sessionId, request)
-  return request as Promise<{ status: number; body: T } | null>
+  ) as Promise<{ status: number; body: T } | null>
 }
 
 function hasAccountToken() {

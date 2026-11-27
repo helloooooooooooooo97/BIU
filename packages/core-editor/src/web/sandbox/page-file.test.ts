@@ -1,6 +1,8 @@
 import { afterEach, test } from 'vitest'
 import assert from 'node:assert/strict'
+import { resetWorkspaceClientCaches } from '@biu/biu-ui/cache'
 import {
+  isAbsentSandboxAsset,
   isFreshSandboxAsset,
   loadTextAsset,
   markFreshSandboxAssets,
@@ -122,4 +124,24 @@ test('save retries 409 with the server etag', async () => {
   const etag = await saveTextAsset('sandbox-ab.jsx', 'next', '', { path: '/pages/p1' })
   assert.equal(etag, 'etag-4')
   assert.equal(puts, 2)
+})
+
+test('absent sandbox assets are scoped by record path and cleared on workspace cache reset', async () => {
+  const calls = mockFetch((url) => {
+    if (url.includes('%2Fpages%2Fp1')) return { status: 404 }
+    return { status: 200, text: '{"ok":true}', etag: 'etag-p2' }
+  })
+  const miss = await loadTextAsset('assets/data.json', 'null', { createOnMiss: false, path: '/pages/p1' })
+  assert.equal(miss.text, 'null')
+  assert.equal(isAbsentSandboxAsset('data.json', '/pages/p1'), true)
+  assert.equal(isAbsentSandboxAsset('data.json', '/pages/p2'), false)
+
+  // Same filename on /pages/p2 still fetches normally instead of hitting /pages/p1 absent entry
+  const hit = await loadTextAsset('assets/data.json', 'null', { createOnMiss: false, path: '/pages/p2' })
+  assert.equal(hit.text, '{"ok":true}')
+  assert.equal(calls.length, 2)
+
+  // Workspace cache reset wipes absent state
+  resetWorkspaceClientCaches()
+  assert.equal(isAbsentSandboxAsset('data.json', '/pages/p1'), false)
 })

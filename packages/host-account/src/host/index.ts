@@ -178,14 +178,27 @@ export class AccountService extends Service {
   }
 
   cloudAvatar(origin: string, remoteAccountId: string) {
-    return this.cloudAvatars.get(this.cloudAvatarKey(origin, remoteAccountId)) ?? ''
+    const key = this.cloudAvatarKey(origin, remoteAccountId)
+    const value = this.cloudAvatars.get(key)
+    if (value === undefined) return ''
+    this.cloudAvatars.delete(key)
+    this.cloudAvatars.set(key, value)
+    return value
   }
 
   setCloudAvatar(origin: string, remoteAccountId: string, avatar: string) {
     const key = this.cloudAvatarKey(origin, remoteAccountId)
     const trimmed = avatar.trim()
-    if (trimmed) this.cloudAvatars.set(key, trimmed)
-    else this.cloudAvatars.delete(key)
+    if (trimmed) {
+      if (this.cloudAvatars.has(key)) this.cloudAvatars.delete(key)
+      else if (this.cloudAvatars.size >= 256) {
+        const oldest = this.cloudAvatars.keys().next().value
+        if (oldest !== undefined) this.cloudAvatars.delete(oldest)
+      }
+      this.cloudAvatars.set(key, trimmed)
+    } else {
+      this.cloudAvatars.delete(key)
+    }
   }
 
   updateCloudIdentity(

@@ -7,7 +7,7 @@ import {
   ArrowUturnLeftIcon,
 } from '@heroicons/react/16/solid'
 import { AiAvatar } from '@biu/biu-ui/ai-avatar'
-import { apiFetch } from '@biu/biu-ui/api-client'
+import { useMemberDirectory } from '@biu/core-file-system/person-cell'
 import { TrashGlyph } from '@biu/web-session-view/trash-glyph'
 import type { CommentAnchor } from './comment-anchor.ts'
 import type { CommentItem, CommentThread } from './comment-store.ts'
@@ -22,74 +22,6 @@ type CommentMemberInfo = {
 }
 
 const INSPECTOR_REVEAL_EVENT = 'biu:inspector-reveal'
-const ACCOUNT_EVENT = 'biu:account-token'
-let membersCache: Map<string, CommentMemberInfo> | null = null
-let membersLoadedAt = 0
-let membersInflight: Promise<Map<string, CommentMemberInfo>> | null = null
-const MEMBERS_TTL_MS = 8000
-
-async function loadCommentMembers(): Promise<Map<string, CommentMemberInfo>> {
-  if (membersCache && Date.now() - membersLoadedAt < MEMBERS_TTL_MS) return membersCache
-  if (membersInflight) return membersInflight
-  const params = new URLSearchParams({
-    path: '/workspace-members',
-    limit: '500',
-    columns: 'title,email,avatar',
-  })
-  const req = apiFetch(`/api/db/list?${params.toString()}`)
-    .then(async (res) => {
-      if (!res.ok) return new Map<string, CommentMemberInfo>()
-      const data = (await res.json()) as { items?: Array<Record<string, unknown>> }
-      const map = new Map<string, CommentMemberInfo>()
-      for (const item of data?.items ?? []) {
-        const id = String(item?.id ?? '').trim()
-        if (!id) continue
-        const name =
-          String(item.title ?? '').trim() ||
-          String(item.name ?? '').trim() ||
-          String(item.email ?? '').trim() ||
-          id.slice(0, 8)
-        const avatar = typeof item.avatar === 'string' ? item.avatar.trim() : ''
-        map.set(id, { id, name, ...(avatar ? { avatar } : {}) })
-      }
-      membersCache = map
-      membersLoadedAt = Date.now()
-      return map
-    })
-    .catch(() => new Map<string, CommentMemberInfo>())
-    .finally(() => {
-      membersInflight = null
-    })
-  membersInflight = req
-  return req
-}
-
-function useCommentMembers(enabled: boolean): ReadonlyMap<string, CommentMemberInfo> {
-  const [members, setMembers] = useState<Map<string, CommentMemberInfo>>(() => membersCache ?? new Map())
-  useEffect(() => {
-    if (!enabled) return
-    let cancelled = false
-    const sync = () => {
-      void loadCommentMembers().then((map) => {
-        if (!cancelled) setMembers(map)
-      })
-    }
-    const onAccountChange = () => {
-      membersCache = null
-      membersLoadedAt = 0
-      sync()
-    }
-    sync()
-    window.addEventListener(ACCOUNT_EVENT, onAccountChange)
-    window.addEventListener('biu:workspace-profile', onAccountChange)
-    return () => {
-      cancelled = true
-      window.removeEventListener(ACCOUNT_EVENT, onAccountChange)
-      window.removeEventListener('biu:workspace-profile', onAccountChange)
-    }
-  }, [enabled])
-  return members
-}
 
 export function openCommentAuthor(item: CommentItem): boolean {
   const person = item.createdBy
@@ -231,7 +163,7 @@ export function CommentPanel({
   const [heights, setHeights] = useState<Record<string, number>>({})
   const draftInputRef = useRef<HTMLTextAreaElement>(null)
   const cardRefs = useRef(new Map<string, HTMLElement>())
-  const members = useCommentMembers(threads.length > 0)
+  const members = useMemberDirectory(threads.length > 0)
 
   useEffect(() => {
     if (draftAnchor) {
@@ -553,7 +485,7 @@ export function CommentInlinePopover({
   const [draftBody, setDraftBody] = useState('')
   const [replyDrafts, setReplyDrafts] = useState<Record<string, string>>({})
   const [submitting, setSubmitting] = useState(false)
-  const members = useCommentMembers(target.kind === 'view' && threads.length > 0)
+  const members = useMemberDirectory(target.kind === 'view' && threads.length > 0)
   const [pos, setPos] = useState<{ top: number; left: number }>(() =>
     computeInlineCommentPopoverPos(
       target.rect,

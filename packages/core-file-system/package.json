@@ -23,6 +23,7 @@
     "./sandbox-biu": "./src/web/sandbox-biu.ts",
     "./sandbox-host-shell": "./src/web/sandbox-host-shell.tsx",
     "./sandbox-kind-icon": "./src/web/sandbox-kind-icon.tsx",
+    "./person-cell": "./src/web/person-cell.tsx",
     "./mention-markup": "./src/mention-markup.ts"
   },
   "dependencies": {

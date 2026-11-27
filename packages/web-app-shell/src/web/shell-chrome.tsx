@@ -1,6 +1,7 @@
 import { readStorageString, removeStorageKey, writeStorageString } from '@biu/biu-ui/client-storage'
 import { emitAppEvent, onAppEvent } from '@biu/biu-ui/app-events'
 import { apiFetch, registerApiRequestInterceptor } from '@biu/biu-ui/api-client'
+import { KeyedSingleflight, registerWorkspaceCache } from '@biu/biu-ui/cache'
 import { syncWorkspaceEndpoint } from '@biu/biu-ui/workspace-transport'
 import { lazy, Suspense, useCallback, useEffect, useRef, useState, useSyncExternalStore, type ReactNode, type Ref } from 'react'
 import { createPortal } from 'react-dom'
@@ -1434,32 +1435,20 @@ async function accountFetch(token: string, path: string, init?: RequestInit) {
 }
 
 const ACCOUNT_ME_HOLD_MS = 400
-const accountMeInflight = new Map<string, Promise<Record<string, unknown>>>()
+const accountMeSingleflight = new KeyedSingleflight<string, Record<string, unknown>>()
 
 /** One in-flight GET /api/account/me for AuthGate and the workspace switcher. */
 export async function getAccountMe(token: string): Promise<Record<string, unknown>> {
-  const pending = accountMeInflight.get(token)
-  if (pending) return pending
-  let request: Promise<Record<string, unknown>>
-  request = accountFetch(token, '/api/account/me').then(
-    (body) => {
-      setTimeout(() => {
-        if (accountMeInflight.get(token) === request) accountMeInflight.delete(token)
-      }, ACCOUNT_ME_HOLD_MS)
-      return body
-    },
-    (error) => {
-      if (accountMeInflight.get(token) === request) accountMeInflight.delete(token)
-      throw error
-    },
-  )
-  accountMeInflight.set(token, request)
-  return request
+  return accountMeSingleflight.run(token, () => accountFetch(token, '/api/account/me'), {
+    holdMs: ACCOUNT_ME_HOLD_MS,
+  })
 }
 
 export function resetAccountMeGet() {
-  accountMeInflight.clear()
+  accountMeSingleflight.clear()
 }
+
+registerWorkspaceCache('shell-account-me', resetAccountMeGet)
 
 export function ShellWorkspaceSwitcher({ onWorkspaceSettings }: { onWorkspaceSettings?: () => void }) {
   const workspaceProfile = useWorkspaceProfile()

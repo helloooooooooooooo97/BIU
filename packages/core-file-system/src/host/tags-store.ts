@@ -1,3 +1,4 @@
+import { BoundedMap } from '@biu/biu-ui/cache'
 import {
   openAndMigrateBiu,
   writeEditorContent,
@@ -97,7 +98,7 @@ export class TagStore {
   readonly metaStore = new RecordMetaStore(() => this.ensure())
   private statsVersion = 0
   private filledCountsCache: { version: number; data: Record<string, Record<string, number>> } | null = null
-  private observedOptionsCache = new Map<string, { version: number; data: Record<string, string[]> }>()
+  private observedOptionsCache = new BoundedMap<string, { version: number; data: Record<string, string[]> }>(256)
 
   private invalidateStatsCache() {
     this.statsVersion += 1

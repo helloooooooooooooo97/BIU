@@ -1,4 +1,5 @@
 import React, { Component, memo, type ReactNode } from 'react'
+import { BoundedMap } from '@biu/biu-ui/cache'
 import type { FieldType } from '@biu/type-file-system'
 import { hasForbiddenModuleSyntax, stripReactImports, transpileSandboxJsx } from './sandbox-compile.ts'
 import { savedViewRecordPath } from '../paths.ts'
@@ -26,8 +27,8 @@ type CompiledSandbox =
   | { ok: true; Component: React.ComponentType<ColumnSandboxProps> }
   | { ok: false; error: string }
 
-const COMPILE_CACHE = new Map<string, CompiledSandbox>()
 const COMPILE_CACHE_MAX = 80
+const COMPILE_CACHE = new BoundedMap<string, CompiledSandbox>(COMPILE_CACHE_MAX)
 
 export function compileColumnSandbox(source: string): CompiledSandbox {
   const text = String(source ?? '').trim()
@@ -36,10 +37,6 @@ export function compileColumnSandbox(source: string): CompiledSandbox {
   if (cached) return cached
 
   const save = (res: CompiledSandbox) => {
-    if (COMPILE_CACHE.size >= COMPILE_CACHE_MAX) {
-      const first = COMPILE_CACHE.keys().next().value
-      if (first !== undefined) COMPILE_CACHE.delete(first)
-    }
     COMPILE_CACHE.set(text, res)
     return res
   }

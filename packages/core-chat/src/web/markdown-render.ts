@@ -1,5 +1,6 @@
 import DOMPurify from 'dompurify'
 import { Marked, marked } from 'marked'
+import { BoundedMap } from '@biu/biu-ui/cache'
 import { markdownHighlight } from './markdown-highlight.ts'
 
 marked.setOptions({
@@ -28,28 +29,17 @@ if (typeof window !== 'undefined') {
 const CACHE_LIMIT = 1200
 
 /** text → 已消毒 HTML；虚表卸载再挂时同步命中，首帧即可贴 HTML */
-const htmlCache = new Map<string, string>()
+const htmlCache = new BoundedMap<string, string>(CACHE_LIMIT)
 
 /** 流式前缀增量缓存：段落或代码块闭合后只解析新增 delta，把流式长文从 O(N²) 降到 O(N)。 */
 let streamFrozenCache: { prefix: string; html: string } = { prefix: '', html: '' }
 
 function touchCache(text: string, html: string) {
-  if (htmlCache.has(text)) htmlCache.delete(text)
   htmlCache.set(text, html)
-  while (htmlCache.size > CACHE_LIMIT) {
-    const oldest = htmlCache.keys().next().value
-    if (oldest == null) break
-    htmlCache.delete(oldest)
-  }
 }
 
 export function getCachedMarkdownHtml(text: string): string | undefined {
-  const hit = htmlCache.get(text)
-  if (hit == null) return undefined
-  // LRU：命中后挪到末尾
-  htmlCache.delete(text)
-  htmlCache.set(text, hit)
-  return hit
+  return htmlCache.get(text)
 }
 
 export function sanitizeMarkdownHtml(dirty: string): string {

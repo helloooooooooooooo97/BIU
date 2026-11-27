@@ -1,3 +1,5 @@
+import { registerWorkspaceCache } from '@biu/biu-ui/cache'
+
 export function assetName(file: string) {
   return file.replace(/^assets\//, '')
 }
@@ -9,6 +11,10 @@ export function assetEtag(raw: string) {
 const fresh = new Set<string>()
 const absent = new Set<string>()
 const seedInflight = new Map<string, Promise<{ text: string; etag: string }>>()
+
+function absentKey(name: string, path: string) {
+  return path ? `${path}\0${name}` : name
+}
 
 export function markFreshSandboxAssets(...files: string[]) {
   for (const file of files) {
@@ -27,8 +33,12 @@ export function resetSandboxAssetState() {
   seedInflight.clear()
 }
 
-export function isAbsentSandboxAsset(file: string) {
-  return absent.has(assetName(file))
+registerWorkspaceCache('editor-sandbox-page-file', resetSandboxAssetState)
+
+export function isAbsentSandboxAsset(file: string, path = pageResourcePath()) {
+  const name = assetName(file)
+  const cleanPath = String(path ?? '').trim()
+  return absent.has(absentKey(name, cleanPath))
 }
 
 export function pageResourcePath() {
@@ -87,7 +97,7 @@ export async function seedTextAsset(file: string, text: string, opts?: { json?: 
       const current = await fetch(url)
       if (current.ok) {
         fresh.delete(name)
-        absent.delete(name)
+        absent.delete(absentKey(name, path))
         return { text: await current.text(), etag: assetEtag(String(current.headers.get('etag') ?? '')) }
       }
       fresh.delete(name)
@@ -98,7 +108,7 @@ export async function seedTextAsset(file: string, text: string, opts?: { json?: 
       return { text, etag: '' }
     }
     fresh.delete(name)
-    absent.delete(name)
+    absent.delete(absentKey(name, path))
     return { text, etag: (await responseEtag(res)) || '' }
   })()
   seedInflight.set(name, job)
@@ -116,18 +126,19 @@ export async function loadTextAsset(
 ) {
   const name = assetName(file)
   const path = String(opts?.path ?? pageResourcePath()).trim()
+  const key = absentKey(name, path)
   const createOnMiss = opts?.createOnMiss !== false
   if (!opts?.bust && fresh.has(name) && createOnMiss) return seedTextAsset(file, fallback, { json: opts?.json, path })
-  if (!createOnMiss && absent.has(name)) return { text: fallback, etag: '' }
+  if (!createOnMiss && absent.has(key)) return { text: fallback, etag: '' }
   const res = await fetch(pageFileUrl(name, { bust: opts?.bust, path }))
   if (res.ok) {
     fresh.delete(name)
-    absent.delete(name)
+    absent.delete(key)
     return { text: await res.text(), etag: assetEtag(String(res.headers.get('etag') ?? '')) }
   }
   if (res.status === 404) {
     if (opts?.bust || !createOnMiss) {
-      if (!createOnMiss) absent.add(name)
+      if (!createOnMiss) absent.add(key)
       return { text: fallback, etag: '' }
     }
     return seedTextAsset(file, fallback, { json: opts?.json, path })
@@ -166,6 +177,6 @@ export async function saveTextAsset(
   }
   if (!res.ok) return etag
   fresh.delete(name)
-  absent.delete(name)
+  absent.delete(absentKey(name, path))
   return (await responseEtag(res)) || etag
 }

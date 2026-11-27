@@ -33,7 +33,7 @@ export class BoundedMap<K, V> extends Map<K, V> {
   }
 }
 
-export interface SingleflightRunOptions {
+export interface SingleflightRunOptions<V = unknown> {
   /** Bypass any post-completion hold cache and start a fresh request. */
   fresh?: boolean
   /**
@@ -46,6 +46,8 @@ export interface SingleflightRunOptions {
    * key (preventing grouped reload fan-out) while bypassing completed held results.
    */
   shareInflightWhenFresh?: boolean
+  /** Optional predicate deciding whether a resolved value should be held for `holdMs`. */
+  shouldHold?: (value: V) => boolean
 }
 
 /**
@@ -57,7 +59,7 @@ export class KeyedSingleflight<K, V> {
   private readonly active = new Set<Promise<V>>()
   private epoch = 0
 
-  run(key: K, loader: () => Promise<V>, opts?: SingleflightRunOptions): Promise<V> {
+  run(key: K, loader: () => Promise<V>, opts?: SingleflightRunOptions<V>): Promise<V> {
     const fresh = Boolean(opts?.fresh)
     const holdMs = Math.max(0, opts?.holdMs ?? 0)
     const shareWhenFresh = Boolean(opts?.shareInflightWhenFresh)
@@ -76,7 +78,8 @@ export class KeyedSingleflight<K, V> {
     request = loader().then(
       (value) => {
         this.active.delete(request)
-        if (fresh || holdMs <= 0 || this.epoch !== startEpoch) {
+        const canHold = !fresh && holdMs > 0 && this.epoch === startEpoch && (opts?.shouldHold ? opts.shouldHold(value) : true)
+        if (!canHold) {
           if (this.entries.get(key) === request) this.entries.delete(key)
         } else {
           setTimeout(() => {
@@ -95,6 +98,12 @@ export class KeyedSingleflight<K, V> {
     this.active.add(request)
     this.entries.set(key, request)
     return request
+  }
+
+  delete(key: K): void {
+    const existing = this.entries.get(key)
+    if (existing) this.active.delete(existing)
+    this.entries.delete(key)
   }
 
   clear(): void {

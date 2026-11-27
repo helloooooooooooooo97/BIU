@@ -1,5 +1,6 @@
 import { test } from 'vitest'
 import assert from 'node:assert/strict'
+import { resetWorkspaceClientCaches } from '@biu/biu-ui/cache'
 import {
   getSessionTurns,
   getSessionsList,
@@ -89,5 +90,38 @@ test('seedHomeSessionFetches pulls the list then the latest turns', async () => 
     globalThis.fetch = originalFetch
     resetSessionsListGet()
     localStorage.removeItem('biu.account.token')
+  }
+})
+
+test('resetWorkspaceClientCaches drops getSessionsList and getSessionTurns hold caches', async () => {
+  resetSessionsListGet()
+  let hits = 0
+  const originalFetch = globalThis.fetch
+  globalThis.fetch = (async () => {
+    hits += 1
+    return new Response(JSON.stringify({ sessions: [{ id: `s${hits}` }], id: `s${hits}`, events: [] }), {
+      status: 200,
+      headers: { 'content-type': 'application/json' },
+    })
+  }) as typeof fetch
+  try {
+    await getSessionsList()
+    await getSessionsList()
+    assert.equal(hits, 1)
+
+    resetWorkspaceClientCaches()
+    await getSessionsList()
+    assert.equal(hits, 2)
+
+    await getSessionTurns('s1')
+    await getSessionTurns('s1')
+    assert.equal(hits, 3)
+
+    resetWorkspaceClientCaches()
+    await getSessionTurns('s1')
+    assert.equal(hits, 4)
+  } finally {
+    globalThis.fetch = originalFetch
+    resetSessionsListGet()
   }
 })

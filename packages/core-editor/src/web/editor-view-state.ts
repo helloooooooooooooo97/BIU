@@ -1,4 +1,5 @@
 import { useSyncExternalStore } from 'react'
+import { BoundedMap, registerWorkspaceCache } from '@biu/biu-ui/cache'
 import type { RecordLayoutSort } from '@biu/type-file-system/record-views'
 import type { CommentAnchor } from './comment-anchor.ts'
 
@@ -17,7 +18,7 @@ export type PageFindState = {
 }
 
 const emptyFind: PageFindState = { open: false, query: '', index: 0, total: 0 }
-const findStore = new Map<string, PageFindState>()
+const findStore = new BoundedMap<string, PageFindState>(128)
 let findSeq = 0
 const findListeners = new Set<() => void>()
 
@@ -75,9 +76,16 @@ const emptyCommentsUi: EditorCommentsUiState = {
   resolvedCount: 0,
   draftAnchor: null,
 }
-const commentsUiStore = new Map<string, EditorCommentsUiState>()
+const commentsUiStore = new BoundedMap<string, EditorCommentsUiState>(128)
 let commentsUiSeq = 0
 const commentsUiListeners = new Set<() => void>()
+
+registerWorkspaceCache('editor-view-state', () => {
+  findStore.clear()
+  commentsUiStore.clear()
+  bumpFind()
+  bumpCommentsUi()
+})
 
 function bumpCommentsUi() {
   commentsUiSeq += 1
