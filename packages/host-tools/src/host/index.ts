@@ -49,7 +49,7 @@ export interface ToolRequest {
 export type ToolGuard = (req: ToolRequest) => ToolRequest | Promise<ToolRequest>
 
 /** 极简=底座两工具；文件=文件系统 db_*；标准=全部。旧创造配置并入标准。 */
-export const AGENT_TOOL_MODES = ['minimal', 'file', 'standard'] as const
+const AGENT_TOOL_MODES = ['minimal', 'file', 'standard'] as const
 export type AgentToolMode = (typeof AGENT_TOOL_MODES)[number]
 
 export function isAgentToolMode(value: unknown): value is AgentToolMode {
@@ -363,7 +363,7 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
 }
 
-export function normalizeToolParameters(parameters: Record<string, unknown>): Record<string, unknown> {
+function normalizeToolParameters(parameters: Record<string, unknown>): Record<string, unknown> {
   if (!isPlainObject(parameters)) return { type: 'object', properties: {}, additionalProperties: false }
   if (parameters.type === 'object' && isPlainObject(parameters.properties) && parameters.additionalProperties === undefined) {
     return { ...parameters, additionalProperties: false }
@@ -437,7 +437,7 @@ function validateSchemaValue(
   }
 }
 
-export function validateToolArgs(
+function validateToolArgs(
   toolName: string,
   parameters: Record<string, unknown>,
   args: Record<string, unknown>,
