@@ -1,3 +1,4 @@
+import { BoundedMap, registerWorkspaceCache } from '@biu/biu-ui/cache'
 import { PAGE_VIEW_EVENT } from './editor-view-state.ts'
 
 export const PAGE_BUILTIN_MODES = ['doc', 'outline', 'table', 'source', 'hidden'] as const
@@ -11,11 +12,16 @@ export function isPageCustomView(mode: string) {
   return Boolean(mode) && !isPageBuiltinMode(mode)
 }
 
-const folded = new Map<string, Set<string>>()
+const folded = new BoundedMap<string, Set<string>>(128)
 
 function bump() {
   if (typeof window !== 'undefined') window.dispatchEvent(new Event(PAGE_VIEW_EVENT))
 }
+
+registerWorkspaceCache('editor-source-mode-folded', () => {
+  folded.clear()
+  bump()
+})
 
 export function pageOutlineFolded(recordId: string) {
   return folded.get(String(recordId ?? '')) ?? new Set<string>()
@@ -31,4 +37,3 @@ export function togglePageOutlineFold(recordId: string, blockId: string) {
   folded.set(id, next)
   bump()
 }
-

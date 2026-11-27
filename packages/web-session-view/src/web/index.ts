@@ -1,5 +1,6 @@
 import { readStorageString } from '@biu/biu-ui/client-storage'
 import { apiFetch } from '@biu/biu-ui/api-client'
+import { BoundedMap, registerWorkspaceCache } from '@biu/biu-ui/cache'
 import { useSyncExternalStore } from 'react'
 import { Service, type Context } from 'cordis'
 import { mergeInspectorBind, mergeContentEditFiles, type SessionInspectorBind, type SessionGoal } from '@biu/type-session'
@@ -322,8 +323,7 @@ export class SessionViewService extends Service {
   private value: SessionViewState = empty
   private listeners = new Set<() => void>()
   /** 切会话瞬时缓存：避免每次都等网络才卸掉旧 Chat DOM */
-  private cache = new Map<string, SessionCacheEntry>()
-  private cacheOrder: string[] = []
+  private cache = new BoundedMap<string, SessionCacheEntry>(SESSION_CACHE_MAX)
   private loadGen = 0
   /** 右侧检查器或 debug 路由要实时轨迹：与 ConversationView 解耦 */
   private trajectoryLive = false
@@ -362,6 +362,13 @@ export class SessionViewService extends Service {
       this.stopDispatchedPoll()
       if (this.recordDetailTimer != null) clearTimeout(this.recordDetailTimer)
     })
+    const unregisterCache = registerWorkspaceCache('web-session-view-service', () => {
+      this.cache.clear()
+      this.locallyIdle.clear()
+      this.loadGen += 1
+      this.trajGen += 1
+    })
+    this.ctx.effect(() => unregisterCache)
     if (typeof window !== 'undefined') {
       const onLibrary = () => this.scheduleRefreshSessions()
       window.addEventListener('fsdb:change', onLibrary)
@@ -1219,24 +1226,15 @@ export class SessionViewService extends Service {
   }
 
   private putCache(id: string, entry: SessionCacheEntry) {
-    if (this.cache.has(id)) this.cacheOrder = this.cacheOrder.filter((item) => item !== id)
     this.cache.set(id, entry)
-    this.cacheOrder.push(id)
-    while (this.cacheOrder.length > SESSION_CACHE_MAX) {
-      const evict = this.cacheOrder.shift()
-      if (evict) this.cache.delete(evict)
-    }
   }
 
   private touchCache(id: string) {
-    if (!this.cache.has(id)) return
-    this.cacheOrder = this.cacheOrder.filter((item) => item !== id)
-    this.cacheOrder.push(id)
+    this.cache.get(id)
   }
 
   private dropCache(id: string) {
     this.cache.delete(id)
-    this.cacheOrder = this.cacheOrder.filter((item) => item !== id)
   }
 
   /** 上滑加载更早 chat turn；返回是否真正拉到了数据 */

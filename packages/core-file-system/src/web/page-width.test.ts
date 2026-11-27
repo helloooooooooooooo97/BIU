@@ -1,5 +1,6 @@
 import { test } from 'vitest'
 import assert from 'node:assert/strict'
+import { resetWorkspaceClientCaches } from '@biu/biu-ui/cache'
 import { persistPageWidth, getPageWidth, persistPagePrefs, getPagePrefs, hydratePagePrefs, SHARE_PAGE_PREFS, getWorkspaceProfile, resetWorkspaceProfileGet } from './page-width.ts'
 
 function okFetch(handler?: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response> | Response) {
@@ -331,5 +332,33 @@ test('hydratePagePrefs keeps local navPin when the profile omits it', async () =
     } finally {
       restore()
     }
+  }
+})
+
+test('resetWorkspaceClientCaches clears getWorkspaceProfile hold cache', async () => {
+  resetWorkspaceProfileGet()
+  let hits = 0
+  const originalFetch = globalThis.fetch
+  globalThis.fetch = (async () => {
+    hits += 1
+    return new Response(JSON.stringify({ theme: `t-${hits}` }), {
+      status: 200,
+      headers: { 'content-type': 'application/json' },
+    })
+  }) as typeof fetch
+  try {
+    const first = await getWorkspaceProfile()
+    const held = await getWorkspaceProfile()
+    assert.equal(hits, 1)
+    assert.equal(first?.theme, 't-1')
+    assert.equal(held?.theme, 't-1')
+
+    resetWorkspaceClientCaches()
+    const next = await getWorkspaceProfile()
+    assert.equal(hits, 2)
+    assert.equal(next?.theme, 't-2')
+  } finally {
+    globalThis.fetch = originalFetch
+    resetWorkspaceProfileGet()
   }
 })
