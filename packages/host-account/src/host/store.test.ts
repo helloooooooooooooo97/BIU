@@ -702,3 +702,50 @@ test('single workspace identity: nickname and avatar stay isolated per workspace
   assert.equal(present.find((p) => p.accountId === bob.id)?.name, 'GlobalBob')
   assert.equal(collab.memberById(ws1.id, ada.id)?.name, 'Space1Ada')
 })
+
+test('collectionOwnership and collectionExternalCollaborators propagate inherited ancestor grants to child and grandchild records', () => {
+  const collab = store()
+  const ada = collab.register('Ada', Date.now(), 'secret1', 'inh-ada@example.com')
+  const bob = collab.register('Bob', Date.now(), 'secret1', 'inh-bob@example.com')
+  const ext = collab.register('Ext', Date.now(), 'secret1', 'inh-ext@example.com')
+  const ws = collab.createWorkspace(ada.id, 'Inherit Space')
+  collab.addMemberByEmail(ada.id, ws.id, bob.email)
+  collab.setActive(ada.id, ws.id)
+
+  // Parent is private, shared with internal member Bob -> 'shared'
+  collab.attachAs(ws.id, '/pages', 'parent', ada.id, { accessMode: 'private' })
+  collab.attachAs(ws.id, '/pages', 'child', ada.id, { accessMode: 'inherit', parentCollection: '/pages', parentRecordId: 'parent' })
+  collab.attachAs(ws.id, '/pages', 'grandchild', ada.id, { accessMode: 'inherit', parentCollection: '/pages', parentRecordId: 'child' })
+  collab.attachAs(ws.id, '/pages', 'detached', ada.id, { accessMode: 'private', parentCollection: '/pages', parentRecordId: 'parent' })
+
+  // Before sharing parent, all are 'personal'
+  const before = collab.collectionOwnership(ws.id, '/pages')
+  assert.equal(before.get('parent'), 'personal')
+  assert.equal(before.get('child'), 'personal')
+  assert.equal(before.get('grandchild'), 'personal')
+  assert.equal(before.get('detached'), 'personal')
+
+  // Share parent with Bob -> parent, child, grandchild MUST all resolve to 'shared'; detached stays 'personal'
+  collab.shareWithEmail(ada.id, '/pages', 'parent', bob.email, 'editor', 'internal')
+  const afterShare = collab.collectionOwnership(ws.id, '/pages')
+  assert.equal(afterShare.get('parent'), 'shared')
+  assert.equal(afterShare.get('child'), 'shared')
+  assert.equal(afterShare.get('grandchild'), 'shared')
+  assert.equal(afterShare.get('detached'), 'personal')
+
+  // Share parent with external collaborator -> child & grandchild inherit hasExternal too; detached does not
+  collab.shareWithEmail(ada.id, '/pages', 'parent', ext.email, 'viewer', 'external')
+  const externals = collab.collectionExternalCollaborators(ws.id, '/pages')
+  assert.equal(externals.has('parent'), true)
+  assert.equal(externals.has('child'), true)
+  assert.equal(externals.has('grandchild'), true)
+  assert.equal(externals.has('detached'), false)
+
+  // Switching parent to 'members' upgrades parent, child, grandchild to 'workspace'; detached stays 'personal'
+  collab.setRecordAccessMode(ada.id, '/pages', 'parent', 'members', 'editor')
+  const afterMembers = collab.collectionOwnership(ws.id, '/pages')
+  assert.equal(afterMembers.get('parent'), 'workspace')
+  assert.equal(afterMembers.get('child'), 'workspace')
+  assert.equal(afterMembers.get('grandchild'), 'workspace')
+  assert.equal(afterMembers.get('detached'), 'personal')
+})
