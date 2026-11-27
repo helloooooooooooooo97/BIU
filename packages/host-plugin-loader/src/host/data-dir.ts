@@ -16,6 +16,7 @@ export {
 } from './asset-cas.ts'
 export { adoptCasAssets, listCasAssetFiles, listDocAssetFiles, rewriteAssetText, upsertAttachmentRow, replacePageBlockRefs, ensureRefTables } from './adopt-cas-assets.ts'
 export { openSqlite, configureSqlite, quoteSqlitePath, SQLITE_BUSY_TIMEOUT_MS, SQLITE_WAL_AUTOCHECKPOINT, getSchemaVersion, setSchemaVersion } from './sqlite-open.ts'
+export { wrapPreparedStmtCache } from './sqlite-pool.ts'
 export { ensureBiuAssetSchema, LATEST_BIU_SCHEMA, createLatestSchema } from './biu-schema.ts'
 export { migrateBiu, openAndMigrateBiu, renameSessionsTableToAgents, sharedBiuPoolStats, closeAllSharedBiuConnections } from './biu-migrate.ts'
 export { migrateEvents, openAndMigrateEvents, LATEST_EVENTS_SCHEMA } from './events-migrate.ts'

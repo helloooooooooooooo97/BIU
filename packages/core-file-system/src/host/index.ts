@@ -11,6 +11,7 @@ import {
 import { getAccountPort, getBlobPort } from '@biu/host-plugin-loader/ports'
 import { getRuntimePolicy, resolveScopedWorkspaceId } from '@biu/host-plugin-loader/runtime'
 import { type Action as PermissionAction, type AuthorizationService } from '@biu/host-account/authorization'
+import { BoundedMap } from '@biu/biu-ui/cache'
 import { Service, type Context } from 'cordis'
 import {
   DATABASE_CHANNEL,
@@ -520,8 +521,7 @@ export class DatabaseService extends Service implements Database {
   private inflightMatches = new Map<string, Promise<DbRecord[]>>()
   private inflightScans = new Map<string, Promise<DbRecord[]>>()
   private inflightVisible = new Map<string, Promise<VisibleSortedPack>>()
-  private visibleCache = new Map<string, VisibleSortedPack>()
-  private readonly visibleCacheMax = 128
+  private visibleCache = new BoundedMap<string, VisibleSortedPack>(128)
   private visibleGen = 0
   private boundAuth?: AuthorizationService
   private unbindAuth?: () => void
@@ -998,23 +998,11 @@ export class DatabaseService extends Service implements Database {
     const rules = normalizeSorts(sorts, sortField, sortDir)
     const key = `${spec.path}\t${load.trash ? 1 : 0}\t${load.q ?? ''}\t${overlay ? 1 : 0}\t${JSON.stringify(load.filter ?? {})}\t${(load.ids ?? []).join(',')}\t${JSON.stringify(rules)}\t${actorKey}`
     const cached = this.visibleCache.get(key)
-    if (cached) {
-      this.visibleCache.delete(key)
-      this.visibleCache.set(key, cached)
-      return cached
-    }
+    if (cached) return cached
     return shareInflight(this.inflightVisible, key, async () => {
       const gen = this.visibleGen
       const pack = await this.visibleSortedCollectionRowsNow(spec, query, sortField, sortDir, sorts, overlay)
-      if (gen === this.visibleGen) {
-        if (this.visibleCache.has(key)) {
-          this.visibleCache.delete(key)
-        } else if (this.visibleCache.size >= this.visibleCacheMax) {
-          const oldest = this.visibleCache.keys().next().value
-          if (oldest !== undefined) this.visibleCache.delete(oldest)
-        }
-        this.visibleCache.set(key, pack)
-      }
+      if (gen === this.visibleGen) this.visibleCache.set(key, pack)
       return pack
     })
   }

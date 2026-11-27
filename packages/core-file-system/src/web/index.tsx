@@ -42,6 +42,7 @@ import { InspectorFollowToggle } from './inspector-follow.tsx'
 import { DatabaseUiService, getDatabaseUi } from './database-ui.ts'
 import { invalidateListCacheForFsdbChange } from './browser-list-cache.ts'
 import { invalidateListReads } from './db-client.ts'
+import { invalidatePreviewTotalsForFsdbChange } from './sidebar-preview.ts'
 
 registerShellDataBridge({
   hydratePagePrefs,
@@ -615,6 +616,7 @@ export function apply(ctx: Context) {
       if (change) {
         invalidateListReads()
         invalidateListCacheForFsdbChange(change)
+        invalidatePreviewTotalsForFsdbChange(change)
         emitFsdbChange(change)
       }
       if (!channelNeedsCollectionSync(parsed)) return

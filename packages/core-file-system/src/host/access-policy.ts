@@ -1,3 +1,4 @@
+import { BoundedMap } from '@biu/biu-ui/cache'
 import { currentAccountId, currentRequestWorkspaceId } from '@biu/host-plugin-loader/data-dir'
 import { getRuntimePolicy } from '@biu/host-plugin-loader/runtime'
 import { type Action as PermissionAction, type AuthorizationService } from '@biu/host-account/authorization'
@@ -148,50 +149,15 @@ export type AccessPolicyHost = {
 
 const DEFAULT_CACHE_CAPACITY = 256
 
-class BoundedLru<K, V> {
-  private readonly map = new Map<K, V>()
-
-  constructor(private readonly maxEntries = DEFAULT_CACHE_CAPACITY) {}
-
-  get(key: K): V | undefined {
-    const value = this.map.get(key)
-    if (value === undefined) return undefined
-    this.map.delete(key)
-    this.map.set(key, value)
-    return value
-  }
-
-  set(key: K, value: V): void {
-    if (this.map.has(key)) this.map.delete(key)
-    else if (this.map.size >= this.maxEntries) {
-      const oldest = this.map.keys().next().value
-      if (oldest !== undefined) this.map.delete(oldest)
-    }
-    this.map.set(key, value)
-  }
-
-  delete(key: K): void {
-    this.map.delete(key)
-  }
-
-  clear(): void {
-    this.map.clear()
-  }
-
-  get size(): number {
-    return this.map.size
-  }
-}
-
 /**
  * 封装单逻辑表工作区数据归属（Notion 三态：私人 / 共享 / 空间 + 正交外部标记）、
  * 静态权限判定与 100% SQL 下推 ID 预计算。
  */
 export class DatabaseAccessPolicy {
-  private readonly ownershipCache = new BoundedLru<string, Map<string, 'personal' | 'workspace' | 'shared'>>()
-  private readonly externalCollaboratorCache = new BoundedLru<string, Set<string>>()
-  private readonly ownerCache = new BoundedLru<string, Map<string, string>>()
-  private readonly recordShareCache = new BoundedLru<string, Set<string>>()
+  private readonly ownershipCache = new BoundedMap<string, Map<string, 'personal' | 'workspace' | 'shared'>>(DEFAULT_CACHE_CAPACITY)
+  private readonly externalCollaboratorCache = new BoundedMap<string, Set<string>>(DEFAULT_CACHE_CAPACITY)
+  private readonly ownerCache = new BoundedMap<string, Map<string, string>>(DEFAULT_CACHE_CAPACITY)
+  private readonly recordShareCache = new BoundedMap<string, Set<string>>(DEFAULT_CACHE_CAPACITY)
 
   constructor(private readonly host: AccessPolicyHost) {}
 

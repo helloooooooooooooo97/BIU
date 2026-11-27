@@ -1,5 +1,6 @@
 import { readStorageString } from './client-storage.ts'
 import { apiFetch } from './api-client.ts'
+import { KeyedSingleflight, registerWorkspaceCache } from './cache.ts'
 export type WorkspaceProfile = {
   name: string
   avatar: string
@@ -78,45 +79,42 @@ function accountToken() {
 }
 
 const PROFILE_GET_HOLD_MS = 400
-let profileGetInflight: Promise<WorkspaceProfile> | null = null
+const profileSingleflight = new KeyedSingleflight<string, WorkspaceProfile>()
+let profileGen = 0
 
 export function resetWorkspaceProfileHydrate() {
-  profileGetInflight = null
+  profileGen += 1
+  profileSingleflight.clear()
 }
 
+registerWorkspaceCache('workspace-profile', () => {
+  resetWorkspaceProfileHydrate()
+})
+
 export async function hydrateWorkspaceProfile() {
-  if (profileGetInflight) return profileGetInflight
   const token = accountToken()
   if (!token) return writeWorkspaceProfile(EMPTY)
-  let request: Promise<WorkspaceProfile>
-  request = (async () => {
-    try {
-      const res = await apiFetch('/api/account/workspace-profile', {
-        headers: { authorization: `Bearer ${token}` },
-      })
-      if (!res.ok) return readWorkspaceProfile()
-      const data = (await res.json()) as Partial<WorkspaceProfile>
-      const next = parse(data, true)
-      const current = readWorkspaceProfile()
-      if (sameProfile(current, next)) return current
-      return writeWorkspaceProfile(next)
-    } catch {
-      return readWorkspaceProfile()
-    }
-  })().then(
-    (body) => {
-      setTimeout(() => {
-        if (profileGetInflight === request) profileGetInflight = null
-      }, PROFILE_GET_HOLD_MS)
-      return body
+  return profileSingleflight.run(
+    token,
+    async () => {
+      const startGen = profileGen
+      try {
+        const res = await apiFetch('/api/account/workspace-profile', {
+          headers: { authorization: `Bearer ${token}` },
+        })
+        if (!res.ok || profileGen !== startGen) return readWorkspaceProfile()
+        const data = (await res.json()) as Partial<WorkspaceProfile>
+        if (profileGen !== startGen) return readWorkspaceProfile()
+        const next = parse(data, true)
+        const current = readWorkspaceProfile()
+        if (sameProfile(current, next)) return current
+        return writeWorkspaceProfile(next)
+      } catch {
+        return readWorkspaceProfile()
+      }
     },
-    (error) => {
-      if (profileGetInflight === request) profileGetInflight = null
-      throw error
-    },
+    { holdMs: PROFILE_GET_HOLD_MS },
   )
-  profileGetInflight = request
-  return request
 }
 
 export async function persistWorkspaceProfile(next: WorkspaceProfile) {

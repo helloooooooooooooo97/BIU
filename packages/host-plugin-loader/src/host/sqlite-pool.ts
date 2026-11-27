@@ -25,20 +25,49 @@ function fileInode(filePath: string): number {
   }
 }
 
-function wrapSharedHandle(entry: SharedPoolEntry): DatabaseSync {
-  let closed = false
-  return new Proxy(entry.raw, {
+function createStmtPreparer(
+  target: DatabaseSync,
+  stmtCache: Map<string, ReturnType<DatabaseSync['prepare']>>,
+  maxStmts = MAX_SHARED_STMTS,
+) {
+  return (sql: string) => {
+    let cached = stmtCache.get(sql)
+    if (!cached) {
+      cached = target.prepare(sql)
+      if (stmtCache.size < maxStmts) stmtCache.set(sql, cached)
+    }
+    return cached
+  }
+}
+
+/**
+ * Wraps a SQLite `DatabaseSync` handle with a bounded prepared-statement cache so
+ * high-frequency queries do not recompile identical SQL on every call.
+ */
+export function wrapPreparedStmtCache(raw: DatabaseSync, maxStmts = MAX_SHARED_STMTS): DatabaseSync {
+  const stmtCache = new Map<string, ReturnType<DatabaseSync['prepare']>>()
+  const prepare = createStmtPreparer(raw, stmtCache, maxStmts)
+  return new Proxy(raw, {
     get(target, prop, receiver) {
-      if (prop === 'prepare') {
-        return (sql: string) => {
-          let cached = entry.stmtCache.get(sql)
-          if (!cached) {
-            cached = target.prepare(sql)
-            if (entry.stmtCache.size < MAX_SHARED_STMTS) entry.stmtCache.set(sql, cached)
-          }
-          return cached
+      if (prop === 'prepare') return prepare
+      if (prop === 'close') {
+        return () => {
+          stmtCache.clear()
+          return target.close()
         }
       }
+      const value = Reflect.get(target, prop, receiver)
+      return typeof value === 'function' ? value.bind(target) : value
+    },
+  })
+}
+
+function wrapSharedHandle(entry: SharedPoolEntry): DatabaseSync {
+  let closed = false
+  const prepare = createStmtPreparer(entry.raw, entry.stmtCache, MAX_SHARED_STMTS)
+  return new Proxy(entry.raw, {
+    get(target, prop, receiver) {
+      if (prop === 'prepare') return prepare
       if (prop === 'close') {
         return () => {
           if (closed) return
