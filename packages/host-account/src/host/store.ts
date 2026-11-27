@@ -1698,6 +1698,31 @@ export class CollabStore {
     return out
   }
 
+  private sanitizeViewOrder(raw: unknown): Record<string, string[]> {
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {}
+    const out: Record<string, string[]> = {}
+    let tableCount = 0
+    for (const [rawPath, rawIds] of Object.entries(raw as Record<string, unknown>)) {
+      if (tableCount >= 128) break
+      const path = String(rawPath ?? '').trim()
+      if (!path || !Array.isArray(rawIds)) continue
+      const seen = new Set<string>()
+      const ids: string[] = []
+      for (const item of rawIds) {
+        const id = String(item ?? '').trim()
+        if (!id || seen.has(id)) continue
+        seen.add(id)
+        ids.push(id)
+        if (ids.length >= 200) break
+      }
+      if (ids.length > 0) {
+        out[path] = ids
+        tableCount += 1
+      }
+    }
+    return out
+  }
+
   workspacePrefs(actorId: string, requestedWorkspaceId = '') {
     const workspaceId = requestedWorkspaceId.trim() || currentRequestWorkspaceId() || this.activeWorkspaceId()
     if (!workspaceId) throw new CollabError('没有工作区', 400)
@@ -1710,6 +1735,7 @@ export class CollabStore {
       starredViews: [] as Array<{ path: string; viewId: string; name?: string }>,
       starredRecords: [] as Array<{ path: string; recordId: string; label?: string; emoji?: string }>,
       pinnedAgents: [] as string[],
+      viewOrder: {} as Record<string, string[]>,
       theme: undefined as 'light' | 'dark' | undefined,
       accent: undefined as 'blue' | 'purple' | 'green' | 'orange' | 'pink' | 'red' | undefined,
       pagePrefs: undefined as Record<string, unknown> | undefined,
@@ -1736,6 +1762,7 @@ export class CollabStore {
         starredViews: this.sanitizeStarredViews(parsed.starredViews),
         starredRecords: this.sanitizeStarredRecords(parsed.starredRecords),
         pinnedAgents: this.sanitizePinnedAgents(parsed.pinnedAgents),
+        viewOrder: this.sanitizeViewOrder(parsed.viewOrder),
         theme,
         accent,
         pagePrefs,
@@ -1751,6 +1778,7 @@ export class CollabStore {
       starredViews?: unknown
       starredRecords?: unknown
       pinnedAgents?: unknown
+      viewOrder?: unknown
       theme?: unknown
       accent?: unknown
       pagePrefs?: unknown
@@ -1775,11 +1803,16 @@ export class CollabStore {
       patch.pagePrefs && typeof patch.pagePrefs === 'object' && !Array.isArray(patch.pagePrefs)
         ? { ...(current.pagePrefs ?? {}), ...(patch.pagePrefs as Record<string, unknown>) }
         : current.pagePrefs
+    const viewOrder =
+      patch.viewOrder !== undefined
+        ? { ...current.viewOrder, ...this.sanitizeViewOrder(patch.viewOrder) }
+        : current.viewOrder
     const next = {
       starredViews: patch.starredViews !== undefined ? this.sanitizeStarredViews(patch.starredViews) : current.starredViews,
       starredRecords:
         patch.starredRecords !== undefined ? this.sanitizeStarredRecords(patch.starredRecords) : current.starredRecords,
       pinnedAgents: patch.pinnedAgents !== undefined ? this.sanitizePinnedAgents(patch.pinnedAgents) : current.pinnedAgents,
+      viewOrder,
       ...(theme ? { theme } : {}),
       ...(accent ? { accent } : {}),
       ...(pagePrefs ? { pagePrefs } : {}),

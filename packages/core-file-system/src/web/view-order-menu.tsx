@@ -1,4 +1,5 @@
 import { useState, type CSSProperties, type ReactNode } from 'react'
+import { createPortal } from 'react-dom'
 import {
   DndContext,
   DragOverlay,
@@ -371,27 +372,34 @@ export function ViewOrderMenu({
                   />
                 ))}
               </SortableContext>
-              <DragOverlay zIndex={overlayZ(280)}>
-                {active ? (
-                  <div className="fsdb-query-drag-overlay" data-fsdb-sort-overlay>
-                    <ViewRowShell
-                      view={active}
-                      active={active.id === activeViewId}
-                      isCloud={isCloud}
-                      isMembersCollection={isMembersCollection}
-                      onSelect={() => undefined}
-                      onCopy={() => undefined}
-                      onDelete={() => undefined}
-                      canRemove={canRemove}
-                      grip={
-                        <button type="button" className="fsdb-query-grip" tabIndex={-1}>
-                          <DndGrip />
-                        </button>
-                      }
-                    />
-                  </div>
-                ) : null}
-              </DragOverlay>
+              {typeof document !== 'undefined'
+                ? createPortal(
+                    <DragOverlay zIndex={overlayZ(280)}>
+                      {active ? (
+                        <div className="fsdb-query-drag-overlay" data-fsdb-sort-overlay>
+                          <ViewRowShell
+                            view={active}
+                            active={active.id === activeViewId}
+                            isCloud={isCloud}
+                            isMembersCollection={isMembersCollection}
+                            onSelect={() => undefined}
+                            onCopy={() => undefined}
+                            onDelete={() => undefined}
+                            onToggleLock={onToggleLock ? () => undefined : undefined}
+                            onOpenShare={onOpenShare ? () => undefined : undefined}
+                            canRemove={canRemove && canDeleteSavedView(active) && canRemoveCollectionView(views, active)}
+                            grip={
+                              <button type="button" className="fsdb-query-grip" tabIndex={-1}>
+                                <DndGrip />
+                              </button>
+                            }
+                          />
+                        </div>
+                      ) : null}
+                    </DragOverlay>,
+                    document.body,
+                  )
+                : null}
             </DndContext>
             {foot}
           </>

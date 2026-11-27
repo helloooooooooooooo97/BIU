@@ -4,12 +4,13 @@ import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { UserGroupIcon, UsersIcon } from '@heroicons/react/16/solid'
 import { emptyFilterGroup } from '../query-logic.ts'
+import { paintCollectionViews } from './collection-nav.ts'
 import { rankListedViews, type SavedView } from './saved-view.ts'
 import { createBrowserViewCrud } from './use-browser-view-crud.ts'
 import { viewScopeMeta } from './view-order-menu.tsx'
-import { loadViews, rememberViews } from './view-storage.ts'
+import { applyUserViewOrder, getViewOrder, persistViewOrderForPath, rememberViews } from './view-storage.ts'
 
-test('persistViewOrder paints new rank order immediately, sends diff upsert, and rolls back on failure', async () => {
+test('persistViewOrder stores per-user viewOrder in workspace prefs without mutating shared saved-views', async () => {
   const path = '/pages-behavior-reorder'
   const mem: Record<string, string> = {}
   Object.defineProperty(globalThis, 'localStorage', {
@@ -25,8 +26,9 @@ test('persistViewOrder paints new rank order immediately, sends diff upsert, and
     ;(globalThis as Record<string, unknown>).window = { dispatchEvent: () => true }
   }
 
-  const v1: SavedView = { id: 'v1', name: '一', mode: 'table', sortField: 'title', sortDir: 'asc', filters: {}, columns: ['title'], rank: 0 }
+  const v1: SavedView = { id: 'v1', name: '全部页面', mode: 'table', locked: true, sortField: 'title', sortDir: 'asc', filters: {}, columns: ['title'], rank: 0 }
   const v2: SavedView = { id: 'v2', name: '二', mode: 'table', sortField: 'title', sortDir: 'asc', filters: {}, columns: ['title'], rank: 1 }
+  const v3: SavedView = { id: 'v3', name: '三', mode: 'table', sortField: 'title', sortDir: 'asc', filters: {}, columns: ['title'], rank: 2 }
 
   const makeCrud = () => {
     rememberViews(path, [v1, v2])
@@ -72,48 +74,52 @@ test('persistViewOrder paints new rank order immediately, sends diff upsert, and
 
   const prevFetch = globalThis.fetch
   try {
-    // 1. Persisting new order sends upsert with updated ranks (not skipped)
-    const upserts: Array<Array<{ id: string; rank?: number }>> = []
+    const starredPatches: Array<Record<string, unknown>> = []
+    let savedViewsWrites = 0
     globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
-      if (String(input).includes('/api/db/saved-views')) {
-        const body = JSON.parse(String(init?.body ?? '{}')) as { upsert?: Array<{ id: string; rank?: number }> }
-        upserts.push(body.upsert ?? [])
+      const url = String(input)
+      if (url.includes('/api/db/saved-views')) {
+        savedViewsWrites += 1
         return new Response('{"ok":true}', { status: 200 })
       }
-      return new Response(
-        JSON.stringify({
-          items: [
-            { viewId: 'v2', title: '二', tablePath: path, rank: 0 },
-            { viewId: 'v1', title: '一', tablePath: path, rank: 1 },
-          ],
-          total: 2,
-        }),
-        { status: 200, headers: { 'content-type': 'application/json' } },
-      )
+      if (url.includes('/api/account/starred') && init?.method === 'POST') {
+        starredPatches.push(JSON.parse(String(init.body ?? '{}')) as Record<string, unknown>)
+        return new Response('{"ok":true}', { status: 200 })
+      }
+      return new Response('{}', { status: 200, headers: { 'content-type': 'application/json' } })
     }) as typeof fetch
 
     const ok = makeCrud()
     ok.crud.persistViewOrder(['v2', 'v1'])
     assert.deepEqual(ok.viewsRef.current.map((v) => v.id), ['v2', 'v1'])
-    await new Promise((r) => setTimeout(r, 25))
-    assert.equal(upserts.length, 1)
-    assert.deepEqual(
-      upserts[0]?.map((v) => [v.id, v.rank]).sort(),
-      [['v1', 1], ['v2', 0]],
-    )
+    assert.deepEqual(getViewOrder(path), ['v2', 'v1'])
+    // Sidebar / collection nav and applyUserViewOrder both follow per-user order and append new views at the end
+    assert.deepEqual(paintCollectionViews(path, [], [v1, v2]).map((v) => v.id), ['v2', 'v1'])
+    assert.deepEqual(applyUserViewOrder(path, [v1, v2, v3]).map((v) => v.id), ['v2', 'v1', 'v3'])
 
-    // 2. Failure rolls back to original order
-    globalThis.fetch = (async () => new Response('err', { status: 500 })) as typeof fetch
-    const fail = makeCrud()
-    fail.crud.persistViewOrder(['v2', 'v1'])
-    assert.deepEqual(fail.viewsRef.current.map((v) => v.id), ['v2', 'v1'])
     await new Promise((r) => setTimeout(r, 25))
-    assert.deepEqual(fail.viewsRef.current.map((v) => v.id), ['v1', 'v2'])
-    assert.deepEqual(loadViews(path).map((v) => v.id), ['v1', 'v2'])
+    assert.equal(savedViewsWrites, 0)
+    assert.equal(starredPatches.length, 1)
+    assert.deepEqual(starredPatches[0], { viewOrder: { [path]: ['v2', 'v1'] } })
   } finally {
+    persistViewOrderForPath(path, [], { remote: false })
     globalThis.fetch = prevFetch
     if (!prevWin) delete (globalThis as Record<string, unknown>).window
   }
+})
+
+test('DragOverlay in popover menus portals to document.body and ViewOrderMenu overlay preserves row icons', () => {
+  const orderMenu = readFileSync(resolve(import.meta.dirname, './view-order-menu.tsx'), 'utf8')
+  const queryMenus = readFileSync(resolve(import.meta.dirname, './query-menus.tsx'), 'utf8')
+  const columnMenu = readFileSync(resolve(import.meta.dirname, './column-order-menu.tsx'), 'utf8')
+  for (const [name, src] of [
+    ['view-order-menu.tsx', orderMenu],
+    ['query-menus.tsx', queryMenus],
+    ['column-order-menu.tsx', columnMenu],
+  ] as const) {
+    assert.match(src, /createPortal\([\s\S]*?<DragOverlay[\s\S]*?document\.body/, `${name} should portal DragOverlay to document.body`)
+  }
+  assert.match(orderMenu, /<DragOverlay[\s\S]*?onToggleLock=\{onToggleLock \? \(\) => undefined : undefined\}[\s\S]*?canRemove=\{canRemove && canDeleteSavedView\(active\) && canRemoveCollectionView\(views, active\)\}/)
 })
 
 test('view switcher button and dropdown resolve and render unified shareScope + locked badges', () => {

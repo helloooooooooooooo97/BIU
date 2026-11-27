@@ -712,6 +712,7 @@ export function apply(ctx: Context, config: AccountConfig = {}) {
       starredViews: prefs.starredViews,
       starredRecords: prefs.starredRecords,
       pinnedAgents: prefs.pinnedAgents,
+      viewOrder: prefs.viewOrder,
     })
   })
 
@@ -720,6 +721,7 @@ export function apply(ctx: Context, config: AccountConfig = {}) {
       starredViews?: unknown
       starredRecords?: unknown
       pinnedAgents?: unknown
+      viewOrder?: unknown
     }
     const saved = account.store.saveWorkspacePrefs(me.id, body)
     route.send(200, {
@@ -727,6 +729,7 @@ export function apply(ctx: Context, config: AccountConfig = {}) {
       starredViews: saved.starredViews,
       starredRecords: saved.starredRecords,
       pinnedAgents: saved.pinnedAgents,
+      viewOrder: saved.viewOrder,
     })
   })
 

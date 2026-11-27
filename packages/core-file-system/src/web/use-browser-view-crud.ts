@@ -17,12 +17,14 @@ import {
 } from './saved-view.ts'
 import {
   activeViewStorageKey,
+  applyUserViewOrder,
   beginPendingViewOp,
   commitPendingViewOp,
   getStarredViews,
   isViewStarred,
   loadViews,
   persistStarredViews,
+  persistViewOrderForPath,
   pullSavedViews,
   pushSavedViewsMutation,
   removeStarredViews,
@@ -118,7 +120,7 @@ export function createBrowserViewCrud(opts: BrowserViewCrudOptions) {
   function syncPaintedState(path: string) {
     if (path !== collectionPath) return
     const live = loadViews(path)
-    const painted = rankListedViews(listedViews(path, live), live)
+    const painted = applyUserViewOrder(path, rankListedViews(listedViews(path, live), live))
     viewsRef.current = painted
     setViews(painted)
   }
@@ -170,29 +172,30 @@ export function createBrowserViewCrud(opts: BrowserViewCrudOptions) {
   function persistViewOrder(ids: string[]) {
     const current = viewsRef.current
     const byId = new Map(current.map((view) => [view.id, view]))
-    const ranked: SavedView[] = []
-    ids.forEach((id, rank) => {
+    const ordered: SavedView[] = []
+    for (const id of ids) {
       const view = byId.get(id)
-      if (!view) return
-      ranked.push({ ...view, rank })
+      if (!view) continue
+      ordered.push(view)
       byId.delete(id)
-    })
-    for (const view of current) {
-      if (byId.has(view.id)) ranked.push(view)
     }
-    const next = rankListedViews(ranked, ranked)
+    for (const view of current) {
+      if (byId.has(view.id)) ordered.push(view)
+    }
     if (externalViews) {
+      const ranked = ordered.map((view, rank) => ({ ...view, rank }))
+      const next = rankListedViews(ranked, ranked)
       viewsRef.current = next
       setViews(next)
       externalViews.onChange?.(next, activeViewIdRef.current ?? activeViewId ?? next[0]?.id ?? '')
       return
     }
-    const prevById = new Map(current.map((view) => [view.id, view]))
-    const changed: SavedViewFieldPatch[] = next
-      .filter((view) => !view.ephemeral && prevById.get(view.id)?.rank !== view.rank)
-      .map((view) => ({ id: view.id, rank: view.rank }))
-    if (!changed.length) return
-    void commitViewMutation(collectionPath, { upsert: changed })
+    const nextIds = ordered.map((view) => view.id)
+    const prevIds = current.map((view) => view.id)
+    if (nextIds.length === prevIds.length && nextIds.every((id, idx) => id === prevIds[idx])) return
+    viewsRef.current = ordered
+    setViews(ordered)
+    persistViewOrderForPath(collectionPath, nextIds)
   }
 
   function newSavedViewId() {

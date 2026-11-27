@@ -51,6 +51,7 @@ import {
   getStarredRecordsVersion,
   getStarredViews,
   getStarredViewsVersion,
+  getViewOrderVersion,
   hasPulledSavedViews,
   isRecordStarred,
   isViewStarred,
@@ -63,6 +64,7 @@ import {
   persistStarredRecords,
   persistStarredViews,
   pullSavedViews,
+  subscribeViewOrder,
   subscribeViews,
   rememberRecords,
   starredRecordEmoji,
@@ -706,6 +708,7 @@ export const DataSidebar = memo(function DataSidebar({
   const litViewId = pendingPick?.viewId ?? activeViewId
   useSyncExternalStore(subscribeStarredViews, getStarredViewsVersion, () => 0)
   useSyncExternalStore(subscribeStarredRecords, getStarredRecordsVersion, () => 0)
+  const viewOrderVersion = useSyncExternalStore(subscribeViewOrder, getViewOrderVersion, () => 0)
   const starredViews = getStarredViews()
   const starredRecords = getStarredRecords()
   const collapsedSections = useSidebarCollapseStore((state) => state.collapsed)
@@ -778,6 +781,7 @@ export const DataSidebar = memo(function DataSidebar({
 
   const viewsByPath = useMemo(() => {
     void viewsTick
+    void viewOrderVersion
     const map = new Map<string, SavedView[]>()
     for (const table of listedTables) {
       const path = table.path
@@ -786,7 +790,7 @@ export const DataSidebar = memo(function DataSidebar({
       map.set(path, paintCollectionViews(path, tables, user))
     }
     return map
-  }, [collectionPath, listedTables, tables, views, viewsTick])
+  }, [collectionPath, listedTables, tables, viewOrderVersion, views, viewsTick])
 
   function viewsFor(path: string) {
     const hit = viewsByPath.get(path)

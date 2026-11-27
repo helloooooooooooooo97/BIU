@@ -7,6 +7,7 @@ export type StarredRecord = { path: string; recordId: string; label?: string; em
 
 const STARRED_VIEWS_KEY = 'fsdb.starredViews'
 const STARRED_RECORDS_KEY = 'fsdb.starredRecords'
+const VIEW_ORDER_KEY = 'fsdb.viewOrder'
 
 function starredViewsKey() {
   const ws = currentStorageWorkspaceId()
@@ -16,6 +17,39 @@ function starredViewsKey() {
 function starredRecordsKey() {
   const ws = currentStorageWorkspaceId()
   return ws ? `${STARRED_RECORDS_KEY}:${ws}` : STARRED_RECORDS_KEY
+}
+
+function viewOrderKey() {
+  const ws = currentStorageWorkspaceId()
+  return ws ? `${VIEW_ORDER_KEY}:${ws}` : VIEW_ORDER_KEY
+}
+
+function normalizeViewOrderMap(raw: unknown): Record<string, string[]> {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {}
+  const out: Record<string, string[]> = {}
+  for (const [rawPath, rawIds] of Object.entries(raw as Record<string, unknown>)) {
+    const path = String(rawPath ?? '').trim()
+    if (!path || !Array.isArray(rawIds)) continue
+    const seen = new Set<string>()
+    const ids: string[] = []
+    for (const item of rawIds) {
+      const id = String(item ?? '').trim()
+      if (!id || seen.has(id)) continue
+      seen.add(id)
+      ids.push(id)
+    }
+    if (ids.length > 0) out[path] = ids
+  }
+  return out
+}
+
+export function loadViewOrderMap(): Record<string, string[]> {
+  try {
+    const raw = readStorageString(viewOrderKey())
+    return normalizeViewOrderMap(raw ? JSON.parse(raw) : {})
+  } catch {
+    return {}
+  }
 }
 
 function normalizeStarredViews(raw: unknown): StarredView[] {
@@ -66,12 +100,19 @@ let starredViews = loadStarredViews()
 let starredVersion = 0
 let starredRecords = loadStarredRecords()
 let starredRecordsVersion = 0
+let viewOrderMap = loadViewOrderMap()
+let viewOrderVersion = 0
 let starredHydrateSeq = 0
 let starredHydratedOnce = false
 const starredListeners = new Set<() => void>()
 const starredRecordListeners = new Set<() => void>()
+const viewOrderListeners = new Set<() => void>()
 
-function pushStarredToServer(patch: { starredViews?: StarredView[]; starredRecords?: StarredRecord[] }) {
+function pushStarredToServer(patch: {
+  starredViews?: StarredView[]
+  starredRecords?: StarredRecord[]
+  viewOrder?: Record<string, string[]>
+}) {
   if (typeof window === 'undefined' || typeof fetch !== 'function') return
   void apiFetch('/api/account/starred', {
     method: 'POST',
@@ -86,13 +127,20 @@ export async function hydrateStarredFromServer() {
   try {
     const res = await apiFetch('/api/account/starred')
     if (!res.ok || seq !== starredHydrateSeq) return
-    const data = (await res.json()) as { starredViews?: unknown; starredRecords?: unknown }
+    const data = (await res.json()) as {
+      starredViews?: unknown
+      starredRecords?: unknown
+      viewOrder?: unknown
+    }
     if (seq !== starredHydrateSeq) return
     if (Array.isArray(data.starredViews)) {
       persistStarredViews(normalizeStarredViews(data.starredViews), { remote: false })
     }
     if (Array.isArray(data.starredRecords)) {
       persistStarredRecords(normalizeStarredRecords(data.starredRecords), { remote: false })
+    }
+    if (data.viewOrder && typeof data.viewOrder === 'object' && !Array.isArray(data.viewOrder)) {
+      persistViewOrderMap(normalizeViewOrderMap(data.viewOrder), { remote: false })
     }
   } catch {
     /* ignore */
@@ -201,9 +249,79 @@ export function starredRecordEmoji(item: StarredRecord) {
   return String(peekRecord(item.path, item.recordId)?.emoji ?? item.emoji ?? '').trim()
 }
 
+export function getViewOrder(path: string): string[] | undefined {
+  const key = String(path ?? '').trim()
+  return key ? viewOrderMap[key] : undefined
+}
+
+export function getAllViewOrders(): Record<string, string[]> {
+  return viewOrderMap
+}
+
+export function subscribeViewOrder(fn: () => void) {
+  viewOrderListeners.add(fn)
+  ensureStarredHydrated()
+  return () => {
+    viewOrderListeners.delete(fn)
+  }
+}
+
+export function getViewOrderVersion() {
+  return viewOrderVersion
+}
+
+function persistViewOrderMap(next: Record<string, string[]>, options?: { remote?: boolean }) {
+  if (options?.remote !== false) starredHydrateSeq += 1
+  viewOrderMap = next
+  viewOrderVersion += 1
+  writeStorageString(viewOrderKey(), JSON.stringify(next))
+  for (const fn of viewOrderListeners) fn()
+  if (options?.remote !== false) pushStarredToServer({ viewOrder: next })
+}
+
+export function persistViewOrderForPath(path: string, ids: string[], options?: { remote?: boolean }) {
+  const key = String(path ?? '').trim()
+  if (!key) return
+  const seen = new Set<string>()
+  const clean: string[] = []
+  for (const raw of ids) {
+    const id = String(raw ?? '').trim()
+    if (!id || seen.has(id)) continue
+    seen.add(id)
+    clean.push(id)
+  }
+  const next: Record<string, string[]> = { ...viewOrderMap }
+  if (clean.length > 0) next[key] = clean
+  else delete next[key]
+  if (options?.remote !== false) starredHydrateSeq += 1
+  viewOrderMap = next
+  viewOrderVersion += 1
+  writeStorageString(viewOrderKey(), JSON.stringify(next))
+  for (const fn of viewOrderListeners) fn()
+  if (options?.remote !== false) pushStarredToServer({ viewOrder: { [key]: clean } })
+}
+
+export function applyUserViewOrder<T extends { id: string }>(path: string, views: T[]): T[] {
+  const order = getViewOrder(path)
+  if (!order?.length || views.length <= 1) return views
+  const byId = new Map(views.map((view) => [view.id, view]))
+  const ordered: T[] = []
+  for (const id of order) {
+    const hit = byId.get(id)
+    if (!hit) continue
+    ordered.push(hit)
+    byId.delete(id)
+  }
+  for (const view of views) {
+    if (byId.has(view.id)) ordered.push(view)
+  }
+  return ordered
+}
+
 export function resetStarredWorkspaceCache() {
   persistStarredViews([], { remote: false })
   persistStarredRecords([], { remote: false })
+  persistViewOrderMap({}, { remote: false })
   starredHydratedOnce = true
   void hydrateStarredFromServer()
 }

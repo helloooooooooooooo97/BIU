@@ -108,6 +108,7 @@ export function registerDatabaseHttpRoutes(
           starredViews: prefs.starredViews,
           starredRecords: prefs.starredRecords,
           pinnedAgents: prefs.pinnedAgents,
+          ...(prefs.viewOrder ? { viewOrder: prefs.viewOrder } : {}),
           ...(prefs.theme ? { theme: prefs.theme } : {}),
           ...(prefs.accent ? { accent: prefs.accent } : {}),
           ...(prefs.pagePrefs ? { pagePrefs: prefs.pagePrefs } : {}),
@@ -138,6 +139,7 @@ export function registerDatabaseHttpRoutes(
         starredViews?: unknown
         starredRecords?: unknown
         pinnedAgents?: unknown
+        viewOrder?: unknown
       }
       const policy = getRuntimePolicy()
       const actorId = currentAccountId()
@@ -159,6 +161,7 @@ export function registerDatabaseHttpRoutes(
                 ...(body.starredViews !== undefined ? { starredViews: body.starredViews } : {}),
                 ...(body.starredRecords !== undefined ? { starredRecords: body.starredRecords } : {}),
                 ...(body.pinnedAgents !== undefined ? { pinnedAgents: body.pinnedAgents } : {}),
+                ...(body.viewOrder !== undefined ? { viewOrder: body.viewOrder } : {}),
               },
               workspaceId,
             )
@@ -166,6 +169,7 @@ export function registerDatabaseHttpRoutes(
               starredViews: saved.starredViews,
               starredRecords: saved.starredRecords,
               pinnedAgents: saved.pinnedAgents,
+              ...(saved.viewOrder ? { viewOrder: saved.viewOrder } : {}),
               ...(saved.theme ? { theme: saved.theme } : {}),
               ...(saved.accent ? { accent: saved.accent } : {}),
               ...(saved.pagePrefs ? { pagePrefs: saved.pagePrefs } : {}),

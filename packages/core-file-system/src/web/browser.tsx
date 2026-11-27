@@ -160,6 +160,7 @@ import {
 import { getDatabaseUi } from './database-ui.ts'
 import {
   activeViewStorageKey,
+  applyUserViewOrder,
   fetchSavedView,
   getStarredViews,
   getStarredViewsVersion,
@@ -172,6 +173,7 @@ import {
   pickViewForRoute,
   routeViewNeedsFetch,
   subscribeStarredViews,
+  subscribeViewOrder,
   subscribeViews,
   upsertSavedView,
   viewForPath,
@@ -394,7 +396,7 @@ export function CollectionBrowser({
   }
   const paintListedViews = (path: string) => {
     const remembered = loadViews(path)
-    const ranked = rankListedViews(listedViews(path, remembered), remembered)
+    const ranked = applyUserViewOrder(path, rankListedViews(listedViews(path, remembered), remembered))
     if (ranked.length === 0 && path === collectionPath && hasPulledSavedViews(path)) {
       const table = tables.find((item) => item.path === path) ?? { path, label: title }
       return [ephemeralFallbackView(table)]
@@ -2674,7 +2676,7 @@ export function CollectionBrowser({
     if (current && (current.revision ?? 0) > (view.revision ?? 0)) return
     const incoming = normalizeSavedView(view)
     upsertSavedView(collectionPath, incoming)
-    const listed = rankListedViews(paintListedViews(collectionPath), viewsRef.current)
+    const listed = applyUserViewOrder(collectionPath, rankListedViews(paintListedViews(collectionPath), viewsRef.current))
     viewsRef.current = listed
     setViews(listed)
     if (view.id === activeViewIdRef.current) {
@@ -2686,7 +2688,7 @@ export function CollectionBrowser({
     const targetPath = collectionPath
     await pullSavedViews([targetPath], { force: true })
     if (dataPathRef.current !== dataPath) return
-    const listed = rankListedViews(paintListedViews(targetPath), viewsRef.current)
+    const listed = applyUserViewOrder(targetPath, rankListedViews(paintListedViews(targetPath), viewsRef.current))
     const prev = viewsRef.current
     const activeId = viewSyncRef.current!.resolveSyncedViewId(targetPath, activeViewIdRef.current, routeViewIdRef.current)
     viewsRef.current = listed
@@ -2722,13 +2724,19 @@ export function CollectionBrowser({
 
   useEffect(() => {
     if (sheet || hasExternalViews) return
-    return subscribeViews(() => {
+    const sync = () => {
       const listed = paintListedViews(collectionPath)
       if (!sameSavedViews(viewsRef.current, listed)) {
         viewsRef.current = listed
         setViews(listed)
       }
-    })
+    }
+    const unsubViews = subscribeViews(sync)
+    const unsubOrder = subscribeViewOrder(sync)
+    return () => {
+      unsubViews()
+      unsubOrder()
+    }
   }, [collectionPath, hasExternalViews, sheet])
 
   useEffect(() => {

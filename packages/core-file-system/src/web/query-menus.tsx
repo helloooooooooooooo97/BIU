@@ -1,4 +1,5 @@
 import { useState, type ReactNode, type RefObject } from 'react'
+import { createPortal } from 'react-dom'
 import {
   DndContext,
   DragOverlay,
@@ -269,18 +270,23 @@ export function SortQueryMenu({
                 )
               })}
             </SortableContext>
-            <DragOverlay zIndex={overlayZ(340)}>
-              {active ? (
-                <div className="fsdb-query-drag-overlay" data-fsdb-sort-overlay>
-                  <div className="fsdb-query-row">
-                    <button type="button" className="fsdb-query-grip" tabIndex={-1}>
-                      <DndGrip />
-                    </button>
-                    <SortRuleFields rule={active} kind={activeKind} options={options} sorts={displaySorts} onChange={() => {}} />
-                  </div>
-                </div>
-              ) : null}
-            </DragOverlay>
+            {typeof document !== 'undefined'
+              ? createPortal(
+                  <DragOverlay zIndex={overlayZ(340)}>
+                    {active ? (
+                      <div className="fsdb-query-drag-overlay" data-fsdb-sort-overlay>
+                        <div className="fsdb-query-row">
+                          <button type="button" className="fsdb-query-grip" tabIndex={-1}>
+                            <DndGrip />
+                          </button>
+                          <SortRuleFields rule={active} kind={activeKind} options={options} sorts={displaySorts} onChange={() => {}} />
+                        </div>
+                      </div>
+                    ) : null}
+                  </DragOverlay>,
+                  document.body,
+                )
+              : null}
           </DndContext>
         ) : (
           <div className="tasks-viewdd-empty">还没有排序</div>
