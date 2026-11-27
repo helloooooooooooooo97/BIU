@@ -2318,6 +2318,70 @@ export class CollabStore {
     return this.recordAccess(actorId, target.collection, target.recordId)
   }
 
+  /**
+   * 校验将某个 `/views` 视图从空间全员（members）切回仅受邀（private）时，
+   * 该表在 `saved_views` 中仍至少保留 1 个有效的空间视图（忽略已删除旧视图残留的幽灵策略行）。
+   */
+  private assertWorkspaceViewRemainsForPrivatize(workspaceId: string, recordId: string) {
+    const sep = recordId.indexOf('::')
+    if (sep <= 0) return
+    const tableName = recordId.slice(0, sep)
+    const tablePrefix = `${tableName}::`
+    const collectionPath = `/${tableName}`
+    const current = this.db
+      .prepare(
+        `SELECT access_mode FROM resource_policies
+         WHERE workspace_id = ? AND collection = '/views' AND record_id = ?`,
+      )
+      .get(workspaceId, recordId) as { access_mode?: string } | undefined
+    if (current?.access_mode !== 'members') return
+
+    let hasSavedViewsForTable = false
+    try {
+      hasSavedViewsForTable = Boolean(
+        this.db
+          .prepare(
+            `SELECT 1 AS ok FROM saved_views
+             WHERE (workspace_id = ? OR workspace_id = '') AND collection = ?
+             LIMIT 1`,
+          )
+          .get(workspaceId, collectionPath),
+      )
+    } catch {
+      hasSavedViewsForTable = false
+    }
+
+    const row = hasSavedViewsForTable
+      ? (this.db
+          .prepare(
+            `SELECT COUNT(DISTINCT p.record_id) AS cnt
+             FROM resource_policies p
+             JOIN saved_views v
+               ON (v.workspace_id = p.workspace_id OR v.workspace_id = '')
+              AND v.collection = ?
+              AND substr(p.record_id, ?) = v.view_id
+             WHERE p.workspace_id = ?
+               AND p.collection = '/views'
+               AND substr(p.record_id, 1, ?) = ?
+               AND p.access_mode = 'members'`,
+          )
+          .get(collectionPath, tablePrefix.length + 1, workspaceId, tablePrefix.length, tablePrefix) as
+          | { cnt?: number }
+          | undefined)
+      : (this.db
+          .prepare(
+            `SELECT COUNT(*) AS cnt FROM resource_policies
+             WHERE workspace_id = ? AND collection = '/views'
+               AND substr(record_id, 1, ?) = ?
+               AND access_mode = 'members'`,
+          )
+          .get(workspaceId, tablePrefix.length, tablePrefix) as { cnt?: number } | undefined)
+
+    if (Number(row?.cnt ?? 0) <= 1) {
+      throw new CollabError('至少保留一个空间视图', 400)
+    }
+  }
+
   setRecordAccessMode(
     actorId: string,
     collection: string,
@@ -2330,29 +2394,7 @@ export class CollabStore {
     this.requireMember(actorId, workspaceId)
     const target = this.resolveRecordTarget(collection, recordId)
     if (target.collection === '/views' && accessMode === 'private') {
-      const sep = target.recordId.indexOf('::')
-      if (sep > 0) {
-        const tablePrefix = `${target.recordId.slice(0, sep)}::`
-        const current = this.db
-          .prepare(
-            `SELECT access_mode FROM resource_policies
-             WHERE workspace_id = ? AND collection = '/views' AND record_id = ?`,
-          )
-          .get(workspaceId, target.recordId) as { access_mode?: string } | undefined
-        if (current?.access_mode === 'members') {
-          const row = this.db
-            .prepare(
-              `SELECT COUNT(*) AS cnt FROM resource_policies
-               WHERE workspace_id = ? AND collection = '/views'
-                 AND substr(record_id, 1, ?) = ?
-                 AND access_mode = 'members'`,
-            )
-            .get(workspaceId, tablePrefix.length, tablePrefix) as { cnt?: number } | undefined
-          if (Number(row?.cnt ?? 0) <= 1) {
-            throw new CollabError('至少保留一个空间视图', 400)
-          }
-        }
-      }
+      this.assertWorkspaceViewRemainsForPrivatize(workspaceId, target.recordId)
     }
     const resource = { type: 'record' as const, workspaceId, collection: target.collection, recordId: target.recordId }
     try {
@@ -2901,6 +2943,9 @@ export class CollabStore {
 
         if (input.mode === 'access_mode') {
           try {
+            if (target.collection === '/views' && input.accessMode === 'private') {
+              this.assertWorkspaceViewRemainsForPrivatize(workspaceId, target.recordId)
+            }
             this.authorization.setAccessMode(
               actor,
               resource,
