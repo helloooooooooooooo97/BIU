@@ -1,12 +1,20 @@
 import { writeStorageString } from '@biu/biu-ui/client-storage'
 import type { Dispatch, MutableRefObject, RefObject, SetStateAction } from 'react'
-import { isBuiltinAllViewId, isReadOnlyViewId, type DataScope } from '../catalog-views.ts'
+import type { DataScope } from '../catalog-views.ts'
 import { DATA_COLLECTION_PATH, WORKSPACE_MEMBERS_COLLECTION_PATH, normalizeCollectionPath } from '../paths.ts'
 import { apiFetch } from '@biu/biu-ui/api-client'
 import type { FilterGroup, SortRule } from '../query-logic.ts'
 import type { ViewMode } from './fields.ts'
 import { FSDB_CRUMB_LABELS_EVENT, FSDB_SHARES_CHANGE_EVENT, emitFsdbEvent } from './fsdb-events.ts'
-import { canDeleteSavedView, canEditSavedView, canRemoveCollectionView, type GroupConfig, type SavedView } from './saved-view.ts'
+import {
+  canDeleteSavedView,
+  canEditSavedView,
+  canManageSavedView,
+  canRemoveCollectionView,
+  type GroupConfig,
+  type SavedView,
+  type SavedViewFieldPatch,
+} from './saved-view.ts'
 import {
   activeViewStorageKey,
   beginPendingViewOp,
@@ -14,16 +22,12 @@ import {
   getStarredViews,
   isViewStarred,
   loadViews,
-  omitSavedViewIds,
   persistStarredViews,
   pullSavedViews,
   pushSavedViewsMutation,
   removeStarredViews,
-  reviveSavedViewIds,
   rollbackPendingViewOp,
-  stampSavedView,
   viewWriteQueue,
-  withViewDisplay,
 } from './view-storage.ts'
 
 export type BrowserViewCrudOptions = {
@@ -40,7 +44,7 @@ export type BrowserViewCrudOptions = {
   activeView?: SavedView
   activeViewIdRef: MutableRefObject<string | null>
   viewsWriteGenRef: MutableRefObject<number>
-  setViewsSaveError: Dispatch<SetStateAction<boolean>>
+  setViewsSaveError: Dispatch<SetStateAction<string>>
   setViewMenuOpen: Dispatch<SetStateAction<boolean>>
   pageRef: RefObject<HTMLDivElement | null>
   mode: ViewMode
@@ -72,7 +76,6 @@ export function createBrowserViewCrud(opts: BrowserViewCrudOptions) {
     sheet,
     collectionPath,
     title,
-    routeScope,
     catalogLocks,
     schemaDefaultKeys,
     viewsRef,
@@ -109,57 +112,43 @@ export function createBrowserViewCrud(opts: BrowserViewCrudOptions) {
   function syncPaintedState(path: string) {
     if (path !== collectionPath) return
     const live = loadViews(path)
-    const painted = rankListedViews(
-      listedViews(path, live).map((view) => withViewDisplay(path, view)),
-      live,
-    )
+    const painted = rankListedViews(listedViews(path, live), live)
     viewsRef.current = painted
     setViews(painted)
   }
 
   /**
-   * 单一权威写通道：
-   * 1. 先在 ViewStore 登记独立 opId 的乐观变更（并发操作互不覆盖）；
-   * 2. 按 collectionPath 串行 POST /api/db/saved-views；
-   * 3. 200 返回权威列表时直接结算 opId 并更新 serverViews（不再自我触发 GET /views 回弹）；
-   * 4. 失败时仅撤销当前 opId，绝不回滚期间并发成功的其他视图变更。
+   * 单一权威字段级增量写通道：
+   * 1. 先在 ViewStore 登记独立 opId 的乐观变更；
+   * 2. 按 collectionPath 串行 POST /api/db/saved-views（只发变更字段，服务端单调递增 revision）；
+   * 3. 200 返回权威列表时直接结算 opId 并更新 serverViews；
+   * 4. 失败时撤销当前 opId 并弹出明确错误信息，绝不静默丢改。
    */
   async function commitViewMutation(
     path: string,
     mutation: {
-      upsert?: SavedView[]
+      upsert?: SavedViewFieldPatch[]
       remove?: string[]
-      baseUpdatedAtById?: Record<string, number>
       emitCrumb?: boolean
     },
   ): Promise<boolean> {
     if (sheet) return true
-    const rawUpsert = mutation.upsert ?? []
+    const upsert = (mutation.upsert ?? []).filter((item) => Boolean(String(item.id ?? '').trim()))
     const remove = [...new Set((mutation.remove ?? []).map((id) => String(id ?? '').trim()).filter(Boolean))]
-    if (!rawUpsert.length && !remove.length) return true
+    if (!upsert.length && !remove.length) return true
 
-    const baseUpdatedAtById: Record<string, number> = { ...(mutation.baseUpdatedAtById ?? {}) }
-    const existing = loadViews(path)
-    const stamped = rawUpsert.map((view) => {
-      if (baseUpdatedAtById[view.id] === undefined) {
-        const prev = existing.find((item) => item.id === view.id)
-        if (prev?.updatedAt) baseUpdatedAtById[view.id] = prev.updatedAt
-      }
-      return stampSavedView(withViewDisplay(path, view))
-    })
-
-    const opId = beginPendingViewOp(path, { upsert: stamped, remove })
+    const opId = beginPendingViewOp(path, { upsert, remove })
     syncPaintedState(path)
     if (mutation.emitCrumb) window.dispatchEvent(new Event(FSDB_CRUMB_LABELS_EVENT))
 
     const gen = ++viewsWriteGenRef.current
     return viewWriteQueue.enqueue(path, async (queueGen) => {
-      const outcome = await pushSavedViewsMutation(path, { upsert: stamped, remove, baseUpdatedAtById })
+      const outcome = await pushSavedViewsMutation(path, { upsert, remove })
       if (outcome.status === 'failed') {
         rollbackPendingViewOp(path, opId)
         syncPaintedState(path)
         if (viewWriteQueue.isLatest(path, queueGen) && gen === viewsWriteGenRef.current) {
-          setViewsSaveError(true)
+          setViewsSaveError(outcome.error || '视图保存失败，请重试')
         }
         return false
       }
@@ -167,7 +156,7 @@ export function createBrowserViewCrud(opts: BrowserViewCrudOptions) {
       commitPendingViewOp(path, opId, outcome.views)
       syncPaintedState(path)
       if (mutation.emitCrumb) window.dispatchEvent(new Event(FSDB_CRUMB_LABELS_EVENT))
-      if (viewWriteQueue.isLatest(path, queueGen)) setViewsSaveError(false)
+      if (viewWriteQueue.isLatest(path, queueGen)) setViewsSaveError('')
       return true
     })
   }
@@ -193,14 +182,11 @@ export function createBrowserViewCrud(opts: BrowserViewCrudOptions) {
       return
     }
     const prevById = new Map(current.map((view) => [view.id, view]))
-    const changed = next.filter((view) => prevById.get(view.id)?.rank !== view.rank)
+    const changed: SavedViewFieldPatch[] = next
+      .filter((view) => !view.ephemeral && prevById.get(view.id)?.rank !== view.rank)
+      .map((view) => ({ id: view.id, rank: view.rank }))
     if (!changed.length) return
-    const baseUpdatedAtById: Record<string, number> = {}
-    for (const view of changed) {
-      const prevAt = prevById.get(view.id)?.updatedAt
-      if (prevAt) baseUpdatedAtById[view.id] = prevAt
-    }
-    void commitViewMutation(collectionPath, { upsert: changed, baseUpdatedAtById })
+    void commitViewMutation(collectionPath, { upsert: changed })
   }
 
   function newSavedViewId() {
@@ -209,7 +195,10 @@ export function createBrowserViewCrud(opts: BrowserViewCrudOptions) {
       : `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
   }
 
-  async function commitView(view: SavedView) {
+  async function commitView(
+    view: SavedView,
+    extra?: { accessMode?: 'private' | 'members'; memberDefaultRole?: 'viewer' | 'editor' },
+  ) {
     if (externalViews) {
       const current = viewsRef.current
       const next = { ...view, rank: Number.isFinite(Number(view.rank)) ? view.rank : current.length }
@@ -220,11 +209,17 @@ export function createBrowserViewCrud(opts: BrowserViewCrudOptions) {
       externalViews.onChange?.(list, next.id)
       return
     }
-    const painted = paintListedViews(collectionPath)
-    const next = { ...view, rank: Number.isFinite(Number(view.rank)) ? view.rank : painted.length }
+    const painted = paintListedViews(collectionPath).filter((item) => !item.ephemeral)
+    const next: SavedViewFieldPatch = {
+      ...view,
+      ephemeral: undefined,
+      rank: Number.isFinite(Number(view.rank)) ? view.rank : painted.length,
+      ...(extra?.accessMode ? { accessMode: extra.accessMode } : {}),
+      ...(extra?.memberDefaultRole ? { memberDefaultRole: extra.memberDefaultRole } : {}),
+    }
     const ok = await commitViewMutation(collectionPath, { upsert: [next], emitCrumb: true })
     if (!ok) return
-    selectView(viewsRef.current.find((item) => item.id === next.id) ?? next)
+    selectView(viewsRef.current.find((item) => item.id === next.id) ?? view)
   }
 
   function uniqueViewName(base: string, listed: SavedView[] = paintListedViews(collectionPath)) {
@@ -240,6 +235,7 @@ export function createBrowserViewCrud(opts: BrowserViewCrudOptions) {
       id: newSavedViewId(),
       name: uniqueViewName('新视图', listed),
       mode: 'table',
+      locked: false,
       sortField: 'title',
       sortDir: 'asc',
       filters: { ...catalogLocks, ...extraFilters },
@@ -250,7 +246,7 @@ export function createBrowserViewCrud(opts: BrowserViewCrudOptions) {
       wrap: false,
       truncate: true,
       query: '',
-      rank: listed.length,
+      rank: listed.filter((item) => !item.ephemeral).length,
     }
   }
 
@@ -270,23 +266,22 @@ export function createBrowserViewCrud(opts: BrowserViewCrudOptions) {
     const stored = loadViews(target)
     const allListed = listedViews(target, stored)
     const listed = target === collectionPath ? paintListedViews(target) : allListed
-    const bindingPatch: Partial<SavedView> = isDataAgg
-      ? { scope: 'personal', protection: 'personal' }
-      : { scope: 'workspace', protection: 'public' }
     const extraFilters: Record<string, string> =
       !isDataAgg && scope ? { $scope: scope } : {}
-    const view: SavedView = {
+    const accessMode: 'private' | 'members' = isDataAgg || scope === 'personal' ? 'private' : 'members'
+    const view: SavedViewFieldPatch = {
       ...makeEmptyView(
         listed,
         target === collectionPath ? [...schemaDefaultKeys] : [],
         extraFilters,
       ),
-      ...bindingPatch,
+      accessMode,
+      ...(accessMode === 'members' ? { memberDefaultRole: 'editor' } : {}),
     }
     void commitViewMutation(target, { upsert: [view], emitCrumb: true }).then((ok) => {
       if (!ok) return
       if (target === collectionPath) {
-        selectView(viewsRef.current.find((item) => item.id === view.id) ?? view)
+        selectView(viewsRef.current.find((item) => item.id === view.id) ?? (view as SavedView))
         return
       }
       try {
@@ -298,45 +293,50 @@ export function createBrowserViewCrud(opts: BrowserViewCrudOptions) {
     })
   }
 
-  function copyView(source?: SavedView, overrides?: Partial<SavedView>) {
+  function copyView(
+    source?: SavedView,
+    overrides?: Partial<SavedView> & { accessMode?: 'private' | 'members' },
+  ) {
     const isDataAgg = normalizeCollectionPath(collectionPath) === DATA_COLLECTION_PATH
-    const scopeBinding: Partial<SavedView> = isDataAgg
-      ? { scope: 'personal', protection: 'personal' }
-      : { scope: 'workspace', protection: 'public' }
-    void commitView(
-      source
-        ? {
-            ...source,
-            ...scopeBinding,
-            ...overrides,
-            id: newSavedViewId(),
-            name: uniqueViewName(`${source.name} 副本`),
-            builtin: false,
-            createdBy: undefined,
-            viewRole: undefined,
-          }
-        : {
-            id: newSavedViewId(),
-            name: uniqueViewName(`${activeView?.name ?? title} 副本`),
-            ...scopeBinding,
-            mode,
-            sortField,
-            sortDir,
-            sorts,
-            filters: { ...catalogLocks },
-            filterTree,
-            columns: columnKeys,
-            groupBy,
-            groupConfig,
-            tree: showTree,
-            wrap: wrapCells,
-            truncate: truncateCells,
-            freezeTitle,
-            query,
-            columnWidths,
-            ...overrides,
-          },
-    )
+    const { accessMode: explicitAccessMode, ...viewOverrides } = overrides ?? {}
+    const accessMode: 'private' | 'members' =
+      explicitAccessMode ?? (isDataAgg || viewOverrides.shareScope === 'personal' ? 'private' : 'members')
+    const baseView: SavedView = source
+      ? {
+          ...source,
+          ...viewOverrides,
+          id: newSavedViewId(),
+          name: uniqueViewName(`${source.name} 副本`),
+          locked: false,
+          ephemeral: undefined,
+          createdBy: undefined,
+          viewRole: undefined,
+          shareScope: undefined,
+          hasExternal: undefined,
+          revision: undefined,
+        }
+      : {
+          id: newSavedViewId(),
+          name: uniqueViewName(`${activeView?.name ?? title} 副本`),
+          mode,
+          locked: false,
+          sortField,
+          sortDir,
+          sorts,
+          filters: { ...catalogLocks },
+          filterTree,
+          columns: columnKeys,
+          groupBy,
+          groupConfig,
+          tree: showTree,
+          wrap: wrapCells,
+          truncate: truncateCells,
+          freezeTitle,
+          query,
+          columnWidths,
+          ...viewOverrides,
+        }
+    void commitView(baseView, { accessMode })
   }
 
   function patchActiveView(patch: Partial<SavedView>) {
@@ -345,15 +345,14 @@ export function createBrowserViewCrud(opts: BrowserViewCrudOptions) {
     const latest = viewsRef.current
     const current = latest.find((view) => view.id === targetId)
     if (!current) return
-    // 只读视图（viewer / commenter）：筛选、排序、分组、列与排版仅在当前会话内存中临时生效，
-    // 不写 ViewStore 也不发 POST /api/db/saved-views，避免 400 弹回和本地缓存污染。
+    // 已锁定 / 只读 / 临时兜底视角：筛选、排序、分组、列与排版仅在当前会话内存中临时生效，
+    // 不写 ViewStore 也不发 POST /api/db/saved-views。
     if (!externalViews && !canEditSavedView(current)) {
       const localNext = latest.map((view) => (view.id === targetId ? { ...view, ...patch } : view))
       viewsRef.current = localNext
       setViews(localNext)
       return
     }
-    const baseUpdatedAt = Number(current.updatedAt) || 0
     const syncedPatch: Partial<SavedView> =
       ('sortField' in patch || 'sortDir' in patch) && !('sorts' in patch)
         ? {
@@ -368,19 +367,21 @@ export function createBrowserViewCrud(opts: BrowserViewCrudOptions) {
             ],
           }
         : patch
-    const updated = { ...current, ...syncedPatch }
     if (externalViews) {
-      const stamped = stampSavedView(updated)
-      const nextList = latest.map((view) => (view.id === targetId ? stamped : view))
+      const updated = { ...current, ...syncedPatch, updatedAt: Date.now() }
+      const nextList = latest.map((view) => (view.id === targetId ? updated : view))
       viewsRef.current = nextList
       setViews(nextList)
       externalViews.onChange?.(nextList, targetId)
       return
     }
-    void commitViewMutation(collectionPath, {
-      upsert: [updated],
-      ...(baseUpdatedAt ? { baseUpdatedAtById: { [targetId]: baseUpdatedAt } } : {}),
-    })
+    // 严格字段级增量 Patch：只发送本次实际改动的字段 + baseRevision
+    const fieldPatch: SavedViewFieldPatch = {
+      id: targetId,
+      ...syncedPatch,
+      ...(current.revision ? { baseRevision: current.revision } : {}),
+    }
+    void commitViewMutation(collectionPath, { upsert: [fieldPatch] })
   }
 
   function commitViewName(viewId: string, raw: string) {
@@ -392,11 +393,8 @@ export function createBrowserViewCrud(opts: BrowserViewCrudOptions) {
     if (!externalViews && !canEditSavedView(target)) return
     if (current.some((item) => item.id !== viewId && item.name === nextName)) return
     const prevName = target.name
-    const baseUpdatedAt = Number(target.updatedAt) || 0
-    const updated = { ...target, name: nextName }
     if (externalViews) {
-      const stamped = stampSavedView(updated)
-      const listed = current.map((item) => (item.id === viewId ? stamped : item))
+      const listed = current.map((item) => (item.id === viewId ? { ...item, name: nextName, updatedAt: Date.now() } : item))
       viewsRef.current = listed
       setViews(listed)
       externalViews.onChange?.(listed, activeViewIdRef.current ?? activeViewId ?? viewId)
@@ -409,17 +407,8 @@ export function createBrowserViewCrud(opts: BrowserViewCrudOptions) {
         stars.map((item) => (item.path === collectionPath && item.viewId === viewId ? { ...item, name: nextName } : item)),
       )
     }
-    if (isReadOnlyViewId(viewId) && !isBuiltinAllViewId(viewId)) {
-      const stamped = stampSavedView(updated)
-      const listed = current.map((item) => (item.id === viewId ? stamped : item))
-      viewsRef.current = listed
-      setViews(listed)
-      window.dispatchEvent(new Event(FSDB_CRUMB_LABELS_EVENT))
-      return
-    }
     void commitViewMutation(collectionPath, {
-      upsert: [updated],
-      ...(baseUpdatedAt ? { baseUpdatedAtById: { [viewId]: baseUpdatedAt } } : {}),
+      upsert: [{ id: viewId, name: nextName, ...(target.revision ? { baseRevision: target.revision } : {}) }],
       emitCrumb: true,
     }).then((ok) => {
       if (!ok && wasStarred) {
@@ -441,71 +430,10 @@ export function createBrowserViewCrud(opts: BrowserViewCrudOptions) {
     })
   }
 
-  function deleteView(view: SavedView, path = collectionPath) {
-    setViewMenuOpen(false)
-    if (externalViews) {
-      const current = viewsRef.current
-      if (current.length <= 1) return
-      const remaining = current.filter((item) => item.id !== view.id)
-      viewsRef.current = remaining
-      setViews(remaining)
-      const nextActive =
-        activeViewIdRef.current === view.id ? remaining[0] : remaining.find((item) => item.id === activeViewIdRef.current) ?? remaining[0]
-      if (nextActive && activeViewIdRef.current === view.id) selectView(nextActive)
-      externalViews.onChange?.(remaining, nextActive?.id ?? '')
-      return
-    }
-    if (isReadOnlyViewId(view.id)) return
-    if (!canDeleteSavedView(view)) return
-    const stored = loadViews(path)
-    const currentVisible = path === collectionPath ? viewsRef.current : stored
-    if (!canRemoveCollectionView(currentVisible)) return
-    const removedId = view.id
-    if (normalizeCollectionPath(path) === WORKSPACE_MEMBERS_COLLECTION_PATH && view.protection === 'locked') {
-      void releaseReferencedMemberView(path, view, 'delete').then((handled) => {
-        if (handled === 'done') {
-          if (path === collectionPath && activeViewIdRef.current === removedId) {
-            const nextActive = viewsRef.current[0]
-            if (nextActive) selectView(nextActive)
-          }
-          return
-        }
-        if (handled === 'cancelled') return
-        omitSavedViewIds(path, [removedId])
-        void commitViewMutation(path, { remove: [removedId], emitCrumb: true }).then((ok) => {
-          if (ok) {
-            if (path === collectionPath && activeViewIdRef.current === removedId) {
-              const nextActive = viewsRef.current[0]
-              if (nextActive) selectView(nextActive)
-            }
-            return
-          }
-          reviveSavedViewIds(path, [removedId])
-          syncPaintedState(path)
-        })
-      })
-      return
-    }
-    // 仅虚拟内置种子视图写入 omittedViews；普通数据库视图通过 pendingOps 隐藏并在 200 后由服务端权威列表移除。
-    omitSavedViewIds(path, [removedId])
-    void commitViewMutation(path, { remove: [removedId], emitCrumb: true }).then((ok) => {
-      if (ok) {
-        if (path === collectionPath && activeViewIdRef.current === removedId) {
-          const nextActive = viewsRef.current[0]
-          if (nextActive) selectView(nextActive)
-        }
-        return
-      }
-      reviveSavedViewIds(path, [removedId])
-      syncPaintedState(path)
-    })
-  }
-
   async function releaseReferencedMemberView(
     path: string,
     view: SavedView,
     action: 'unlock' | 'delete',
-    targetProtection?: 'public' | 'personal',
   ): Promise<'none' | 'done' | 'cancelled'> {
     try {
       const res = await apiFetch('/api/db/member-views')
@@ -529,11 +457,7 @@ export function createBrowserViewCrud(opts: BrowserViewCrudOptions) {
       const releaseRes = await apiFetch(`/api/db/member-views/${encodeURIComponent(view.id)}/release`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({
-          action,
-          mode,
-          ...(targetProtection ? { targetProtection } : {}),
-        }),
+        body: JSON.stringify({ action, mode }),
       })
       if (!releaseRes.ok) return 'cancelled'
       await pullSavedViews([path], { force: true })
@@ -546,43 +470,85 @@ export function createBrowserViewCrud(opts: BrowserViewCrudOptions) {
     }
   }
 
-  function updateViewProtection(view: SavedView, protection: 'public' | 'locked' | 'personal') {
-    if (isReadOnlyViewId(view.id)) return
-    const nextScope = protection === 'personal' ? 'personal' : 'workspace'
-    const current = viewsRef.current
-    const target = current.find((item) => item.id === view.id)
-    if (!target) return
-    if (
-      !externalViews &&
-      normalizeCollectionPath(collectionPath) === WORKSPACE_MEMBERS_COLLECTION_PATH &&
-      target.protection === 'locked' &&
-      protection !== 'locked'
-    ) {
-      void releaseReferencedMemberView(collectionPath, target, 'unlock', protection).then((handled) => {
-        if (handled !== 'none') return
-        const baseUpdatedAt = Number(target.updatedAt) || 0
-        const updated: SavedView = { ...target, protection, scope: nextScope }
-        void commitViewMutation(collectionPath, {
-          upsert: [updated],
-          ...(baseUpdatedAt ? { baseUpdatedAtById: { [target.id]: baseUpdatedAt } } : {}),
-        })
+  function deleteView(view: SavedView, path = collectionPath) {
+    setViewMenuOpen(false)
+    if (view.ephemeral) return
+    if (externalViews) {
+      const current = viewsRef.current
+      if (current.length <= 1) return
+      const remaining = current.filter((item) => item.id !== view.id)
+      viewsRef.current = remaining
+      setViews(remaining)
+      const nextActive =
+        activeViewIdRef.current === view.id ? remaining[0] : remaining.find((item) => item.id === activeViewIdRef.current) ?? remaining[0]
+      if (nextActive && activeViewIdRef.current === view.id) selectView(nextActive)
+      externalViews.onChange?.(remaining, nextActive?.id ?? '')
+      return
+    }
+    if (!canDeleteSavedView(view)) return
+    const stored = loadViews(path)
+    const currentVisible = path === collectionPath ? viewsRef.current : stored
+    if (!canRemoveCollectionView(currentVisible)) {
+      setViewsSaveError('至少保留一个视图')
+      return
+    }
+    const removedId = view.id
+    const performRemove = () => {
+      void commitViewMutation(path, { remove: [removedId], emitCrumb: true }).then((ok) => {
+        if (!ok) return
+        if (path === collectionPath && activeViewIdRef.current === removedId) {
+          const nextActive = viewsRef.current[0]
+          if (nextActive) selectView(nextActive)
+        }
+      })
+    }
+    if (normalizeCollectionPath(path) === WORKSPACE_MEMBERS_COLLECTION_PATH && view.locked) {
+      void releaseReferencedMemberView(path, view, 'delete').then((handled) => {
+        if (handled === 'done') {
+          if (path === collectionPath && activeViewIdRef.current === removedId) {
+            const nextActive = viewsRef.current[0]
+            if (nextActive) selectView(nextActive)
+          }
+          return
+        }
+        if (handled === 'cancelled') return
+        performRemove()
       })
       return
     }
-    const baseUpdatedAt = Number(target.updatedAt) || 0
-    const updated: SavedView = { ...target, protection, scope: nextScope }
+    performRemove()
+  }
+
+  function toggleViewLock(view: SavedView) {
+    if (view.ephemeral) return
+    const current = viewsRef.current
+    const target = current.find((item) => item.id === view.id) ?? view
+    if (!externalViews && !canManageSavedView(target)) return
+    const nextLocked = !target.locked
     if (externalViews) {
-      const stamped = stampSavedView(updated)
-      const next = current.map((item) => (item.id === view.id ? stamped : item))
+      const next = current.map((item) => (item.id === target.id ? { ...item, locked: nextLocked, updatedAt: Date.now() } : item))
       viewsRef.current = next
       setViews(next)
-      externalViews.onChange?.(next, activeViewIdRef.current ?? view.id)
+      externalViews.onChange?.(next, activeViewIdRef.current ?? target.id)
       return
     }
-    void commitViewMutation(collectionPath, {
-      upsert: [updated],
-      ...(baseUpdatedAt ? { baseUpdatedAtById: { [target.id]: baseUpdatedAt } } : {}),
-    })
+    const commitLock = () => {
+      void commitViewMutation(collectionPath, {
+        upsert: [{ id: target.id, locked: nextLocked, ...(target.revision ? { baseRevision: target.revision } : {}) }],
+      })
+    }
+    if (
+      normalizeCollectionPath(collectionPath) === WORKSPACE_MEMBERS_COLLECTION_PATH &&
+      target.locked &&
+      !nextLocked
+    ) {
+      void releaseReferencedMemberView(collectionPath, target, 'unlock').then((handled) => {
+        if (handled !== 'none') return
+        commitLock()
+      })
+      return
+    }
+    commitLock()
   }
 
   return {
@@ -591,7 +557,7 @@ export function createBrowserViewCrud(opts: BrowserViewCrudOptions) {
     addEmptyView,
     copyView,
     patchActiveView,
-    updateViewProtection,
+    toggleViewLock,
     commitViewName,
     renameView,
     deleteView,

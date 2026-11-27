@@ -4,7 +4,6 @@ import { readStorageString, writeStorageString } from '@biu/biu-ui/client-storag
 import { CONTENT_JUMP_EVENT, parseContentJump } from '@biu/type-file-system'
 import { parseAppPath } from '@biu/web-session-view'
 import { normalizeCollectionPath } from '../paths.ts'
-import { builtinAllViewId } from '../catalog-views.ts'
 import {
   DATA_MODULE,
   DATA_MODULE_PATH,
@@ -400,7 +399,7 @@ export function showInInspector(collection: string, href: string, opts?: { uniqu
 export function moveInspectorRecordsToTrash(collection: string, recordIds: string[]) {
   const table = normalizeCollectionPath(collection)
   if (!table || table === '/' || table === TRASH_COLLECTION_PATH) return
-  const viewId = builtinAllViewId(TRASH_COLLECTION_PATH)
+  const viewId = 'all'
   for (const raw of recordIds) {
     const recordId = String(raw ?? '').trim()
     if (!recordId) continue

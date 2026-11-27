@@ -1,5 +1,4 @@
 import { buildAppPath, type AppRoute } from '@biu/web-session-view'
-import { builtinAllViewId } from '../catalog-views.ts'
 import {
   AGENTS_COLLECTION_PATH,
   COMMENTS_COLLECTION_PATH,
@@ -57,9 +56,10 @@ export function databaseViewPath(collection: string, viewId?: string): string {
   })
 }
 
-/** 内置「全部 xx」视图，数据页默认进这里。 */
+/** 默认「全部 xx」视图，数据页默认进这里。 */
 export function databaseAllViewPath(collection: string): string {
-  return databaseViewPath(collection, builtinAllViewId(collection))
+  const defaultId = normalizeCollectionPath(collection) === WORKSPACE_MEMBERS_COLLECTION_PATH ? 'member' : 'all'
+  return databaseViewPath(collection, defaultId)
 }
 
 export function databaseRecordPath(collection: string, recordId: string, viewId?: string): string {

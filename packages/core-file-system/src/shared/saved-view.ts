@@ -6,21 +6,17 @@ import { countFilterRules, filterTreeStateKey, normalizeSorts, resolveViewFilter
 
 export type GroupSortMode = 'manual' | 'asc' | 'desc'
 
-/** 视图自身的可见范围两态（纯展示，不授予底层数据权限）：私人（仅创建者可见）、空间（空间内部成员可见）。 */
-export type ViewScope = 'personal' | 'workspace'
-
-/** 视图三态保护（对齐飞书多维表格 / Airtable，取代视图级分享 ACL）：公共视图 / 锁定视图 / 个人视图。 */
-export type ViewProtection = 'public' | 'locked' | 'personal'
+/** 视图在 /views 表中的站内共享范围（与所有普通 Record 100% 统一）。 */
+export type ViewShareScope = 'personal' | 'shared' | 'workspace'
 
 export type ViewRole = 'owner' | 'manager' | 'editor' | 'commenter' | 'viewer'
 
-export function normalizeViewProtection(
-  value: unknown,
-  fallbackScope?: ViewScope,
-): ViewProtection {
-  if (value === 'public' || value === 'locked' || value === 'personal') return value
-  if (fallbackScope === 'personal') return 'personal'
-  return 'public'
+export function normalizeViewShareScope(value: unknown): ViewShareScope | undefined {
+  if (value === 'personal' || value === 'shared' || value === 'workspace') return value
+  if (value === '私人') return 'personal'
+  if (value === '共享') return 'shared'
+  if (value === '空间') return 'workspace'
+  return undefined
 }
 
 export function normalizeViewRole(value: unknown): ViewRole | undefined {
@@ -30,22 +26,29 @@ export function normalizeViewRole(value: unknown): ViewRole | undefined {
   return undefined
 }
 
-/** 当前用户是否有权修改并保存该视图定义（缺省 viewRole 时视为本地/桌面模式，默认可编辑）。 */
-export function canEditSavedView(view: Pick<SavedView, 'viewRole'> | null | undefined): boolean {
-  if (!view?.viewRole) return true
+/** 当前用户是否有权直接修改并落盘该视图配置（锁定或临时只读视角不可直接修改；本地模式无 viewRole 默认可编辑）。 */
+export function canEditSavedView(
+  view: Pick<SavedView, 'viewRole' | 'locked' | 'ephemeral'> | null | undefined,
+): boolean {
+  if (!view || view.ephemeral || view.locked) return false
+  if (!view.viewRole) return true
   return view.viewRole === 'owner' || view.viewRole === 'manager' || view.viewRole === 'editor'
 }
 
-/** 当前用户是否有权删除该视图（仅创建者与管理者可删）。 */
-export function canDeleteSavedView(view: Pick<SavedView, 'viewRole'> | null | undefined): boolean {
-  if (!view?.viewRole) return true
+/** 当前用户是否有权管理该视图（分享、锁定/解锁、删除）。 */
+export function canManageSavedView(
+  view: Pick<SavedView, 'viewRole' | 'ephemeral'> | null | undefined,
+): boolean {
+  if (!view || view.ephemeral) return false
+  if (!view.viewRole) return true
   return view.viewRole === 'owner' || view.viewRole === 'manager'
 }
 
-export function normalizeViewScope(value: unknown): ViewScope | undefined {
-  if (value === 'personal' || value === 'workspace') return value
-  if (value === 'shared') return 'personal'
-  return undefined
+/** 当前用户是否有权删除该视图（仅创建者与管理者可删）。 */
+export function canDeleteSavedView(
+  view: Pick<SavedView, 'viewRole' | 'ephemeral'> | null | undefined,
+): boolean {
+  return canManageSavedView(view)
 }
 
 export type GroupConfig = {
@@ -59,13 +62,19 @@ export type SavedView = {
   id: string
   name: string
   mode: ViewMode
-  /** 视图自身的可见范围两态（缺省视为 workspace）。 */
-  scope?: ViewScope
-  /** 视图三态保护：public（公共视图，空间成员可改）、locked（锁定视图，仅创建者/管理员可改）、personal（个人视图，仅自己可见）。 */
-  protection?: ViewProtection
-  /** 创建者账号 ID（用于私人视图可见性隔离与创建者/管理员独占编辑权）。 */
+  /** 正交防误改配置锁：true 时冻结配置（含筛选/排序/分组/列），需管理者解锁后修改；在 /workspace-members 下兼作管理员动态成员组标记。 */
+  locked?: boolean
+  /** 服务端单调递增版本号（替代客户端 Date.now() 时间戳）。 */
+  revision?: number
+  /** 视图分享范围（由服务端基于 /views 的 resource_policies + record_grants 下发）。 */
+  shareScope?: ViewShareScope
+  /** 是否存在正交外部共享（公开外链或外部协作者）。 */
+  hasExternal?: boolean
+  /** 仅用于无可见持久化视图时的前端内存临时只读视角，不落盘。 */
+  ephemeral?: boolean
+  /** 创建者账号 ID。 */
   createdBy?: string
-  /** 当前操作者在该视图上的有效权限角色（由后端 /views 列表下发）。 */
+  /** 当前操作者在该视图上的有效权限角色（由后端 /views 权限引擎下发）。 */
   viewRole?: ViewRole
   sortField: string
   sortDir: 'asc' | 'desc'
@@ -92,12 +101,22 @@ export type SavedView = {
   columnViews?: Record<string, ColumnViewConfig>
   /** 表级沙箱呈现视图列表。 */
   sandboxViews?: TableSandboxItem[]
-  /** 工作区创建时写入的种子视图。与后来保存的视图同一套改名 / 筛选 / 删除规则。 */
-  builtin?: boolean
-  /** 本地最后修改时间（ms）。多窗口下用来丢弃比库里更旧的快照。 */
+  /** 最后修改时间（ms，仅用于展示/审计，不再用于客户端冲突丢弃）。 */
   updatedAt?: number
   /** 视图浮窗/Tab 的排列顺序，越小越靠前。 */
   rank?: number
+}
+
+/** 字段级增量更新载荷（可选字段支持传 null 显式清空）。 */
+export type SavedViewFieldPatch = Partial<Omit<SavedView, 'id' | 'freezeUntil' | 'groupConfig' | 'filterTree'>> & {
+  id: string
+  freezeUntil?: string | null
+  groupConfig?: GroupConfig | null
+  filterTree?: FilterGroup | null
+  baseRevision?: number
+  /** 仅建新视图时指定初始访问模式（不覆盖已有记录权限）。 */
+  accessMode?: 'private' | 'members'
+  memberDefaultRole?: 'viewer' | 'editor'
 }
 
 export const COL_WIDTH_MIN = 56
@@ -255,17 +274,23 @@ export function extractViewCreatorId(raw: unknown): string | undefined {
 
 export function normalizeSavedView(view: SavedView): SavedView {
   const sorts = normalizeSorts(view.sorts, view.sortField || 'title', view.sortDir === 'desc' ? 'desc' : 'asc')
-  const scope = normalizeViewScope(view.scope)
-  const protection = normalizeViewProtection(view.protection, scope)
   const createdBy = extractViewCreatorId(view.createdBy)
   const viewRole = normalizeViewRole(view.viewRole)
-  return {
-    ...view,
-    ...(scope ? { scope } : { scope: undefined }),
-    protection,
-    ...(createdBy ? { createdBy } : { createdBy: undefined }),
-    ...(viewRole ? { viewRole } : { viewRole: undefined }),
+  const shareScope = normalizeViewShareScope(view.shareScope)
+  const revision = Number.isFinite(Number(view.revision)) && Number(view.revision) > 0
+    ? Math.round(Number(view.revision))
+    : undefined
+  const out: SavedView = {
+    id: String(view.id ?? '').trim(),
+    name: String(view.name ?? view.id ?? '').trim(),
     mode: isViewModeId(view.mode) ? view.mode : 'table',
+    locked: Boolean(view.locked),
+    ...(revision ? { revision } : {}),
+    ...(shareScope ? { shareScope } : {}),
+    ...(view.hasExternal ? { hasExternal: true } : {}),
+    ...(view.ephemeral ? { ephemeral: true } : {}),
+    ...(createdBy ? { createdBy } : {}),
+    ...(viewRole ? { viewRole } : {}),
     sortField: sorts[0]?.field || 'title',
     sortDir: sorts[0]?.dir ?? 'asc',
     sorts,
@@ -289,14 +314,14 @@ export function normalizeSavedView(view: SavedView): SavedView {
     columnSummaries: normalizeColumnSummaries(view.columnSummaries),
     columnViews: normalizeColumnViews(view.columnViews),
     sandboxViews: normalizeTableSandboxViews(view.sandboxViews),
-    builtin: Boolean(view.builtin),
     updatedAt: Number(view.updatedAt) || 0,
     rank: Number.isFinite(Number(view.rank)) ? Math.round(Number(view.rank)) : undefined,
   }
+  return out
 }
 
-export function canRemoveCollectionView(views: Array<{ id: string }>) {
-  return views.length > 1
+export function canRemoveCollectionView(views: Array<{ id: string; ephemeral?: boolean }>) {
+  return views.filter((v) => !v.ephemeral).length > 1
 }
 
 export function sortViewsByRank(views: SavedView[]): SavedView[] {
@@ -310,7 +335,7 @@ export function sortViewsByRank(views: SavedView[]): SavedView[] {
     .map((item) => item.view)
 }
 
-/** 每条视图都有 0..n-1 的 rank，缺省时跟 previous 里的位置走，不跟 merge 出来的默认顺序走。 */
+/** 每条视图都有 0..n-1 的 rank，缺省时跟 previous 里的位置走。 */
 export function rankListedViews(listed: SavedView[], previous: SavedView[] = listed): SavedView[] {
   const prevRank = new Map<string, number>()
   previous.forEach((view, index) => {
@@ -360,14 +385,4 @@ export function viewStateKey(
     columnViews: normalizeColumnViews(view.columnViews),
     sandboxViews: normalizeTableSandboxViews(view.sandboxViews),
   })
-}
-
-/** incoming 的 updatedAt 不低于 current 时才算更新；本地已打戳、对端没有时间戳时保住本地。 */
-export function viewIsFresher(incoming: SavedView, current?: SavedView | null) {
-  if (!current) return true
-  const incomingAt = Number(incoming.updatedAt) || 0
-  const currentAt = Number(current.updatedAt) || 0
-  if (!incomingAt && currentAt) return false
-  if (!incomingAt || !currentAt) return true
-  return incomingAt >= currentAt
 }

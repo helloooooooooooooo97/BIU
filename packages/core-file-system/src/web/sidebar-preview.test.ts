@@ -103,23 +103,12 @@ test('sidebar preview does not refetch the currently painted view', () => {
   )
 })
 
-test('block/tag stub views only fetch a total when they are the open view', () => {
-  const block = { id: 'builtin-block:terminal' }
-  const tag = { id: 'builtin-tag:work' }
-  const all = { id: 'builtin-all:/editor-blocks' }
+test('shouldFetchViewTotal skips only the currently open view on the active collection', () => {
+  const all = { id: 'all' }
   const user = { id: 'mine' }
-  assert.equal(
-    shouldFetchViewTotal({ path: '/editor-blocks', view: block, collectionPath: '/editor-blocks', activeViewId: all.id }),
-    false,
-  )
-  assert.equal(
-    shouldFetchViewTotal({ path: '/editor-blocks', view: block, collectionPath: '/editor-blocks', activeViewId: block.id }),
-    true,
-  )
   assert.equal(shouldFetchViewTotal({ path: '/editor-blocks', view: all, collectionPath: '/editor-blocks', activeViewId: all.id }), false)
   assert.equal(shouldFetchViewTotal({ path: '/editor-blocks', view: user, collectionPath: '/editor-blocks', activeViewId: all.id }), true)
   assert.equal(shouldFetchViewTotal({ path: '/editor-blocks', view: all, collectionPath: '/tasks', activeViewId: all.id }), true)
-  assert.equal(shouldFetchViewTotal({ path: '/tags', view: tag, collectionPath: '/tasks', activeViewId: tag.id }), false)
 })
 
 test('view totals wait past first paint so ready is not blocked', () => {

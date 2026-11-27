@@ -6,9 +6,19 @@ import { ArrowPathIcon, CheckIcon, ChevronDownIcon, LinkIcon, LockClosedIcon, Sh
 import { HeadlessDismiss } from '@biu/biu-ui/headless-dismiss'
 import { useFloatingPosition } from '@biu/biu-ui/floating-position'
 import { OVERLAY_Z, overlayPortalRoot, overlayZ } from '@biu/biu-ui/overlay-portal'
-import { WORKSPACE_MEMBERS_COLLECTION_PATH } from './database-path.ts'
+import { VIEWS_COLLECTION_PATH, WORKSPACE_MEMBERS_COLLECTION_PATH } from './database-path.ts'
 import { listCollection, readJson } from './db-client.ts'
-import { FSDB_SHARES_CHANGE_EVENT, emitFsdbEvent } from './fsdb-events.ts'
+import { emitFsdbChange } from '@biu/type-file-system'
+import { FSDB_OPEN_VIEW_SHARE_EVENT, FSDB_SHARES_CHANGE_EVENT, emitFsdbEvent } from './fsdb-events.ts'
+
+export { FSDB_OPEN_VIEW_SHARE_EVENT }
+
+function notifyViewShareChanged(collection: string, recordId: string) {
+  if (collection !== VIEWS_COLLECTION_PATH) return
+  const cut = recordId.indexOf('::')
+  const targetPath = cut > 0 ? `/${recordId.slice(0, cut).replace(/^\/+/, '')}` : VIEWS_COLLECTION_PATH
+  emitFsdbChange({ scope: 'views', path: targetPath })
+}
 
 export { ShareScopeLabel, ShareRoleLabel } from './share-scope-label.tsx'
 export { ShareScopeDetail, ShareRoleDetail } from './share-chain-detail.tsx'
@@ -35,6 +45,7 @@ type ShareInfo = {
 
 type SharePayload = {
   share: ShareInfo | null
+  viewPublicStats?: { matchedCount: number; publicCount: number }
 }
 
 function pinStorageKey(token: string) {
@@ -261,6 +272,18 @@ export function ShareButton({
     }
   }, [target?.collection, target?.recordId, localOnly])
 
+  useEffect(() => {
+    if (!target || target.collection !== VIEWS_COLLECTION_PATH) return
+    const onOpen = (event: Event) => {
+      const detail = (event as CustomEvent<{ recordId?: string }>).detail
+      if (!detail?.recordId || detail.recordId === target.recordId) {
+        setOpen(true)
+      }
+    }
+    window.addEventListener(FSDB_OPEN_VIEW_SHARE_EVENT, onOpen)
+    return () => window.removeEventListener(FSDB_OPEN_VIEW_SHARE_EVENT, onOpen)
+  }, [target?.collection, target?.recordId])
+
   if (!target) return null
   return (
     <div className="fsdb-share-wrap" ref={wrapRef}>
@@ -324,7 +347,6 @@ function WorkspaceAccess({
   const [availableMemberViews, setAvailableMemberViews] = useState<Array<{
     id: string
     name: string
-    protection: 'public' | 'locked' | 'personal'
     isLocked: boolean
     memberCount: number
   }>>([])
@@ -402,7 +424,7 @@ function WorkspaceAccess({
       console.warn('[share-popover] load grants failed', collection, error)
       setPeople([])
     })
-    void readJson<{ views?: Array<{ id: string; name: string; protection: 'public' | 'locked' | 'personal'; isLocked: boolean; memberCount: number }> }>(
+    void readJson<{ views?: Array<{ id: string; name: string; isLocked: boolean; memberCount: number }> }>(
       '/api/db/member-views',
     )
       .then((res) => {
@@ -464,6 +486,7 @@ function WorkspaceAccess({
           setMemberPickerOpen(false)
         }
         emitFsdbEvent(FSDB_SHARES_CHANGE_EVENT)
+        notifyViewShareChanged(collection, recordId)
         return load()
       })
       .catch((err) => setError(err instanceof Error ? err.message : '无法授权'))
@@ -499,6 +522,7 @@ function WorkspaceAccess({
       setMemberPickerOpen(false)
       setStatusNotice(`已按「${viewName}」一次性展开添加 ${matched.length} 位成员`)
       emitFsdbEvent(FSDB_SHARES_CHANGE_EVENT)
+      notifyViewShareChanged(collection, recordId)
       await load()
     } catch (err) {
       setError(err instanceof Error ? err.message : '无法展开添加成员')
@@ -521,6 +545,7 @@ function WorkspaceAccess({
         }),
       })
       emitFsdbEvent(FSDB_SHARES_CHANGE_EVENT)
+      notifyViewShareChanged(collection, recordId)
       await load()
     } catch (err) {
       setError(err instanceof Error ? err.message : '无法移除协作者')
@@ -544,6 +569,7 @@ function WorkspaceAccess({
         }),
       })
       emitFsdbEvent(FSDB_SHARES_CHANGE_EVENT)
+      notifyViewShareChanged(collection, recordId)
       await load()
     } catch (err) {
       setError(err instanceof Error ? err.message : '无法更新通用访问设置')
@@ -567,6 +593,7 @@ function WorkspaceAccess({
         }),
       })
       emitFsdbEvent(FSDB_SHARES_CHANGE_EVENT)
+      notifyViewShareChanged(collection, recordId)
       await load()
     } catch (err) {
       setError(err instanceof Error ? err.message : '无法切换继承模式')
@@ -981,8 +1008,11 @@ export function SharePanel({
   embedded?: boolean
   localOnly?: boolean
 }) {
-  const [tab, setTab] = useState<'public' | 'collaboration'>('public')
+  const [tab, setTab] = useState<'public' | 'collaboration'>(
+    !localOnly && target.collection === VIEWS_COLLECTION_PATH ? 'collaboration' : 'public',
+  )
   const [share, setShare] = useState<ShareInfo | null>(null)
+  const [viewPublicStats, setViewPublicStats] = useState<{ matchedCount: number; publicCount: number } | null>(null)
   const [pin, setPin] = useState('')
   const [usePassword, setUsePassword] = useState(false)
   const [copied, setCopied] = useState(false)
@@ -1003,8 +1033,12 @@ export function SharePanel({
     void readJson<SharePayload>(`/api/db/shares?${params}`).then((data) => {
       if (gone) return
       applyPayload(data)
+      setViewPublicStats(data.viewPublicStats ?? null)
     }).catch(() => {
-      if (!gone) setShare(null)
+      if (!gone) {
+        setShare(null)
+        setViewPublicStats(null)
+      }
     })
     return () => {
       gone = true
@@ -1060,6 +1094,7 @@ export function SharePanel({
       applyPayload(data, opts.pin, opts.flagsOnly)
       if (patch.enabled === false && data.share == null && share) rememberPin(share.token, '')
       emitFsdbEvent(FSDB_SHARES_CHANGE_EVENT)
+      notifyViewShareChanged(target.collection, target.recordId)
       return data.share
     } catch (err) {
       setError(String(err instanceof Error ? err.message : err))
@@ -1143,6 +1178,17 @@ export function SharePanel({
         <WorkspaceAccess collection={target.collection} recordId={target.recordId} />
       ) : null}
       {tab === 'public' ? <><section className="fsdb-share-link-section">
+        {target.collection === VIEWS_COLLECTION_PATH ? (
+          <p
+            className="fsdb-share-copy-note"
+            data-testid="fsdb-view-public-stats"
+            style={{ marginBottom: 8 }}
+          >
+            {viewPublicStats
+              ? `公开视图仅展示其中已公开的记录 · 当前命中 ${viewPublicStats.matchedCount} 条，其中 ${viewPublicStats.publicCount} 条已公开`
+              : '公开视图仅展示其中已单独开启公开链接的记录，未公开记录绝不泄露。'}
+          </p>
+        ) : null}
         {!share ? (
           <div className="fsdb-share-empty">
             <span>

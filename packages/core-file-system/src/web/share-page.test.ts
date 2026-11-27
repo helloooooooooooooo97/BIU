@@ -6,7 +6,7 @@ import assert from 'node:assert/strict'
 test('share list keeps the shared view grouping', () => {
   const src = readFileSync(resolve(import.meta.dirname, './share-page.tsx'), 'utf8')
   const payload = readFileSync(resolve(import.meta.dirname, '../host/share-payload.ts'), 'utf8')
-  assert.match(payload, /groupBy: stored\?\.groupBy/)
+  assert.match(payload, /kind: 'view'/)
   assert.match(src, /snapshot\.view\?\.groupBy/)
   assert.match(src, /tags=\{snapshot\.tags\}/)
 })

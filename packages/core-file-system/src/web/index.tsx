@@ -66,7 +66,7 @@ import {
   bootLoadCollections,
   collectionNavKey,
 } from './nav-boot.ts'
-import { defaultViewId, isOmittedViewId } from './view-storage.ts'
+import { defaultViewId } from './view-storage.ts'
 import { DATA_COLLECTION_PATH, DATA_MODULE, DATA_MODULE_ID, DATA_MODULE_PATH, TAGS_COLLECTION_PATH, PAGE_BLOCKS_COLLECTION_PATH, VIEWS_COLLECTION_PATH, WORKSPACE_MEMBERS_COLLECTION_PATH, sortDataCollections } from './database-path.ts'
 import { dataChrome, setViaDataCrumbs, subscribeViaDataCrumbs, viaDataCrumbsOn, viaDataViewId } from './data-chrome.ts'
 import { writeMainDataRoute } from './main-data-route.ts'
@@ -76,7 +76,7 @@ import { RecordProperties } from './record-prop-host.tsx'
 import { viewsChrome } from './views-chrome.ts'
 import { pageBlocksChrome } from './page-blocks-chrome.ts'
 import { viewsForRegisteredCollection } from './collection-nav.ts'
-import { builtinAllViewId, stampRowOpenTarget } from '../catalog-views.ts'
+import { stampRowOpenTarget } from '../catalog-views.ts'
 import { normalizeCollectionPath } from '../paths.ts'
 import { ensureFsdbStyle } from './fsdb-style.ts'
 import { listenOpenTag } from './tag-catalog.ts'
@@ -166,9 +166,7 @@ function CollectionPage(props: SlotProps) {
   const routeCollection = parsed.kind === 'collection-view' || parsed.kind === 'record' ? parsed : null
   const collectionFromRoute = routeCollection?.collection ?? ''
   const viewFromRoute = routeCollection
-    ? routeCollection.viewId && !isOmittedViewId(routeCollection.collection, routeCollection.viewId)
-      ? routeCollection.viewId
-      : defaultViewId(routeCollection.collection)
+    ? routeCollection.viewId || defaultViewId(routeCollection.collection)
     : undefined
   const recordFromRoute = parsed.kind === 'record' ? parsed.recordId : null
   const currentPath = collectionFromRoute
@@ -212,7 +210,7 @@ function CollectionPage(props: SlotProps) {
 
   useEffect(() => {
     if (dataHome) {
-      go({ collection: DATA_COLLECTION_PATH, viewId: builtinAllViewId(DATA_COLLECTION_PATH) }, { replace: true })
+      go({ collection: DATA_COLLECTION_PATH, viewId: defaultViewId(DATA_COLLECTION_PATH) }, { replace: true })
       return
     }
     if (parsed.kind !== 'collection-view' || recordFromRoute) return
@@ -220,7 +218,7 @@ function CollectionPage(props: SlotProps) {
     const next = defaultViewId(parsed.collection, parsed.viewId)
     if (!next) return
     if (parsed.viewId === next) return
-    if (!parsed.viewId || isOmittedViewId(parsed.collection, parsed.viewId)) {
+    if (!parsed.viewId) {
       go({ collection: parsed.collection, viewId: next }, { replace: true })
     }
   }, [dataHome, parsed, recordFromRoute])
@@ -242,11 +240,11 @@ function CollectionPage(props: SlotProps) {
     }
     const stamp = stampRowOpenTarget({ id: recordFromRoute })
     if (!stamp) return
-    setViaDataCrumbs(true, viewFromRoute || builtinAllViewId(DATA_COLLECTION_PATH))
+    setViaDataCrumbs(true, viewFromRoute || defaultViewId(DATA_COLLECTION_PATH))
     go(
       {
         collection: stamp.collection,
-        viewId: builtinAllViewId(stamp.collection),
+        viewId: defaultViewId(stamp.collection),
         recordId: stamp.recordId,
       },
       { replace: true },
@@ -257,7 +255,7 @@ function CollectionPage(props: SlotProps) {
       <Suspense fallback={null}>
         <DataOverview
           tables={orderedTables}
-          routeViewId={dataHome ? builtinAllViewId(DATA_COLLECTION_PATH) : viewFromRoute}
+          routeViewId={dataHome ? defaultViewId(DATA_COLLECTION_PATH) : viewFromRoute}
           routeRecordId={recordFromRoute}
           onOpenTable={(path, viewId) => {
             setViaDataCrumbs(false)
@@ -269,7 +267,7 @@ function CollectionPage(props: SlotProps) {
             const collection = stamp?.collection ?? path
             go({
               collection,
-              viewId: view.id || builtinAllViewId(collection),
+              viewId: view.id || defaultViewId(collection),
               recordId: stamp?.recordId ?? recordId,
             })
           }}

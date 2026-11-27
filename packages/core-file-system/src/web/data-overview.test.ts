@@ -31,7 +31,8 @@ test('data overview reuses CollectionBrowser and opens source records', () => {
   assert.match(overview, /record\.actionIds/)
   assert.doesNotMatch(overview, /action.id === 'open'/)
   const chrome = readFileSync(resolve(import.meta.dirname, './data-chrome.ts'), 'utf8')
-  assert.match(chrome, /columns: \['title', 'actions', 'table'\]/)
+  const catalog = readFileSync(resolve(import.meta.dirname, '../catalog-views.ts'), 'utf8')
+  assert.match(catalog, /\['title', 'actions', 'table'\]/)
   assert.match(overview, /SourceTableCell/)
   assert.match(overview, /cells: \{/)
   const sourceCell = readFileSync(resolve(import.meta.dirname, './source-table-cell.tsx'), 'utf8')
@@ -40,7 +41,7 @@ test('data overview reuses CollectionBrowser and opens source records', () => {
   assert.match(sourceCell, /className="fsdb-title-text"/)
   assert.match(sourceCell, /collectionNoun/)
   assert.match(sourceCell, /onOpenTable\(path, viewId\)/)
-  assert.match(sourceCell, /builtinAllViewId\(path\)/)
+  assert.match(sourceCell, /defaultViewId\(path\)/)
   const browser =
     readFileSync(resolve(import.meta.dirname, './browser-row-title.tsx'), 'utf8') +
     '\n' +
@@ -66,10 +67,10 @@ test('data overview reuses CollectionBrowser and opens source records', () => {
   assert.match(page, /crumbFromData=\{viaDataCrumbs\}/)
   assert.match(overview, /stampRowOpenTarget/)
   assert.match(overview, /stamp\?\.recordId \?\? recordId/)
-  assert.match(page, /dataHome \? builtinAllViewId\(DATA_COLLECTION_PATH\) : viewFromRoute/)
+  assert.match(page, /dataHome \? defaultViewId\(DATA_COLLECTION_PATH\) : viewFromRoute/)
   assert.match(
     page,
-    /go\(\{ collection: DATA_COLLECTION_PATH, viewId: builtinAllViewId\(DATA_COLLECTION_PATH\) \}/,
+    /go\(\{ collection: DATA_COLLECTION_PATH, viewId: defaultViewId\(DATA_COLLECTION_PATH\) \}/,
   )
   assert.match(chrome, /stampRowOpenTarget/)
   assert.match(browser, /crumbFromData/)

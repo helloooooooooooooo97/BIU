@@ -1221,6 +1221,16 @@ export function apply(ctx: Context, config: AccountConfig = {}) {
     ctx.http.broadcast('database', payload, workspaceId)
   }
 
+  const broadcastRecordAccessChange = (workspaceId: string, collection: string, recordId: string) => {
+    if (collection === '/views') {
+      const cut = recordId.indexOf('::')
+      const targetTable = cut > 0 ? `/${recordId.slice(0, cut).replace(/^\/+/, '')}` : ''
+      broadcastAccessChange(workspaceId, 'views', targetTable || '/views')
+      return
+    }
+    broadcastAccessChange(workspaceId, 'records', collection)
+  }
+
   authedRoute('POST', '/api/account/access', async (route, me) => {
     const activeWorkspace = resolveScopedWorkspaceId(ctx)
     requireCollaborativeWorkspace(activeWorkspace ?? '')
@@ -1242,7 +1252,7 @@ export function apply(ctx: Context, config: AccountConfig = {}) {
     const result = body.memberViewId
       ? account.store.grantMemberView(me.id, collection, recordId, String(body.memberViewId), role)
       : account.store.shareWithEmail(me.id, collection, recordId, String(body.email ?? ''), role, kind)
-    broadcastAccessChange(activeWorkspace, 'records', collection)
+    broadcastRecordAccessChange(activeWorkspace, collection, recordId)
     route.send(200, result)
   })
 
@@ -1277,7 +1287,7 @@ export function apply(ctx: Context, config: AccountConfig = {}) {
     const result = accessMode
       ? account.store.setRecordAccessMode(me.id, collection, recordId, accessMode, memberDefaultRole)
       : account.store.setRecordInheritance(me.id, collection, recordId, inheritanceMode!)
-    broadcastAccessChange(activeWorkspace, 'records', collection)
+    broadcastRecordAccessChange(activeWorkspace, collection, recordId)
     route.send(200, result)
   })
 
@@ -1291,15 +1301,16 @@ export function apply(ctx: Context, config: AccountConfig = {}) {
       subjectId?: string
     }
     const collection = String(body.collection ?? '')
+    const recordId = String(body.recordId ?? '')
     const subjectType = body.subjectType === 'member_view' ? 'member_view' : 'account'
     const result = account.store.revokeRecordGrant(
       me.id,
       collection,
-      String(body.recordId ?? ''),
+      recordId,
       subjectType,
       String(body.subjectId ?? ''),
     )
-    broadcastAccessChange(activeWorkspace, 'records', collection)
+    broadcastRecordAccessChange(activeWorkspace, collection, recordId)
     route.send(200, result)
   })
 

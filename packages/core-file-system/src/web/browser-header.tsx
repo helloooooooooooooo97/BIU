@@ -8,9 +8,12 @@ import type { QueryField } from './query-menus.tsx'
 import type { SavedView } from './saved-view.ts'
 import {
   PLUGINS_COLLECTION_PATH,
+  VIEWS_COLLECTION_PATH,
+  WORKSPACE_MEMBERS_COLLECTION_PATH,
   isIndexCollection,
   isSystemCollection,
 } from './database-path.ts'
+import { normalizeCollectionPath } from '../paths.ts'
 import { EXPAND_SHELL_SIDEBAR_EVENT, INSPECTOR_TOGGLE_EVENT } from './fsdb-events.ts'
 import { UiGlyph } from './nav-glyphs.tsx'
 import type { PagePrefs } from './page-width.ts'
@@ -21,23 +24,12 @@ import {
 } from './view-storage.ts'
 
 const LazyShareButton = lazy(() => import('./share-popover.tsx').then((m) => ({ default: m.ShareButton })))
-const LazyTableCollaboratorsButton = lazy(() =>
-  import('./table-collaborators-button.tsx').then((m) => ({ default: m.TableCollaboratorsButton })),
-)
 const LayoutPrefsMenu = lazy(() => import('./layout-prefs-menu.tsx').then((m) => ({ default: m.LayoutPrefsMenu })))
 
 function ShareButton(props: ComponentProps<typeof LazyShareButton>) {
   return (
     <Suspense fallback={null}>
       <LazyShareButton {...props} />
-    </Suspense>
-  )
-}
-
-function TableCollaboratorsButton(props: ComponentProps<typeof LazyTableCollaboratorsButton>) {
-  return (
-    <Suspense fallback={null}>
-      <LazyTableCollaboratorsButton {...props} />
     </Suspense>
   )
 }
@@ -140,7 +132,7 @@ export const BrowserHeader = memo(function BrowserHeader({
         />
       </div>
       <div className="chat-view-header-right">
-        {activeViewId && !selected ? (
+        {activeViewId && !activeView?.ephemeral && !selected ? (
           <button
             type="button"
             className={`chat-view-header-expand${viewStarred ? ' is-starred' : ''}`}
@@ -152,22 +144,30 @@ export const BrowserHeader = memo(function BrowserHeader({
             <UiGlyph icon="star" />
           </button>
         ) : null}
-        {isSystemCollection(collectionPath) || isIndexCollection(collectionPath) || (collectionPath === PLUGINS_COLLECTION_PATH && detailRow?.builtin === true) ? null : detailId ? (
+        {detailId ? (
+          isSystemCollection(collectionPath) || isIndexCollection(collectionPath) || (collectionPath === PLUGINS_COLLECTION_PATH && detailRow?.builtin === true) ? null : (
+            <ShareButton
+              localOnly={localData}
+              target={{
+                kind: 'record' as const,
+                collection: collectionPath,
+                recordId: detailId,
+                title: String(detailRow?.title ?? title),
+              }}
+            />
+          )
+        ) : !nested && activeView && !activeView.ephemeral && (
+          normalizeCollectionPath(collectionPath) === WORKSPACE_MEMBERS_COLLECTION_PATH ||
+          (!isSystemCollection(collectionPath) && !isIndexCollection(collectionPath))
+        ) ? (
           <ShareButton
             localOnly={localData}
             target={{
               kind: 'record' as const,
-              collection: collectionPath,
-              recordId: detailId,
-              title: String(detailRow?.title ?? title),
+              collection: VIEWS_COLLECTION_PATH,
+              recordId: `${normalizeCollectionPath(collectionPath).replace(/^\/+/, '')}::${activeView.id}`,
+              title: activeView.name || title,
             }}
-          />
-        ) : !nested && !localData ? (
-          <TableCollaboratorsButton
-            collectionPath={collectionPath}
-            activeView={activeView}
-            viewerAccountId={viewerAccountId}
-            localOnly={localData}
           />
         ) : null}
         <div className="fsdb-layout-wrap" ref={layoutRef}>

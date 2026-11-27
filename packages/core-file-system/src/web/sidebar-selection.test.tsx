@@ -3,10 +3,9 @@ import { afterEach, beforeEach, test, vi } from 'vitest'
 import assert from 'node:assert/strict'
 import { act, cleanup, fireEvent, render, waitFor, within } from '@testing-library/react'
 import { REQUIRED_RECORD_FIELDS, type CollectionInfo, type CollectionSchema } from '@biu/type-file-system'
-import { builtinAllViewId } from '../catalog-views.ts'
 import { invalidateListReads } from './db-client.ts'
 import { CollectionBrowser } from './browser.tsx'
-import { activeViewStorageKey, getStarredViews, omitSavedViewIds, persistStarredViews, upsertSavedView } from './view-storage.ts'
+import { activeViewStorageKey, getStarredViews, persistStarredViews, upsertSavedView } from './view-storage.ts'
 import { DataSidebar } from './data-sidebar.tsx'
 import { DataSidebarSlot } from './data-sidebar-slot.tsx'
 import { normalizeSavedView } from './saved-view.ts'
@@ -41,11 +40,20 @@ beforeEach(() => {
   vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {
     const url = new URL(String(input), 'http://test.local')
     const path = url.searchParams.get('path') ?? ''
-    const body = url.pathname === '/api/db/list' && path.startsWith('/selection-')
-      ? { schema, items: [{ id: `${path}${url.searchParams.get('q') === 'only-target' ? '-target-row' : '-row'}`, title: `${path} content` }], total: 1 }
-      : url.pathname === '/api/db/stat'
-        ? { schema, total: 1 }
-        : { items: [], total: 0 }
+    const body = url.pathname === '/api/db/saved-views'
+      ? {
+          views: [
+            { id: 'all', name: `全部${path.slice(1)}`, mode: 'table', sortField: 'title', sortDir: 'asc', filters: {}, columns: ['title'], rank: 0 },
+            ...(path === '/selection-views'
+              ? [{ id: 'selection-target-view', name: '目标页面视图', mode: 'table', sortField: 'title', sortDir: 'asc', columns: ['title'], filters: {}, query: 'only-target', groupBy: '', rank: 1 }]
+              : []),
+          ],
+        }
+      : url.pathname === '/api/db/list' && path.startsWith('/selection-')
+        ? { schema, items: [{ id: `${path}${url.searchParams.get('q') === 'only-target' ? '-target-row' : '-row'}`, title: `${path} content` }], total: 1 }
+        : url.pathname === '/api/db/stat'
+          ? { schema, total: 1 }
+          : { items: [], total: 0 }
     return new Response(JSON.stringify(body), { status: 200, headers: { 'content-type': 'application/json' } })
   }))
 })
@@ -66,7 +74,7 @@ test('switching collections after selecting a cell paints the destination withou
       <Profiler id="table" onRender={() => {
         if (++commits > 80) throw new Error('table selection triggered an update loop')
       }}>
-        <CollectionBrowser collectionPath={path} routeViewId={builtinAllViewId(path)}
+        <CollectionBrowser collectionPath={path} routeViewId="all"
           title={path} blurb="" tables={tables} />
       </Profiler>
     </RenderBoundary>
@@ -93,7 +101,7 @@ test('sidebar view clicks do not close a record through the previous view route'
   const viewTables: CollectionInfo[] = [{ id: path.slice(1), path, kind: 'collection', label: '页面', view: null }]
   const closeRecord = vi.fn()
   function RoutedCollection() {
-    const [routeView, setRouteView] = useState(builtinAllViewId(path))
+    const [routeView, setRouteView] = useState('all')
     return <>
       <output data-testid="route-view">{routeView}</output>
       <DataSidebarSlot renderSlot={() => null} />
@@ -120,13 +128,12 @@ test('sidebar view clicks do not close a record through the previous view route'
 })
 
 
-test('sidebar collection and icon navigation open the first remaining view after deleting the builtin', () => {
+test('sidebar collection and icon navigation open the first remaining view after deleting the seed view', () => {
   const path = '/selection-deleted-builtin'
   const first = normalizeSavedView({ id: 'first-remaining', name: '第一个视图', rank: 0 } as unknown as Parameters<typeof normalizeSavedView>[0])
   const second = normalizeSavedView({ id: 'second-remaining', name: '第二个视图', rank: 1 } as unknown as Parameters<typeof normalizeSavedView>[0])
   upsertSavedView(path, second)
   upsertSavedView(path, first)
-  omitSavedViewIds(path, [builtinAllViewId(path)])
   const onOpenTable = vi.fn()
   const result = render(<DataSidebar collectionPath="/selection-other" title="其他表"
     tables={[{ id: path.slice(1), path, kind: 'collection', label: '删除后的页面', view: null }]}
@@ -142,9 +149,9 @@ test('sidebar collection and icon navigation open the first remaining view after
 test('sidebar collection navigation follows the displayed view order', () => {
   const path = '/selection-ranked-views'
   const first = normalizeSavedView({ id: 'ranked-first', name: '排在最前', rank: 0 } as unknown as Parameters<typeof normalizeSavedView>[0])
-  const builtin = normalizeSavedView({ id: builtinAllViewId(path), name: '全部排序后的页面', builtin: true, rank: 1 } as unknown as Parameters<typeof normalizeSavedView>[0])
+  const seedAll = normalizeSavedView({ id: 'all', name: '全部排序后的页面', rank: 1 } as unknown as Parameters<typeof normalizeSavedView>[0])
   upsertSavedView(path, first)
-  upsertSavedView(path, builtin)
+  upsertSavedView(path, seedAll)
   const onOpenTable = vi.fn()
   const result = render(<DataSidebar collectionPath="/selection-other" title="其他表"
     tables={[{ id: path.slice(1), path, kind: 'collection', label: '排序后的页面', view: null }]}
@@ -188,7 +195,7 @@ test('highlighted sidebar row backgrounds activate the title action without hija
   const onDeleteView = vi.fn(), onAddView = vi.fn(), onExpandedViewKeyChange = vi.fn()
   const result = render(<DataSidebar collectionPath={path} title="点击区域表"
     tables={[{ id: path.slice(1), path, kind: 'collection', label: '点击区域表', view: null }]}
-    views={[target]} activeViewId={builtinAllViewId(path)} onOpenTable={onOpenTable}
+    views={[target]} activeViewId="all" onOpenTable={onOpenTable}
     onApplyView={onApplyView} onDeleteView={onDeleteView}
     onAddView={onAddView} onExpandedViewKeyChange={onExpandedViewKeyChange} />)
   try {

@@ -1,6 +1,20 @@
 import { test } from 'vitest'
 import assert from 'node:assert/strict'
-import { colWidthStyle, DEFAULT_VIEW_PAGE_SIZE, normalizePageSize, normalizeSavedView, parseViewColumns, rankListedViews, sortViewsByRank, tableWidthStyle, viewIsFresher, viewStateKey, type SavedView } from './saved-view.ts'
+import {
+  canDeleteSavedView,
+  canEditSavedView,
+  canManageSavedView,
+  colWidthStyle,
+  DEFAULT_VIEW_PAGE_SIZE,
+  normalizePageSize,
+  normalizeSavedView,
+  parseViewColumns,
+  rankListedViews,
+  sortViewsByRank,
+  tableWidthStyle,
+  viewStateKey,
+  type SavedView,
+} from './saved-view.ts'
 
 const base: SavedView = {
   id: '1',
@@ -76,8 +90,8 @@ test('sortViewsByRank follows rank then original index', () => {
   assert.deepEqual(sortViewsByRank([c, a]).map((view) => view.id), ['c', 'a'])
 })
 
-test('rankListedViews assigns 0..n-1 and keeps previous order when merge prepends builtin', () => {
-  const all = normalizeSavedView({ ...base, id: 'all', name: '全部', builtin: true })
+test('rankListedViews assigns 0..n-1 and keeps previous order when seed view is prepended', () => {
+  const all = normalizeSavedView({ ...base, id: 'all', name: '全部' })
   const a = normalizeSavedView({ ...base, id: 'a', name: 'A' })
   const b = normalizeSavedView({ ...base, id: 'b', name: 'B' })
   const ranked = rankListedViews([all, a, b], [a, b, all])
@@ -86,17 +100,27 @@ test('rankListedViews assigns 0..n-1 and keeps previous order when merge prepend
   assert.deepEqual(rankListedViews([all, b, a], ranked).map((view) => view.id), ['a', 'b', 'all'])
 })
 
-test('rankListedViews can put a custom view before builtin', () => {
-  const all = normalizeSavedView({ ...base, id: 'all', name: '全部', builtin: true, rank: 1 })
+test('rankListedViews can put a custom view before the default seed view', () => {
+  const all = normalizeSavedView({ ...base, id: 'all', name: '全部', rank: 1 })
   const mine = normalizeSavedView({ ...base, id: 'mine', name: '我的', rank: 0 })
   assert.deepEqual(rankListedViews([all, mine]).map((view) => view.id), ['mine', 'all'])
 })
 
-test('viewIsFresher keeps a stamped local rename over a pull with no timestamp', () => {
-  const local = normalizeSavedView({ ...base, name: '什么呢？？？', updatedAt: 9 })
-  const pulled = normalizeSavedView({ ...base, name: '新视图 2' })
-  assert.equal(viewIsFresher(pulled, local), false)
-  assert.equal(viewIsFresher(local, pulled), true)
+test('locked view freezes configuration edits while keeping manager unlock/delete permissions', () => {
+  const unlocked = normalizeSavedView({ ...base, id: 'v1', viewRole: 'editor', locked: false })
+  const lockedEditor = normalizeSavedView({ ...base, id: 'v2', viewRole: 'editor', locked: true })
+  const lockedManager = normalizeSavedView({ ...base, id: 'v3', viewRole: 'manager', locked: true })
+  const ephemeral = normalizeSavedView({ ...base, id: 'v4', viewRole: 'owner', ephemeral: true })
+
+  assert.equal(canEditSavedView(unlocked), true)
+  assert.equal(canManageSavedView(unlocked), false)
+  assert.equal(canEditSavedView(lockedEditor), false)
+  assert.equal(canManageSavedView(lockedEditor), false)
+  assert.equal(canEditSavedView(lockedManager), false)
+  assert.equal(canManageSavedView(lockedManager), true)
+  assert.equal(canDeleteSavedView(lockedManager), true)
+  assert.equal(canEditSavedView(ephemeral), false)
+  assert.equal(canManageSavedView(ephemeral), false)
 })
 
 test('viewStateKey ignores name and treats missing query as empty', () => {

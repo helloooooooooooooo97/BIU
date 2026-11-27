@@ -1,5 +1,5 @@
 import type { CollectionActionInfo, CollectionInfo, DbRecord } from '@biu/type-file-system'
-import { builtinAllViewId, stampRowOpenTarget } from '../catalog-views.ts'
+import { stampRowOpenTarget } from '../catalog-views.ts'
 import { CollectionBrowser } from './browser.tsx'
 import type { CrumbTarget } from './sidebar-nav.ts'
 import { viewsForRegisteredCollection } from './collection-nav.ts'
@@ -8,6 +8,7 @@ import { actionIcon } from './fsdb-cells.tsx'
 import { DATA_COLLECTION_PATH, DATA_MODULE_ID } from './database-path.ts'
 import { SourceTableCell } from './source-table-cell.tsx'
 import type { SavedView } from './saved-view.ts'
+import { defaultViewId } from './view-storage.ts'
 
 function SourceActions({
   actions,
@@ -101,11 +102,11 @@ export function DataOverview({
           const stamp = stampRowOpenTarget({ id: recordId, tablePath: collection })
           const path = stamp?.collection ?? collection ?? DATA_COLLECTION_PATH
           if (path !== DATA_COLLECTION_PATH) {
-            setViaDataCrumbs(true, viewId || builtinAllViewId(DATA_COLLECTION_PATH))
+            setViaDataCrumbs(true, viewId || defaultViewId(DATA_COLLECTION_PATH))
           }
           onOpenRecord?.(
             path,
-            { id: builtinAllViewId(path) } as SavedView,
+            { id: defaultViewId(path) } as SavedView,
             stamp?.recordId ?? recordId,
           )
         }}

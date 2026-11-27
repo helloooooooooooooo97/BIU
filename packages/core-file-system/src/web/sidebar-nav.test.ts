@@ -2,7 +2,6 @@ import { test } from 'vitest'
 import assert from 'node:assert/strict'
 import { parseAppPath } from '@biu/web-session-view'
 import { DATA_MODULE } from './database-path.ts'
-import { builtinAllViewId, mergeTableViews } from '../catalog-views.ts'
 import { normalizeSavedView } from './saved-view.ts'
 import {
   applySidebarAction,
@@ -140,11 +139,10 @@ test('从记录返回回到上次视图，展开状态仍在', () => {
   assert.equal(pathForCenter(closed), '/database/tasks/view/board')
 })
 
-test('deleted builtin all view keeps its breadcrumb name when opened from navigation', () => {
+test('unlisted seed view keeps its fallback breadcrumb name when opened from navigation', () => {
   const table = { path: '/pages', label: '页面' }
-  const viewId = builtinAllViewId(table.path)
-  const views = mergeTableViews(table, [normalizeSavedView({ id: 'mine', name: '我的页面' } as unknown as Parameters<typeof normalizeSavedView>[0])], [viewId])
-  assert.ok(!views.some((view) => view.id === viewId))
+  const viewId = 'all'
+  const views = [normalizeSavedView({ id: 'mine', name: '我的页面' } as unknown as Parameters<typeof normalizeSavedView>[0])]
   const crumbs = buildCrumbs({
     collection: table.path,
     collectionLabel: table.label,
@@ -153,13 +151,13 @@ test('deleted builtin all view keeps its breadcrumb name when opened from naviga
     views,
   })
   assert.equal(crumbs[1]!.label, '全部页面')
-  assert.equal(pathForCrumbTarget(crumbs[1]!.target), `/database/pages/view/${encodeURIComponent(viewId)}`)
+  assert.equal(pathForCrumbTarget(crumbs[1]!.target), '/database/pages/view/all')
   assert.deepEqual(crumbs[1]!.choices.map((view) => view.id), ['mine'])
 })
 
-test('unlisted builtin breadcrumbs resolve names without changing saved view names', () => {
+test('unlisted seed breadcrumbs resolve names without changing saved view names', () => {
   const input = { collection: '/pages', collectionLabel: '页面', tables: [] }
-  const all = buildCrumbs({ ...input, viewId: builtinAllViewId('/pages') })[1]!
+  const all = buildCrumbs({ ...input, viewId: 'all' })[1]!
   assert.equal(all.label, '全部页面')
   assert.equal(all.choices[0]!.label, '全部页面')
   const wsCrumbs = buildCrumbs({ ...input, viewId: 'team', views: [{ id: 'team', name: '团队看板' }] })
@@ -189,7 +187,7 @@ test('面包屑点上级会清掉后面几级', () => {
   )
   assert.equal(crumbs[0]!.label, 'Task')
   assert.equal(crumbs[0]!.icon, 'bolt')
-  assert.equal(pathForCrumbTarget(crumbs[0]!.target), '/database/tasks/view/builtin-all%3A%2Ftasks')
+  assert.equal(pathForCrumbTarget(crumbs[0]!.target), '/database/tasks/view/all')
   assert.equal(pathForCrumbTarget(crumbs[1]!.target), '/database/tasks/view/1787983501816')
   assert.equal(crumbButtonAction(crumbs[0]!), 'menu')
   const board = crumbs[1]!.choices.find((item) => item.id === 'board')
@@ -197,7 +195,7 @@ test('面包屑点上级会清掉后面几级', () => {
   assert.equal(board?.mode, 'board')
   assert.equal(pathForCrumbTarget(board!.target), '/database/tasks/view/board')
   assert.equal(crumbs[0]!.choices.find((item) => item.id === '/pages')?.label, 'Page')
-  assert.equal(pathForCrumbTarget(crumbs[0]!.choices.find((item) => item.id === '/pages')!.target), '/database/pages/view/builtin-all%3A%2Fpages')
+  assert.equal(pathForCrumbTarget(crumbs[0]!.choices.find((item) => item.id === '/pages')!.target), '/database/pages/view/all')
   assert.ok(!crumbs[0]!.choices.some((item) => item.id === 'board'))
 })
 
@@ -217,7 +215,7 @@ test('记录页面包屑是表 / 视图 / 记录，点表回到集合', () => {
     crumbs.map((item) => item.kind),
     ['collection', 'view', 'record'],
   )
-  assert.equal(pathForCrumbTarget(crumbs[0]!.target), '/database/tasks/view/builtin-all%3A%2Ftasks')
+  assert.equal(pathForCrumbTarget(crumbs[0]!.target), '/database/tasks/view/all')
   assert.equal(pathForCrumbTarget(crumbs[1]!.target), '/database/tasks/view/1787983501816')
   assert.ok(pathForCrumbTarget(crumbs[2]!.target).includes('/view/1787983501816/record/'))
   assert.ok(!pathForCrumbTarget(crumbs[0]!.target).includes('/record/'))

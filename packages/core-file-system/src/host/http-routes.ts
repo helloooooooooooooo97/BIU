@@ -31,7 +31,7 @@ import {
   type FileSystemAssets,
 } from './assets-store.ts'
 import { type SavedViewsStore, type StoredView } from './saved-views.ts'
-import { buildShareSnapshot } from './share-payload.ts'
+import { buildShareSnapshot, computeViewPublicStats, parseViewShareRecordId } from './share-payload.ts'
 import { publicShareUrl } from './share-origin.ts'
 import { readSharePluginWebJs, zipSharePluginSource } from './share-plugin-pack.ts'
 import { type SharesStore } from './shares-store.ts'
@@ -403,11 +403,54 @@ export function registerDatabaseHttpRoutes(
   ctx.http.route('GET', '/api/db/trash', async (route) => {
     await send(route, () => db.listTrash())
   })
+  const ensureSeedsForPath = (rawPath: string) => {
+    const normalized = normalizeCollectionPath(rawPath)
+    if (!normalized || normalized === '/' || normalized === VIEWS_COLLECTION_PATH) return
+    const spec = db.collection(normalized)
+    savedViews.ensureSeedViews(
+      normalized,
+      spec
+        ? { path: normalized, label: spec.label, view: spec.view }
+        : { path: normalized, label: normalized.replace(/^\//, '') },
+    )
+  }
+
+  ctx.http.route('GET', '/api/db/saved-views', async (route) => {
+    try {
+      const accountId = currentAccountId()
+      const singlePath = String(route.query.get('path') ?? '').trim()
+      if (singlePath) {
+        const normalized = normalizeCollectionPath(singlePath)
+        await db.requirePath(normalized, 'resource:read')
+        ensureSeedsForPath(normalized)
+        route.send(200, { views: savedViews.clientViewsFor(normalized, accountId) })
+        return
+      }
+      const rawPaths = String(route.query.get('paths') ?? '').trim()
+      const requestedPaths = rawPaths
+        ? rawPaths.split(',').map((p) => normalizeCollectionPath(p)).filter((p) => p && p !== '/' && p !== VIEWS_COLLECTION_PATH)
+        : db.collectionsList().map((spec) => normalizeCollectionPath(spec.path)).filter((p) => p && p !== '/' && p !== VIEWS_COLLECTION_PATH)
+      const viewsByPath: Record<string, StoredView[]> = {}
+      for (const path of new Set(requestedPaths)) {
+        try {
+          await db.requirePath(path, 'resource:read')
+        } catch {
+          continue
+        }
+        ensureSeedsForPath(path)
+        viewsByPath[path] = savedViews.clientViewsFor(path, accountId)
+      }
+      route.send(200, { viewsByPath })
+    } catch (error) {
+      const failure = databaseHttpFailure(error)
+      route.send(failure.status, failure.body)
+    }
+  })
+
   ctx.http.route('POST', '/api/db/saved-views', async (route) => {
     try {
       /**
-       * 默认是差异写：upsert 只新增/更新这几条，remove 只删这几个 id。
-       * 两个窗口各存一份快照时，后写的不会把另一个窗口刚建的视图冲掉。
+       * 默认是字段级增量写：upsert 只合并传入字段并由服务端单调递增 revision，remove 只删指定 id。
        * 需要整份同步的老调用方显式传 replace: true。
        */
       const body = (await route.json()) as {
@@ -417,14 +460,12 @@ export function registerDatabaseHttpRoutes(
         remove?: string[]
         replace?: boolean
       }
-      const path = String(body?.path ?? '')
+      const path = normalizeCollectionPath(String(body?.path ?? ''))
       const accountId = currentAccountId()
-      // 视图级写/删权限由 SavedViewsStore.applyPatch / replace 内部按 resolveViewDecision 精确判定，
-      // 此处仅校验调用方对目标集合具有读访问权，避免 viewer / 外部协作者无法持久化自己的个人聚合视图。
       await db.requirePath(path, 'resource:read')
+      ensureSeedsForPath(path)
       const removals = (body.remove ?? []).map(String).filter(Boolean)
       let views: StoredView[] = []
-      let skipped: string[] = []
       if (body.replace === true || (body.upsert === undefined && body.remove === undefined)) {
         const next = Array.isArray(body.views) ? body.views : []
         savedViews.replace(path, next, accountId)
@@ -432,18 +473,23 @@ export function registerDatabaseHttpRoutes(
       } else {
         const result = savedViews.applyPatch(path, { upsert: body.upsert ?? [], remove: removals }, accountId)
         views = result.views
-        skipped = result.skipped
       }
       db.notifyViewCatalog(path)
-      route.send(200, { ok: true, views, ...(skipped.length ? { skipped } : {}) })
+      route.send(200, { ok: true, views })
     } catch (error) {
-      route.send(400, { error: String(error) })
+      const msg = error instanceof Error ? error.message : String(error)
+      const status = msg.includes('MEMBER_VIEW_REFERENCED')
+        ? 409
+        : msg.includes('permission denied')
+          ? 403
+          : 400
+      route.send(status, { error: msg })
     }
   })
   const shareSnapshotOpts = (query: URLSearchParams) => {
-    if (query.get('contents') === 'all') return { contentIds: 'all' as const }
+    if (query.get('contents') === 'all') return { contentIds: 'all' as const, shares }
     const record = query.get('record') || ''
-    return { contentIds: record ? [record] : [] }
+    return { contentIds: record ? [record] : [], shares }
   }
   const sharePasswordOf = (route: { req: { headers: IncomingMessage['headers'] }; query: URLSearchParams }, body?: { password?: unknown }) => {
     const header = String(route.req.headers['x-share-password'] ?? '')
@@ -653,8 +699,15 @@ export function registerDatabaseHttpRoutes(
       return
     }
     const share = shares.findRecord(collection, recordId)
+    let viewPublicStats: { matchedCount: number; publicCount: number } | undefined
+    if (normalizeCollectionPath(collection) === VIEWS_COLLECTION_PATH && recordId) {
+      viewPublicStats =
+        (await computeViewPublicStats(db, savedViews, shares, recordId, currentAccountId(), currentRequestWorkspaceId())) ??
+        undefined
+    }
     route.send(200, {
       share: share ? { ...share, url: publicShareUrl(route.req, share.token) } : null,
+      ...(viewPublicStats ? { viewPublicStats } : {}),
     })
   })
   ctx.http.route('POST', '/api/db/shares', async (route) => {
@@ -675,9 +728,15 @@ export function registerDatabaseHttpRoutes(
       const collection = String(body.collection ?? '')
       const recordId = String(body.recordId ?? '')
       await db.requirePath(`${collection}/${recordId}`, 'resource:share')
+      const notifyViewShare = () => {
+        if (normalizeCollectionPath(collection) !== VIEWS_COLLECTION_PATH) return
+        const parsed = parseViewShareRecordId(recordId)
+        db.notifyViewCatalog(parsed?.targetCollection || VIEWS_COLLECTION_PATH)
+      }
       if (body.enabled === false) {
         shares.revokeRecord(collection, recordId)
         db.notifyShareChange()
+        notifyViewShare()
         route.send(200, { share: null })
         return
       }
@@ -692,6 +751,7 @@ export function registerDatabaseHttpRoutes(
         createdBy: currentAccountId(),
       })
       db.notifyShareChange()
+      notifyViewShare()
       route.send(200, { share: { ...share, url: publicShareUrl(route.req, share.token) } })
     } catch (error) {
       route.send(400, { error: String(error) })
@@ -770,7 +830,7 @@ export function registerDatabaseHttpRoutes(
     const recordId = route.params.recordId ?? ''
     try {
       const snapshot = await runInShareContext(share, () =>
-        buildShareSnapshot(db, savedViews, share, { contentIds: [recordId] }),
+        buildShareSnapshot(db, savedViews, share, { contentIds: [recordId], shares }),
       )
       if (!snapshot.records.some((row) => String(row.id) === recordId)) {
         route.send(404, { error: 'not found' })
@@ -799,7 +859,9 @@ export function registerDatabaseHttpRoutes(
     }
     try {
       const record = route.query.get('record') || ''
-      const snapshot = await buildShareSnapshot(db, savedViews, share, record ? { contentIds: [record] } : { contentIds: [] })
+      const snapshot = await runInShareContext(share, () =>
+        buildShareSnapshot(db, savedViews, share, record ? { contentIds: [record], shares } : { contentIds: [], shares }),
+      )
       const name = route.params.name ?? ''
       if (!snapshot.assets.includes(name)) {
         route.send(404, { error: 'not found' })
@@ -1183,12 +1245,12 @@ export function registerDatabaseHttpRoutes(
       }
       const visibleViews = savedViews.listMemberViews(workspaceId, actorId)
       const items = visibleViews.map((view) => {
-        const isLocked = view.protection === 'locked'
+        const isLocked = Boolean(view.locked)
         const matched = resolveMemberViewMatches(account, actorId, workspaceId, view)
         return {
           id: String(view.id),
           name: String(view.name || view.id),
-          protection: view.protection ?? 'public',
+          locked: isLocked,
           isLocked,
           createdBy: view.createdBy ?? '',
           memberCount: matched.length,
@@ -1222,7 +1284,8 @@ export function registerDatabaseHttpRoutes(
       route.send(200, {
         viewId: String(view.id),
         name: String(view.name || view.id),
-        isLocked: view.protection === 'locked',
+        locked: Boolean(view.locked),
+        isLocked: Boolean(view.locked),
         members,
       })
     } catch (error) {
@@ -1242,7 +1305,6 @@ export function registerDatabaseHttpRoutes(
       const body = (await route.json()) as {
         action?: 'unlock' | 'delete'
         mode?: 'freeze' | 'revoke'
-        targetProtection?: 'public' | 'personal'
       }
       const action = body?.action === 'delete' ? 'delete' : 'unlock'
       const mode = body?.mode === 'revoke' ? 'revoke' : body?.mode === 'freeze' ? 'freeze' : null
@@ -1281,17 +1343,10 @@ export function registerDatabaseHttpRoutes(
       if (action === 'delete') {
         savedViews.remove(`${WORKSPACE_MEMBERS_COLLECTION_PATH}::${viewId}`, actorId, [], workspaceId)
       } else {
-        const nextProtection = body?.targetProtection === 'personal' ? 'personal' : 'public'
         savedViews.applyPatch(
           WORKSPACE_MEMBERS_COLLECTION_PATH,
           {
-            upsert: [
-              {
-                ...view,
-                protection: nextProtection,
-                scope: nextProtection === 'personal' ? 'personal' : 'workspace',
-              },
-            ],
+            upsert: [{ id: viewId, locked: false }],
           },
           actorId,
           workspaceId,

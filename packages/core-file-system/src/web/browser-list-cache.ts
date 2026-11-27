@@ -5,7 +5,7 @@ import type {
   FieldSpec,
 } from '@biu/type-file-system'
 import { parseAppPath } from '@biu/web-session-view'
-import { builtinAllViewId, stampRecordId } from '../catalog-views.ts'
+import { stampRecordId } from '../catalog-views.ts'
 import { DATA_MODULE } from './database-path.ts'
 import { BoundedMap } from './bounded-map.ts'
 import { registerWorkspaceCache } from './workspace-client-store.ts'
@@ -34,7 +34,6 @@ import { tablePinCount } from './table-window.ts'
 import {
   applyListedCrumbMutation,
   defaultViewId,
-  loadOmittedViewIds,
 } from './view-storage.ts'
 import type { TablePaintNode } from './windowed-table.tsx'
 
@@ -176,9 +175,7 @@ export function collectionFromAppUrl(url: string): { collection: string; viewId:
   if (parsed.kind !== 'collection-view' && parsed.kind !== 'record') return null
   return {
     collection: parsed.collection,
-    viewId: parsed.viewId && !loadOmittedViewIds(parsed.collection).includes(parsed.viewId)
-      ? parsed.viewId
-      : defaultViewId(parsed.collection, parsed.viewId),
+    viewId: parsed.viewId || defaultViewId(parsed.collection, parsed.viewId),
   }
 }
 
@@ -383,7 +380,7 @@ export function toTrashListRow(collectionPath: string, row: DbRecord, tableLabel
 
 export function publishDeletedRowsToTrash(collectionPath: string, rows: DbRecord[], tableLabel: string) {
   if (collectionPath === TRASH_COLLECTION_PATH) return
-  const viewId = builtinAllViewId(TRASH_COLLECTION_PATH)
+  const viewId = defaultViewId(TRASH_COLLECTION_PATH)
   for (const row of rows) {
     if (!row?.id) continue
     publishListedMutation({

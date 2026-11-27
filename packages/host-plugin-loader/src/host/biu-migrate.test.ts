@@ -44,7 +44,7 @@ test('empty database fast path matches upgraded v1 fixture', () => {
 test('BIU_MIGRATIONS versions are unique and increasing', () => {
   assertBiuMigrationLog()
   assert.equal(BIU_MIGRATIONS.at(-1)?.version, LATEST_BIU_SCHEMA)
-  assert.equal(BIU_MIGRATIONS.at(-1)?.name, 'single_table_static_authz_and_member_views')
+  assert.equal(BIU_MIGRATIONS.at(-1)?.name, 'unify_views_record_permissions_and_remove_builtin')
   assert.throws(() => assertBiuMigrationLog([{ version: 2 }, { version: 2 }]), /重复/)
   assert.throws(() => assertBiuMigrationLog([{ version: 3 }, { version: 1 }]), /单调递增/)
 })
@@ -157,7 +157,7 @@ test('v41 remaps stored /sessions collection paths to /agents', () => {
     payload_json: string
   }
   assert.equal(view.collection, '/agents')
-  assert.equal(view.view_id, 'builtin-all:/agents')
+  assert.equal(view.view_id, 'all')
   assert.match(view.payload_json, /"tablePath":"\/agents"/)
   db.close()
 })
@@ -361,5 +361,72 @@ test('v61 migrates dynamic groups to locked member views, expands static groups,
     .prepare(`SELECT view_id FROM saved_views WHERE view_id = 'default:account:acc_owner:/pages'`)
     .get()
   assert.equal(removedPersonalDefault, undefined)
+  db.close()
+})
+
+test('v62 unifies view permissions into resource_policies, replaces protection with locked, and removes builtin shadows', () => {
+  const db = openSqlite(':memory:')
+  migrateBiu(db, {}, 61)
+  db.exec(`
+    INSERT INTO workspaces (id, name, owner_id, created_at) VALUES ('ws_1', 'Acme', 'acc_owner', 100);
+    INSERT INTO saved_views (workspace_id, collection, view_id, payload_json, updated_at)
+    VALUES
+      ('ws_1', '/pages', 'v_pub', '{"id":"v_pub","name":"团队页面","scope":"workspace","protection":"public","createdBy":"acc_owner"}', 100),
+      ('ws_1', '/pages', 'v_lock', '{"id":"v_lock","name":"看板","scope":"workspace","protection":"locked","createdBy":"acc_owner"}', 101),
+      ('ws_1', '/pages', 'v_priv', '{"id":"v_priv","name":"我的草稿","scope":"personal","protection":"personal","createdBy":"acc_bob"}', 102),
+      ('ws_1', '/pages', 'builtin-all:/pages::user:acc_owner', '{"id":"builtin-all:/pages","name":"全部页面","builtin":true,"createdBy":"acc_owner"}', 103),
+      ('ws_1', '/pages', 'builtin-all:/pages::user:acc_bob', '{"id":"builtin-all:/pages","name":"Bob自定义","builtin":true,"createdBy":"acc_bob","filters":{"status":"done"}}', 104),
+      ('ws_1', '/pages', 'builtin-all:/pages::user:acc_cara', '{"id":"builtin-all:/pages","name":"全部页面","builtin":true,"createdBy":"acc_cara"}', 105),
+      ('ws_1', '/workspace-members', 'builtin-member:member', '{"id":"builtin-member:member","name":"空间成员","builtin":true,"filters":{"membershipKind":"member"}}', 106);
+    INSERT INTO record_grants (workspace_id, collection, record_id, subject_type, subject_id, role, effect, granted_by, created_at)
+    VALUES ('ws_1', '/pages', 'p1', 'member_view', 'builtin-member:member', 'viewer', 'allow', 'acc_owner', 107);
+  `)
+  migrateBiu(db, {}, 62)
+
+  // Check revision column exists
+  assert.equal(tableColumnNames(db, 'saved_views').includes('revision'), true)
+
+  // Check v_pub / v_lock / v_priv policies and locked flag
+  const readView = (col: string, id: string): Record<string, unknown> | null => {
+    const row = db
+      .prepare('SELECT payload_json, revision FROM saved_views WHERE workspace_id = ? AND collection = ? AND view_id = ?')
+      .get('ws_1', col, id) as { payload_json: string; revision: number } | undefined
+    return row ? { ...(JSON.parse(row.payload_json) as Record<string, unknown>), revision: row.revision } : null
+  }
+  const readPolicy = (recId: string) =>
+    db
+      .prepare('SELECT owner_account_id, access_mode, member_default_role FROM resource_policies WHERE workspace_id = ? AND collection = ? AND record_id = ?')
+      .get('ws_1', '/views', recId) as { owner_account_id: string; access_mode: string; member_default_role: string } | undefined
+
+  const pubView = readView('/pages', 'v_pub')!
+  assert.equal(pubView.locked, false)
+  assert.equal('protection' in pubView, false)
+  assert.equal('scope' in pubView, false)
+  assert.equal(pubView.revision, 1)
+  assert.deepEqual({ ...readPolicy('pages::v_pub') }, { owner_account_id: 'acc_owner', access_mode: 'members', member_default_role: 'editor' })
+
+  const lockView = readView('/pages', 'v_lock')!
+  assert.equal(lockView.locked, true)
+  assert.deepEqual({ ...readPolicy('pages::v_lock') }, { owner_account_id: 'acc_owner', access_mode: 'members', member_default_role: 'viewer' })
+
+  const privView = readView('/pages', 'v_priv')!
+  assert.equal(privView.locked, false)
+  assert.deepEqual({ ...readPolicy('pages::v_priv') }, { owner_account_id: 'acc_bob', access_mode: 'private', member_default_role: 'viewer' })
+
+  // builtin-all shadows collapsed: owner -> 'all' (members/editor), bob's customized shadow -> personal view, cara's unmodified shadow deleted
+  assert.ok(readView('/pages', 'all'))
+  assert.deepEqual({ ...readPolicy('pages::all') }, { owner_account_id: 'acc_owner', access_mode: 'members', member_default_role: 'editor' })
+  assert.ok(readView('/pages', 'personal-acc_bob'))
+  assert.deepEqual({ ...readPolicy('pages::personal-acc_bob') }, { owner_account_id: 'acc_bob', access_mode: 'private', member_default_role: 'viewer' })
+  assert.equal(readView('/pages', 'personal-acc_car'), null)
+
+  // builtin-member:member renamed to clean 'member' (locked=true) and record_grants remapped
+  const memberView = readView('/workspace-members', 'member')!
+  assert.equal(memberView.locked, true)
+  const grant = db
+    .prepare(`SELECT subject_id FROM record_grants WHERE workspace_id = 'ws_1' AND collection = '/pages' AND record_id = 'p1'`)
+    .get() as { subject_id: string }
+  assert.equal(grant.subject_id, 'member')
+
   db.close()
 })

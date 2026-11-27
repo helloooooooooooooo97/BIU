@@ -6,7 +6,7 @@ import {
   CheckCircleIcon,
   Cog6ToothIcon,
   EllipsisHorizontalIcon,
-  GlobeAltIcon,
+  ShieldCheckIcon,
   TagIcon,
   TrashIcon,
   UserIcon,
@@ -18,7 +18,7 @@ import { overlayPortalRoot, overlayZ } from '@biu/biu-ui/overlay-portal'
 import { emitFsdbChange, type CollectionInfo, type CollectionSchema, type DbRecord, type FieldSpec } from '@biu/type-file-system'
 import type { CollectionRowViewType, CollectionViewType } from '@biu/type-file-system/ui'
 import { collectionNoun, viewDomainOf } from '../catalog-views.ts'
-import { savedViewRecordPath } from '../paths.ts'
+import { normalizeCollectionPath, savedViewRecordPath } from '../paths.ts'
 import { countFilterRules, type FilterGroup, type SortRule } from '../query-logic.ts'
 import type { BrowserDialogState } from './browser-dialogs.tsx'
 import { askNewPlugin } from './browser-row-title.tsx'
@@ -30,14 +30,18 @@ import { ModeGlyph, VIEW_MODES } from './fsdb-cells.tsx'
 import { TableGlyph, UiGlyph, ViewModeGlyph } from './nav-glyphs.tsx'
 import { PageBanner } from './page-banner.tsx'
 import type { QueryField } from './query-menus.tsx'
-import { ViewOrderMenu, ViewProtectionBadge } from './view-order-menu.tsx'
-import { canEditSavedView, viewStateKey, type GroupConfig, type SavedView } from './saved-view.ts'
+import { ViewOrderMenu, ViewStatusBadge } from './view-order-menu.tsx'
+import { canEditSavedView, canManageSavedView, viewStateKey, type GroupConfig, type SavedView } from './saved-view.ts'
 import type { TableSandboxItem } from '../shared/table-sandbox-model.ts'
 import { SandboxKindIcon } from './sandbox-kind-icon.tsx'
+import { FSDB_OPEN_VIEW_SHARE_EVENT } from './fsdb-events.ts'
 
 const QueryFlyout = lazy(() => import('./query-menus.tsx').then((m) => ({ default: m.QueryFlyout })))
 const ViewSettingsMenu = lazy(() => import('./view-settings-menu.tsx').then((m) => ({ default: m.ViewSettingsMenu })))
 const BatchShareDialog = lazy(() => import('./batch-share-dialog.tsx').then((m) => ({ default: m.BatchShareDialog })))
+const TableCollaboratorsButton = lazy(() =>
+  import('./table-collaborators-button.tsx').then((m) => ({ default: m.TableCollaboratorsButton })),
+)
 import type { ViewSettingsTab } from './view-settings-menu.tsx'
 
 const QUERY_NEST_IGNORE = `${HEADLESS_DISMISS_IGNORE}, .db-search-menu, .fsdb-cellselect-menu, .fsdb-query-drag-overlay, [data-fsdb-sort-overlay]`
@@ -58,9 +62,9 @@ export type BrowserListChromeProps = {
   setViewMenuOpen: (open: boolean) => void
   toggleMenu: (which: 'view' | 'mode' | 'sort' | 'columns' | 'filter' | 'config' | 'group' | 'layout') => void
   selectView: (view: SavedView) => void
-  copyView: (source?: SavedView, overrides?: Partial<SavedView>) => void
+  copyView: (source?: SavedView, overrides?: Partial<SavedView> & { accessMode?: 'private' | 'members' }) => void
   deleteView: (view: SavedView, path?: string) => void
-  updateViewProtection?: (view: SavedView, protection: 'public' | 'locked' | 'personal') => void
+  toggleViewLock?: (view: SavedView) => void
   persistViewOrder: (ids: string[]) => void
   addEmptyView: () => void
   pickedIds: string[]
@@ -82,8 +86,8 @@ export type BrowserListChromeProps = {
   lockedKindLabel?: string
   toolbarRightRef: RefObject<HTMLDivElement | null>
   searchExpanded: boolean
-  viewsSaveError: boolean
-  setViewsSaveError: (next: boolean) => void
+  viewsSaveError: string
+  setViewsSaveError: (next: string) => void
   query: string
   setQuery: (next: string) => void
   setSearchOpen: (next: boolean | ((open: boolean) => boolean)) => void
@@ -186,7 +190,7 @@ export const BrowserListChrome = memo(function BrowserListChrome(props: BrowserL
     selectView,
     copyView,
     deleteView,
-    updateViewProtection,
+    toggleViewLock,
     persistViewOrder,
     addEmptyView,
     pickedIds,
@@ -317,6 +321,18 @@ export const BrowserListChrome = memo(function BrowserListChrome(props: BrowserL
       viewStateKey(activeView) !== viewStateKey(readOnlyBaseline),
   )
 
+  const isMembersCollection = normalizeCollectionPath(collectionPath) === WORKSPACE_MEMBERS_COLLECTION_PATH
+  const isCloud = !localData
+  const openViewShare = (targetView?: SavedView) => {
+    const view = targetView ?? activeView
+    if (!view || view.ephemeral) return
+    if (view.id !== activeViewId) selectView(view)
+    const recId = `${normalizeCollectionPath(collectionPath).replace(/^\/+/, '')}::${view.id}`
+    window.setTimeout(() => {
+      window.dispatchEvent(new CustomEvent(FSDB_OPEN_VIEW_SHARE_EVENT, { detail: { recordId: recId } }))
+    }, 0)
+  }
+
   const canBulkPermissions =
     !localData &&
     !inTrash &&
@@ -426,7 +442,9 @@ export const BrowserListChrome = memo(function BrowserListChrome(props: BrowserL
                 >
                   {activeView ? <ViewModeGlyph mode={activeView.mode} /> : <UiGlyph icon="squares" />}
                   <span className="tasks-viewdd-name">{activeView?.name ?? '未保存'}</span>
-                  {activeView ? <ViewProtectionBadge view={activeView} /> : null}
+                  {activeView ? (
+                    <ViewStatusBadge view={activeView} isCloud={isCloud} isMembersCollection={isMembersCollection} />
+                  ) : null}
                 </button>
               </div>
               {viewMenuOpen ? (
@@ -440,13 +458,19 @@ export const BrowserListChrome = memo(function BrowserListChrome(props: BrowserL
                     <ViewOrderMenu
                       views={views}
                       activeViewId={activeViewId}
+                      isCloud={isCloud}
+                      isMembersCollection={isMembersCollection}
                       onSelect={(view) => {
                         selectView(view)
                         setViewMenuOpen(false)
                       }}
                       onCopy={copyView}
                       onDelete={deleteView}
-                      onChangeProtection={updateViewProtection}
+                      onToggleLock={toggleViewLock}
+                      onOpenShare={isCloud ? (view) => {
+                        setViewMenuOpen(false)
+                        openViewShare(view)
+                      } : undefined}
                       onReorder={persistViewOrder}
                       onAdd={() => addEmptyView()}
                     />
@@ -492,7 +516,7 @@ export const BrowserListChrome = memo(function BrowserListChrome(props: BrowserL
                     title={`对选中的 ${pickedIds.length} 条记录批量设置权限`}
                     onClick={() => setBatchShareOpen(true)}
                   >
-                    <UsersIcon aria-hidden className="size-[14px]" />
+                    <ShieldCheckIcon aria-hidden className="size-[14px]" />
                   </button>
                 ) : null}
                 {canBulkDelete && pickedIds.some((id) => !(collectionPath === PLUGINS_COLLECTION_PATH && items.find((row) => row.id === id)?.builtin === true)) ? (
@@ -589,9 +613,9 @@ export const BrowserListChrome = memo(function BrowserListChrome(props: BrowserL
         </div>
         <div className={`tasks-toolbar-right${searchExpanded ? ' is-searching' : ''}`} ref={toolbarRightRef}>
           {viewsSaveError ? (
-            <div className="fsdb-views-error" role="alert">
-              <span>视图没有保存到数据库，本地仍是上一次成功保存的状态。请重试。</span>
-              <button type="button" onClick={() => setViewsSaveError(false)}>
+            <div className="fsdb-views-error" role="alert" data-testid="fsdb-views-error">
+              <span>{viewsSaveError}</span>
+              <button type="button" onClick={() => setViewsSaveError('')}>
                 知道了
               </button>
             </div>
@@ -706,6 +730,15 @@ export const BrowserListChrome = memo(function BrowserListChrome(props: BrowserL
                   </button>
                 </div>
               ) : null}
+              {!sheet && !hasExternalViews && canBulkPermissions ? (
+                <Suspense fallback={null}>
+                  <TableCollaboratorsButton
+                    collectionPath={collectionPath}
+                    activeView={activeView}
+                    localOnly={localData}
+                  />
+                </Suspense>
+              ) : null}
               <div className="tasks-filter-btn-wrap" ref={configRef}>
                 <button
                   type="button"
@@ -750,9 +783,12 @@ export const BrowserListChrome = memo(function BrowserListChrome(props: BrowserL
                         sheet={sheet && !hasExternalViews}
                         collectionPath={collectionPath}
                         title={title}
+                        localData={localData}
                         activeView={activeView}
                         commitViewName={commitViewName}
-                        onSaveAsPersonal={activeView ? () => copyView(activeView, { scope: 'personal' }) : undefined}
+                        onSaveAsPersonal={activeView ? () => copyView(activeView, { accessMode: 'private' }) : undefined}
+                        onToggleViewLock={toggleViewLock}
+                        onOpenViewShare={isCloud ? () => openViewShare(activeView) : undefined}
                         mode={mode}
                         setMode={setMode}
                         extraViews={extraViews}
@@ -798,59 +834,6 @@ export const BrowserListChrome = memo(function BrowserListChrome(props: BrowserL
                   </Suspense>
                 ) : null}
               </div>
-              {!sheet && !hasExternalViews && hasReadOnlyDraftChanges && activeView && readOnlyBaseline ? (
-                <div
-                  className="fsdb-readonly-draft-pill"
-                  data-testid="fsdb-readonly-draft-pill"
-                  style={{
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: 6,
-                    padding: '2px 8px',
-                    borderRadius: 999,
-                    fontSize: 12,
-                    background: 'var(--biu-color-bg-subtle, rgba(128,128,128,0.1))',
-                    border: 'var(--biu-stroke-width, 1px) solid var(--biu-color-border, rgba(128,128,128,0.2))',
-                    color: 'var(--biu-color-text-muted)',
-                  }}
-                >
-                  <span>临时预览</span>
-                  <button
-                    type="button"
-                    data-testid="fsdb-readonly-draft-reset"
-                    style={{
-                      background: 'transparent',
-                      border: 'none',
-                      padding: '0 2px',
-                      cursor: 'pointer',
-                      color: 'var(--biu-color-text)',
-                      fontSize: 12,
-                    }}
-                    onClick={() => {
-                      patchActiveView(readOnlyBaseline)
-                      selectView(readOnlyBaseline)
-                    }}
-                  >
-                    重置
-                  </button>
-                  <button
-                    type="button"
-                    data-testid="fsdb-readonly-draft-save-as"
-                    style={{
-                      background: 'transparent',
-                      border: 'none',
-                      padding: '0 2px',
-                      cursor: 'pointer',
-                      color: 'var(--biu-color-accent, var(--biu-color-text))',
-                      fontWeight: 500,
-                      fontSize: 12,
-                    }}
-                    onClick={() => copyView(activeView, { scope: 'personal' })}
-                  >
-                    另存为我的视图
-                  </button>
-                </div>
-              ) : null}
               <div className="fsdb-refresh-wrap">
                 <button
                   type="button"
@@ -991,18 +974,6 @@ export const BrowserListChrome = memo(function BrowserListChrome(props: BrowserL
                                 空间
                               </button>
                             )}
-                            <button
-                              type="button"
-                              role="menuitem"
-                              className={createScope === 'shared' ? 'is-on' : ''}
-                              onClick={() => {
-                                setCreateScope('shared')
-                                setCreateScopeOpen(false)
-                              }}
-                            >
-                              <GlobeAltIcon aria-hidden className="size-[14px]" />
-                              共享
-                            </button>
                           </div>
                         ) : null}
                       </div>

@@ -1,6 +1,5 @@
 import { beforeEach, test } from 'vitest'
 import assert from 'node:assert/strict'
-import { builtinAllViewId } from '../catalog-views.ts'
 import { databaseAllViewPath, databaseRecordPath, databaseViewPath } from './database-path.ts'
 import {
   getInspectorDbPath,
@@ -111,13 +110,13 @@ test('showRecordInInspector newTab keeps the list pane and opens another tab', (
   assert.equal(getInspectorDbPath('database:/pages'), list)
   const extra = Object.keys(snapshotInspectorDbPaths()).filter((id) => id.startsWith('database:/pages::'))
   assert.equal(extra.length, 1)
-  assert.equal(getInspectorDbPath(extra[0]!), databaseRecordPath('/pages', 'p-new', builtinAllViewId('/pages')))
+  assert.equal(getInspectorDbPath(extra[0]!), databaseRecordPath('/pages', 'p-new', 'all'))
 })
 
 test('showRecordInInspector reuses the collection pane instead of opening a second copy of the page', () => {
   setInspectorDbPath('database:/pages', databaseAllViewPath('/pages'))
   showRecordInInspector('/pages', 'p-new')
-  assert.equal(getInspectorDbPath('database:/pages'), databaseRecordPath('/pages', 'p-new', builtinAllViewId('/pages')))
+  assert.equal(getInspectorDbPath('database:/pages'), databaseRecordPath('/pages', 'p-new', 'all'))
   const extra = Object.keys(snapshotInspectorDbPaths()).filter((id) => id.startsWith('database:/pages::'))
   assert.equal(extra.length, 0)
 })
@@ -125,7 +124,7 @@ test('showRecordInInspector reuses the collection pane instead of opening a seco
 test('opening a page from the all-pages list then navigating that pane still keeps one tab', () => {
   setInspectorDbPath('database:/pages', databaseAllViewPath('/pages'))
   showRecordInInspector('/pages', 'same-page')
-  setInspectorDbPath('database:/pages', databaseRecordPath('/pages', 'same-page', 'builtin-all:/pages'))
+  setInspectorDbPath('database:/pages', databaseRecordPath('/pages', 'same-page', 'all'))
   assert.equal(Object.keys(snapshotInspectorDbPaths()).filter((id) => id.startsWith('database:/pages')).length, 1)
 })
 
@@ -297,9 +296,9 @@ test('applyDatabaseReveal opens the table, or the record when an id is present',
   applyDatabaseReveal({ collection: '/tasks' })
   assert.equal(getInspectorDbPath('database:/tasks'), databaseAllViewPath('/tasks'))
   applyDatabaseReveal({ collection: '/tasks', recordId: 't9' })
-  assert.equal(getInspectorDbPath('database:/tasks'), databaseRecordPath('/tasks', 't9', builtinAllViewId('/tasks')))
+  assert.equal(getInspectorDbPath('database:/tasks'), databaseRecordPath('/tasks', 't9', 'all'))
   applyDatabaseReveal({ collection: '/' })
-  assert.equal(getInspectorDbPath('database:/tasks'), databaseRecordPath('/tasks', 't9', builtinAllViewId('/tasks')))
+  assert.equal(getInspectorDbPath('database:/tasks'), databaseRecordPath('/tasks', 't9', 'all'))
 })
 
 test('applyDatabaseChannelPayload marks the table as agent-working until done', () => {
@@ -529,7 +528,7 @@ test('moving an open inspector record lands on the matching 回收站 row', () =
   moveInspectorRecordsToTrash('/pages', ['p1'])
   assert.equal(
     getInspectorDbPath('database:/pages'),
-    databaseRecordPath('/trash', 'pages::p1', builtinAllViewId('/trash')),
+    databaseRecordPath('/trash', 'pages::p1', 'all'),
   )
 })
 
@@ -540,13 +539,13 @@ test('moving inspector records to 回收站 keeps other panes and skips missing 
   moveInspectorRecordsToTrash('/pages', ['p1', 'p-missing'])
   assert.equal(
     getInspectorDbPath(pane),
-    databaseRecordPath('/trash', 'pages::p1', builtinAllViewId('/trash')),
+    databaseRecordPath('/trash', 'pages::p1', 'all'),
   )
   assert.equal(getInspectorDbPath('database:/notes'), '/database/notes/record/n1')
   moveInspectorRecordsToTrash('/trash', ['pages::p1'])
   assert.equal(
     getInspectorDbPath(pane),
-    databaseRecordPath('/trash', 'pages::p1', builtinAllViewId('/trash')),
+    databaseRecordPath('/trash', 'pages::p1', 'all'),
   )
   moveInspectorRecordsToTrash('/pages', [])
   assert.equal(getInspectorDbPath('database:/notes'), '/database/notes/record/n1')

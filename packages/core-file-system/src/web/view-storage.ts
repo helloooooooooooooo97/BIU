@@ -1,40 +1,23 @@
 import { currentStorageWorkspaceId, readStorageString, removeStorageKey, writeStorageString } from '@biu/biu-ui/client-storage'
 import { apiFetch } from '@biu/biu-ui/api-client'
 import {
-  builtinAllGroupBy,
-  builtinAllViewId,
-  isBuiltinAllViewForCollection,
-  isBuiltinAllViewId,
-  isBuiltinCatalogViewId,
-  stubBuiltinAllView,
-  stubBuiltinBlockKindView,
-  stubBuiltinCatalogView,
-  stubBuiltinMemberView,
-  stubBuiltinTagView,
-} from '../catalog-views.ts'
-import {
-  DATA_COLLECTION_PATH,
-  EDITOR_BLOCKS_COLLECTION_PATH,
-  VIEWS_COLLECTION_PATH,
   WORKSPACE_MEMBERS_COLLECTION_PATH,
-  isIndexCollection,
-} from './database-path.ts'
-import { normalizeCollectionPath, savedViewRecordPath } from '../paths.ts'
-import { invalidateListReads, listCollection, readJson } from './db-client.ts'
-import { looksLikeFilterTree, normalizeFilterGroup, parseSortsInput, resolveViewFilterTree } from '../query-logic.ts'
+  normalizeCollectionPath,
+} from '../paths.ts'
+import { invalidateListReads, readJson } from './db-client.ts'
+import { looksLikeFilterTree, normalizeFilterGroup, parseSortsInput } from '../query-logic.ts'
 import {
   extractViewCreatorId,
   normalizeGroupConfig,
   normalizePageSize,
   normalizeSavedView,
-  normalizeViewProtection,
   normalizeViewRole,
-  normalizeViewScope,
+  normalizeViewShareScope,
   parseViewColumns,
   rankListedViews,
   sortViewsByRank,
-  viewIsFresher,
   type SavedView,
+  type SavedViewFieldPatch,
 } from './saved-view.ts'
 import { KeyedSerialQueue } from './record-write-queue.ts'
 import { registerWorkspaceCache } from './workspace-client-store.ts'
@@ -87,60 +70,13 @@ function workspaceStoragePrefix(): string {
   return ws ? `${ws}:` : ''
 }
 
-function isVirtualBuiltinSeedId(id: string): boolean {
-  const key = String(id ?? '').trim()
-  return Boolean(
-    key &&
-      (isBuiltinAllViewId(key) ||
-        key.startsWith('__all__:') ||
-        isBuiltinCatalogViewId(key) ||
-        Boolean(stubBuiltinBlockKindView(key)) ||
-        Boolean(stubBuiltinTagView(key)) ||
-        Boolean(stubBuiltinMemberView(key))),
-  )
-}
-
-export function omittedViewsKey(collectionPath: string) {
-  return `fsdb.omittedViews:${workspaceStoragePrefix()}${collectionPath}`
-}
-
-export function loadOmittedViewIds(collectionPath: string): string[] {
-  try {
-    const raw = readStorageString(omittedViewsKey(collectionPath))
-    const parsed = raw ? (JSON.parse(raw) as unknown) : []
-    if (!Array.isArray(parsed)) return []
-    return parsed.map((id) => String(id ?? '').trim()).filter(Boolean)
-  } catch {
-    return []
-  }
-}
-
-function persistOmittedViewIds(collectionPath: string, ids: Iterable<string>) {
-  const next = [...new Set([...ids].map((id) => String(id ?? '').trim()).filter(Boolean))]
-  try {
-    if (next.length) writeStorageString(omittedViewsKey(collectionPath), JSON.stringify(next))
-    else removeStorageKey(omittedViewsKey(collectionPath))
-  } catch {
-    /* ignore */
-  }
-}
-
-/** 仅对虚拟内置种子视图（如 builtin-all:*）记录本地隐藏；普通数据库视图的删除以服务端权威列表为准，不再写入永久黑名单。 */
-export function omitSavedViewIds(collectionPath: string, ids: Iterable<string>) {
-  const builtinOnly = [...ids].map((id) => String(id ?? '').trim()).filter(isVirtualBuiltinSeedId)
-  if (!builtinOnly.length) return
-  persistOmittedViewIds(collectionPath, [...loadOmittedViewIds(collectionPath), ...builtinOnly])
-}
-
-export function reviveSavedViewIds(collectionPath: string, ids: Iterable<string>) {
-  const drop = new Set([...ids].map((id) => String(id ?? '').trim()))
-  const existing = loadOmittedViewIds(collectionPath)
-  const filtered = existing.filter((id) => !drop.has(id))
-  if (filtered.length !== existing.length) persistOmittedViewIds(collectionPath, filtered)
-}
-
 export function activeViewStorageKey(collectionPath: string) {
   return `fsdb.activeView:${workspaceStoragePrefix()}${collectionPath}`
+}
+
+/** 集合在服务端首拉前尚未载入时的约定默认种子视图 ID。 */
+export function defaultSeedViewId(collectionPath: string): string {
+  return normalizeCollectionPath(collectionPath) === WORKSPACE_MEMBERS_COLLECTION_PATH ? 'member' : 'all'
 }
 
 // ---------------------------------------------------------------------------
@@ -150,7 +86,7 @@ export function activeViewStorageKey(collectionPath: string) {
 export type PendingViewOp = {
   opId: number
   workspaceGen: number
-  upsert?: SavedView[]
+  upsert?: SavedViewFieldPatch[]
   remove?: string[]
 }
 
@@ -186,6 +122,30 @@ export function hasPendingViewOps(collectionPath: string): boolean {
   return (pendingOps.get(collectionPath)?.length ?? 0) > 0
 }
 
+function mergePatchOntoView(base: SavedView | undefined, patch: SavedViewFieldPatch): SavedView {
+  if (!base) {
+    return normalizeSavedView({
+      mode: 'table',
+      sortField: 'updatedAt',
+      sortDir: 'desc',
+      filters: {},
+      columns: [],
+      ...patch,
+      id: patch.id,
+      name: String(patch.name ?? patch.id),
+    } as SavedView)
+  }
+  return normalizeSavedView({
+    ...base,
+    ...patch,
+    freezeUntil: patch.freezeUntil === null ? undefined : (patch.freezeUntil ?? base.freezeUntil),
+    groupConfig: patch.groupConfig === null ? undefined : (patch.groupConfig ?? base.groupConfig),
+    filterTree: patch.filterTree === null ? undefined : (patch.filterTree ?? base.filterTree),
+    id: base.id,
+    name: typeof patch.name === 'string' && patch.name.trim() ? patch.name : base.name,
+  } as SavedView)
+}
+
 function applyPendingOps(base: SavedView[], ops: PendingViewOp[]): SavedView[] {
   if (!ops.length) return base
   const byId = new Map<string, SavedView>()
@@ -198,10 +158,10 @@ function applyPendingOps(base: SavedView[], ops: PendingViewOp[]): SavedView[] {
       const id = String(rawId ?? '').trim()
       if (id) byId.delete(id)
     }
-    for (const view of op.upsert ?? []) {
-      const id = String(view.id ?? '').trim()
+    for (const patch of op.upsert ?? []) {
+      const id = String(patch.id ?? '').trim()
       if (!id) continue
-      byId.set(id, normalizeSavedView(view))
+      byId.set(id, mergePatchOntoView(byId.get(id), patch))
     }
   }
   return sortViewsByRank([...byId.values()])
@@ -216,13 +176,13 @@ function bumpWriteSeq(collectionPath: string) {
 /** 登记一次在途乐观视图变更，返回独立 opId；提交或失败时按 opId 精准结算，绝不误伤并发成功操作。 */
 export function beginPendingViewOp(
   collectionPath: string,
-  op: { upsert?: SavedView[]; remove?: string[] },
+  op: { upsert?: SavedViewFieldPatch[]; remove?: string[] },
 ): number {
   const opId = nextPendingOpId++
   const entry: PendingViewOp = {
     opId,
     workspaceGen,
-    upsert: op.upsert?.map((view) => normalizeSavedView(view)),
+    upsert: op.upsert?.map((patch) => ({ ...patch })),
     remove: op.remove?.map((id) => String(id ?? '').trim()).filter(Boolean),
   }
   const list = pendingOps.get(collectionPath) ?? []
@@ -232,7 +192,7 @@ export function beginPendingViewOp(
   return opId
 }
 
-/** 结算已落盘的在途变更：优先采纳服务端响应返回的权威视图列表，避免二次拉取回弹覆盖。 */
+/** 结算已落盘的在途变更：直接采纳服务端响应返回的权威视图列表，避免二次拉取回弹覆盖。 */
 export function commitPendingViewOp(
   collectionPath: string,
   opId: number,
@@ -247,13 +207,10 @@ export function commitPendingViewOp(
 
   const prevServer = serverViews.get(collectionPath) ?? []
   if (serverAuthoritativeViews) {
-    const omitted = new Set(loadOmittedViewIds(collectionPath))
-    const normalized = serverAuthoritativeViews
-      .map((view) => withViewDisplay(collectionPath, normalizeSavedView(view)))
-      .filter((view) => !omitted.has(view.id))
+    const normalized = serverAuthoritativeViews.map((view) => normalizeSavedView(view))
     serverViews.set(collectionPath, rankListedViews(normalized, prevServer))
   } else if (op) {
-    const applied = applyPendingOps(prevServer, [op]).map((view) => withViewDisplay(collectionPath, view))
+    const applied = applyPendingOps(prevServer, [op])
     serverViews.set(collectionPath, rankListedViews(applied, prevServer))
   }
   bumpWriteSeq(collectionPath)
@@ -279,7 +236,7 @@ export function rememberViews(collectionPath: string, views: SavedView[]) {
   emitViewsStoreChange()
 }
 
-/** 把这次写入的视图叠进已有列表。快照缺了的条目不能当成删除。 */
+/** 合并两份视图列表（优先使用较高 revision，不依赖客户端时钟）。 */
 export function mergeSavedViewLists(
   previous: SavedView[],
   incoming: SavedView[],
@@ -297,15 +254,7 @@ export function mergeSavedViewLists(
     if (!id || gone.has(id)) continue
     const next = normalizeSavedView(view)
     const prev = byId.get(id)
-    if (prev && !viewIsFresher(next, prev)) {
-      const patched = {
-        ...prev,
-        ...(!prev.createdBy && next.createdBy ? { createdBy: next.createdBy } : {}),
-        ...(next.viewRole && next.viewRole !== prev.viewRole ? { viewRole: next.viewRole } : {}),
-      }
-      if (patched.createdBy !== prev.createdBy || patched.viewRole !== prev.viewRole) {
-        byId.set(id, patched)
-      }
+    if (prev && (prev.revision ?? 0) > (next.revision ?? 0)) {
       continue
     }
     byId.set(id, next)
@@ -330,71 +279,38 @@ export function loadActiveViewId(collectionPath: string, listed: SavedView[]) {
   return listed[0]?.id ?? null
 }
 
-export function isOmittedViewId(collectionPath: string, viewId: string) {
-  const id = String(viewId ?? '').trim()
-  return Boolean(id) && loadOmittedViewIds(collectionPath).includes(id)
-}
-
 export function viewForPath(collectionPath: string, routeViewId?: string): SavedView | null {
-  const omitted = new Set(loadOmittedViewIds(collectionPath))
-  const listed = loadViews(collectionPath).filter((item) => !omitted.has(item.id))
-  const allId = builtinAllViewId(collectionPath)
-  const fallback = omitted.has(allId) ? null : stubBuiltinAllView(allId)
-  const route = String(routeViewId ?? '').trim()
-  const want = route && !omitted.has(route) ? route : ''
+  const listed = loadViews(collectionPath)
+  const want = String(routeViewId ?? '').trim()
   const preferred =
-    (want
-      ? listed.find((item) => item.id === want) ??
-        stubBuiltinMemberView(want) ??
-        stubBuiltinCatalogView(want) ??
-        stubBuiltinTagView(want) ??
-        stubBuiltinBlockKindView(want) ??
-        (isBuiltinAllViewForCollection(want, collectionPath) ? stubBuiltinAllView(want) : null)
-      : undefined) ??
+    (want ? listed.find((item) => item.id === want) : undefined) ??
     listed.find((item) => item.id === loadActiveViewId(collectionPath, listed)) ??
-    fallback ??
     listed[0]
-  return preferred ? withViewDisplay(collectionPath, normalizeSavedView(preferred)) : null
+  return preferred ? normalizeSavedView(preferred) : null
 }
 
 export function defaultViewId(collectionPath: string, routeViewId?: string) {
   const hit = viewForPath(collectionPath, routeViewId)
   if (hit) return hit.id
-  const omitted = new Set(loadOmittedViewIds(collectionPath))
-  const listed = loadViews(collectionPath).filter((item) => !omitted.has(item.id))
+  const listed = loadViews(collectionPath)
   if (listed[0]) return listed[0].id
-  const allId = builtinAllViewId(collectionPath)
-  return omitted.has(allId) ? '' : allId
+  return defaultSeedViewId(collectionPath)
 }
 
-/** 水合时列表可能还没有内置块类型视图；URL 上的 builtin-block: 仍用 stub 还原，不能退回「全部」。 */
 export function pickViewForRoute(listed: SavedView[], collectionPath: string, routeViewId?: string) {
   const route = String(routeViewId ?? '').trim()
   if (route) {
     const hit = listed.find((item) => item.id === route)
     if (hit) return hit
-    if (isOmittedViewId(collectionPath, route)) {
-      return listed.find((item) => item.id === loadActiveViewId(collectionPath, listed)) ?? listed[0] ?? null
-    }
-    return viewForPath(collectionPath, route)
   }
   return listed.find((item) => item.id === loadActiveViewId(collectionPath, listed)) ?? listed[0] ?? null
 }
 
-/** 冷 origin 上 URL 里的已存视图不在缓存里；内置 stub 不用拉。 */
+/** 冷 origin 上 URL 里的视图尚未拉到缓存时先拉取权威列表。 */
 export function routeViewNeedsFetch(collectionPath: string, routeViewId?: string) {
   const id = String(routeViewId ?? '').trim()
   if (!id) return false
-  if (isOmittedViewId(collectionPath, id)) return false
-  if (
-    stubBuiltinAllView(id) ||
-    stubBuiltinBlockKindView(id) ||
-    stubBuiltinCatalogView(id) ||
-    stubBuiltinTagView(id) ||
-    stubBuiltinMemberView(id)
-  ) {
-    return false
-  }
+  if (hasPulledSavedViews(collectionPath)) return false
   return !loadViews(collectionPath).some((view) => view.id === id)
 }
 
@@ -404,7 +320,7 @@ export async function fetchSavedView(collectionPath: string, viewId: string): Pr
   const id = String(viewId ?? '').trim()
   if (!id) return null
   const hit = loadViews(collectionPath).find((view) => view.id === id)
-  if (hit) return withViewDisplay(collectionPath, hit)
+  if (hit) return normalizeSavedView(hit)
   const key = `${workspaceGen}\0${collectionPath}\0${id}`
   const pending = routeViewFetchByKey.get(key)
   if (pending) return pending
@@ -418,58 +334,29 @@ export async function fetchSavedView(collectionPath: string, viewId: string): Pr
 async function fetchSavedViewNow(collectionPath: string, viewId: string): Promise<SavedView | null> {
   const startGen = workspaceGen
   const startWs = currentWorkspaceStorageId()
-  const path = savedViewRecordPath(collectionPath, viewId)
-  if (path) {
-    try {
-      const data = await readJson<{ value?: Parameters<typeof savedViewFromRecord>[0] }>(
-        `/api/db/read?path=${encodeURIComponent(path)}`,
-      )
-      if (workspaceGen !== startGen || currentWorkspaceStorageId() !== startWs) return null
-      const view = data.value ? savedViewFromRecord(data.value) : null
-      if (view && view.id === viewId) {
-        upsertSavedView(collectionPath, view)
-        return withViewDisplay(collectionPath, view)
-      }
-    } catch {
-      /* 单条读失败就停，不拉整表视图挡首屏 */
-    }
-  }
+  await pullSavedViews([collectionPath], { force: true })
   if (workspaceGen !== startGen || currentWorkspaceStorageId() !== startWs) return null
   const listed = loadViews(collectionPath).find((view) => view.id === viewId)
-  return listed ? withViewDisplay(collectionPath, listed) : null
+  return listed ? normalizeSavedView(listed) : null
 }
 
-export type SavedViewsPatch = { upsert?: SavedView[]; remove?: string[]; baseUpdatedAtById?: Record<string, number> }
+export type SavedViewsPatch = { upsert?: SavedViewFieldPatch[]; remove?: string[] }
 
 export function viewPatchKey(view: SavedView) {
   return JSON.stringify(normalizeSavedView(view))
 }
 
-/** 推给后端的载荷：带上 baseUpdatedAt 与本地修改时间，并显式序列化已清空的可选字段为 null / {}。 */
-function viewWirePayload(view: SavedView, baseUpdatedAt?: number) {
-  const normalized = normalizeSavedView(view)
-  return {
-    ...normalized,
-    filterTree: resolveViewFilterTree(normalized),
-    groupConfig: normalized.groupConfig ?? null,
-    freezeUntil: normalized.freezeUntil ?? null,
-    columnWidths: normalized.columnWidths ?? {},
-    columnSummaries: normalized.columnSummaries ?? {},
-    columnViews: normalized.columnViews ?? {},
-    sandboxViews: normalized.sandboxViews ?? [],
-    updatedAt: Number(normalized.updatedAt) || 0,
-    ...(baseUpdatedAt ? { baseUpdatedAt } : {}),
-  }
-}
-
-let lastViewStamp = 0
-
-/** 本地改了哪些视图就打个单调递增时间戳，同一毫秒内连续修改或切窗口时旧快照不会盖掉刚做的修改。 */
-export function stampSavedView(view: SavedView): SavedView {
-  const now = Date.now()
-  const next = Math.max(now, lastViewStamp + 1, (Number(view.updatedAt) || 0) + 1)
-  lastViewStamp = next
-  return { ...view, updatedAt: next }
+/** 将字段级 patch 归一化为传输载荷（仅序列化传入的字段；可清空字段显式传 null / {}）。 */
+function patchWirePayload(patch: SavedViewFieldPatch) {
+  const out: Record<string, unknown> = { ...patch }
+  if ('groupConfig' in patch && patch.groupConfig === undefined) out.groupConfig = null
+  if ('freezeUntil' in patch && patch.freezeUntil === undefined) out.freezeUntil = null
+  if ('filterTree' in patch && patch.filterTree === undefined) out.filterTree = null
+  if ('columnWidths' in patch && patch.columnWidths === undefined) out.columnWidths = {}
+  if ('columnSummaries' in patch && patch.columnSummaries === undefined) out.columnSummaries = {}
+  if ('columnViews' in patch && patch.columnViews === undefined) out.columnViews = {}
+  if ('sandboxViews' in patch && patch.sandboxViews === undefined) out.sandboxViews = []
+  return out
 }
 
 export type SavedViewsWriteResult = 'skipped' | 'ok' | 'failed'
@@ -477,10 +364,10 @@ export type SavedViewsWriteResult = 'skipped' | 'ok' | 'failed'
 export type SavedViewsMutationOutcome = {
   status: SavedViewsWriteResult
   views?: SavedView[]
-  skipped?: string[]
+  error?: string
 }
 
-/** 按差异推视图并解析服务端返回的权威视图列表。 */
+/** 字段级增量推视图，解析服务端返回的权威视图列表与具体报错原因。 */
 export async function pushSavedViewsMutation(
   collectionPath: string,
   patch: SavedViewsPatch,
@@ -496,39 +383,38 @@ export async function pushSavedViewsMutation(
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
         path: collectionPath,
-        upsert: upsert.map((view) => viewWirePayload(view, patch.baseUpdatedAtById?.[view.id])),
+        upsert: upsert.map(patchWirePayload),
         remove,
       }),
     })
     if (workspaceGen !== startGen || currentWorkspaceStorageId() !== startWs) {
-      return { status: 'failed' }
+      return { status: 'failed', error: '工作区已切换' }
     }
-    if (!res.ok) return { status: 'failed' }
-    let views: SavedView[] | undefined
-    let skipped: string[] | undefined
-    try {
-      const text = await res.text()
-      if (text && text.trim().startsWith('{')) {
-        const parsed = JSON.parse(text) as { views?: unknown; skipped?: unknown }
-        if (Array.isArray(parsed.views)) {
-          views = parsed.views
-            .filter((item): item is SavedView => Boolean(item && typeof item === 'object' && !Array.isArray(item)))
-            .map((item) => normalizeSavedView(item))
-        }
-        if (Array.isArray(parsed.skipped)) {
-          skipped = parsed.skipped.map(String).filter(Boolean)
-        }
+    const text = await res.text()
+    let parsed: { views?: unknown; error?: unknown } | null = null
+    if (text && text.trim().startsWith('{')) {
+      try {
+        parsed = JSON.parse(text) as { views?: unknown; error?: unknown }
+      } catch {
+        parsed = null
       }
-    } catch {
-      /* 兼容返回纯文本 "ok" 的响应 */
     }
-    return { status: 'ok', views, skipped }
-  } catch {
-    return { status: 'failed' }
+    if (!res.ok) {
+      const msg = typeof parsed?.error === 'string' && parsed.error.trim() ? parsed.error.trim() : `保存失败 (${res.status})`
+      return { status: 'failed', error: msg }
+    }
+    let views: SavedView[] | undefined
+    if (Array.isArray(parsed?.views)) {
+      views = parsed.views
+        .filter((item): item is SavedView => Boolean(item && typeof item === 'object' && !Array.isArray(item)))
+        .map((item) => normalizeSavedView(item))
+    }
+    return { status: 'ok', views }
+  } catch (err) {
+    return { status: 'failed', error: err instanceof Error ? err.message : String(err) }
   }
 }
 
-/** 按差异推视图：只发这一个窗口真正改动的条目，避免把别的窗口新建的视图整份冲掉。 */
 export async function pushSavedViewsPatch(collectionPath: string, patch: SavedViewsPatch): Promise<SavedViewsWriteResult> {
   const outcome = await pushSavedViewsMutation(collectionPath, patch)
   return outcome.status
@@ -537,7 +423,7 @@ export async function pushSavedViewsPatch(collectionPath: string, patch: SavedVi
 /** 两份视图列表的差异：新增/改了什么、删了哪些 id。 */
 export function diffSavedViews(prev: SavedView[], next: SavedView[]): SavedViewsPatch {
   const before = new Map(prev.map((view) => [view.id, view]))
-  const upsert: SavedView[] = []
+  const upsert: SavedViewFieldPatch[] = []
   const seen = new Set<string>()
   for (const view of next) {
     if (!view.id) continue
@@ -549,16 +435,11 @@ export function diffSavedViews(prev: SavedView[], next: SavedView[]): SavedViews
   return { upsert, remove }
 }
 
-function writableSavedView(view: SavedView) {
-  return Boolean(String(view.id ?? '').trim())
-}
-
-/** 把调用方点名的 upsert/remove 并进 diff，避免新 id 不在 baseline 时整次写入被 skipped。 */
 export function mergeSavedViewsPatch(diff: SavedViewsPatch, extra?: SavedViewsPatch): SavedViewsPatch {
-  const byId = new Map<string, SavedView>()
+  const byId = new Map<string, SavedViewFieldPatch>()
   for (const view of [...(diff.upsert ?? []), ...(extra?.upsert ?? [])]) {
-    if (!writableSavedView(view)) continue
-    byId.set(view.id, view)
+    if (!String(view.id ?? '').trim()) continue
+    byId.set(view.id, { ...(byId.get(view.id) ?? {}), ...view })
   }
   const remove = [...new Set([...(diff.remove ?? []), ...(extra?.remove ?? [])].map((id) => String(id ?? '').trim()).filter(Boolean))]
   for (const id of remove) byId.delete(id)
@@ -597,7 +478,7 @@ function parseViewFilters(value: unknown): Record<string, string> {
 }
 
 export function savedViewFromRecord(row: Record<string, unknown>): SavedView | null {
-  const id = String(row.viewId ?? '').trim()
+  const id = String(row.viewId ?? row.id ?? '').trim()
   if (!id) return null
   const sortDir = row.sortDir === 'desc' ? 'desc' : 'asc'
   const sortField = String(row.sortField ?? 'title')
@@ -605,14 +486,14 @@ export function savedViewFromRecord(row: Record<string, unknown>): SavedView | n
   const filterTree =
     parseViewFilterTree(row.filterTree) ??
     (looksLikeFilterTree(parseMaybeJson(row.filters)) ? normalizeFilterGroup(parseMaybeJson(row.filters)) : undefined)
-  const scope = normalizeViewScope(row.scope)
-  const protection = normalizeViewProtection(row.protection, scope)
   return normalizeSavedView({
     id,
-    name: String(row.title ?? id),
+    name: String(row.title ?? row.name ?? id),
     mode: String(row.mode ?? 'table') as SavedView['mode'],
-    scope: protection === 'personal' ? 'personal' : (scope ?? 'workspace'),
-    protection,
+    locked: Boolean(row.locked),
+    revision: Number.isFinite(Number(row.revision)) && Number(row.revision) > 0 ? Math.round(Number(row.revision)) : undefined,
+    shareScope: normalizeViewShareScope(row.shareScope),
+    hasExternal: Boolean(row.hasExternal),
     createdBy: extractViewCreatorId(row.createdBy),
     viewRole: normalizeViewRole(row.viewRole),
     sortField,
@@ -635,7 +516,6 @@ export function savedViewFromRecord(row: Record<string, unknown>): SavedView | n
     columnSummaries: row.columnSummaries as SavedView['columnSummaries'],
     columnViews: row.columnViews as SavedView['columnViews'],
     sandboxViews: row.sandboxViews as SavedView['sandboxViews'],
-    builtin: false,
     rank: Number.isFinite(Number(row.rank)) ? Math.round(Number(row.rank)) : undefined,
     updatedAt: Number(row.updatedAt) || 0,
   })
@@ -644,7 +524,6 @@ export function savedViewFromRecord(row: Record<string, unknown>): SavedView | n
 const viewsPullByKey = new Map<string, Promise<boolean>>()
 const pulledViewPaths = new Set<string>()
 let pulledAllViews = false
-const VIEWS_PULL_LIMIT = 200
 
 export function hasPulledSavedViews(collectionPath: string) {
   const path = String(collectionPath ?? '').trim()
@@ -679,23 +558,6 @@ export async function pullSavedViews(
   return request
 }
 
-async function listAllSavedViewRows(tablePath?: string) {
-  const items: Awaited<ReturnType<typeof listCollection>>['items'] = []
-  let offset = 0
-  for (;;) {
-    const page = await listCollection({
-      path: VIEWS_COLLECTION_PATH,
-      limit: VIEWS_PULL_LIMIT,
-      offset,
-      fresh: true,
-      ...(tablePath ? { filters: { tablePath } } : {}),
-    })
-    items.push(...page.items)
-    if (page.items.length < VIEWS_PULL_LIMIT || (offset += page.items.length) >= 4000) break
-  }
-  return items
-}
-
 async function pullSavedViewsNow(collectionPaths: readonly string[] = []) {
   const startGen = workspaceGen
   const startWs = currentWorkspaceStorageId()
@@ -706,32 +568,31 @@ async function pullSavedViewsNow(collectionPaths: readonly string[] = []) {
     if (!startSeqByPath.has(p)) startSeqByPath.set(p, seq)
   }
   try {
-    const pages = fetchPaths.length
-      ? await Promise.all(fetchPaths.map((tablePath) => listAllSavedViewRows(tablePath)))
-      : [await listAllSavedViewRows()]
+    const byPath = new Map<string, SavedView[]>()
+    if (fetchPaths.length === 1) {
+      const target = fetchPaths[0]!
+      const data = await readJson<{ views?: SavedView[] }>(
+        `/api/db/saved-views?path=${encodeURIComponent(target)}`,
+      )
+      byPath.set(target, Array.isArray(data.views) ? data.views.map((v) => normalizeSavedView(v)) : [])
+    } else {
+      const url = fetchPaths.length
+        ? `/api/db/saved-views?paths=${encodeURIComponent(fetchPaths.join(','))}`
+        : '/api/db/saved-views'
+      const data = await readJson<{ viewsByPath?: Record<string, SavedView[]> }>(url)
+      for (const [path, list] of Object.entries(data.viewsByPath ?? {})) {
+        byPath.set(path, Array.isArray(list) ? list.map((v) => normalizeSavedView(v)) : [])
+      }
+    }
     // 切工作区后丢弃旧空间在飞响应，杜绝跨空间污染
     if (workspaceGen !== startGen || currentWorkspaceStorageId() !== startWs) return false
-    const byPath = new Map<string, SavedView[]>()
-    for (const row of pages.flat()) {
-      const tablePath = String(row.tablePath ?? '').trim()
-      const view = savedViewFromRecord(row)
-      if (!tablePath || !view) continue
-      const list = byPath.get(tablePath) ?? []
-      list.push(view)
-      byPath.set(tablePath, list)
-    }
     let changed = false
     for (const path of new Set([...fetchPaths, ...byPath.keys()])) {
-      // 拉取在途期间若本端发生过写入，跳过用旧快照覆写 serverViews
       const startedSeq = startSeqByPath.get(path) ?? 0
       if ((writeSeqByPath.get(path) ?? 0) !== startedSeq) continue
       pulledViewPaths.add(path)
-      const omitted = new Set(loadOmittedViewIds(path))
-      const incoming = (byPath.get(path) ?? [])
-        .map((view) => withViewDisplay(path, view))
-        .filter((view) => !omitted.has(view.id))
+      const incoming = byPath.get(path) ?? []
       const prevServer = serverViews.get(path) ?? []
-      // 权威覆盖 serverViews：其他端/Agent 删除的视图直接移除；本端未落盘的 pendingOps 由 loadViews 自动叠加保护
       const ranked = rankListedViews(incoming, prevServer)
       if (JSON.stringify(prevServer) !== JSON.stringify(ranked)) {
         changed = true
@@ -748,11 +609,10 @@ async function pullSavedViewsNow(collectionPaths: readonly string[] = []) {
 
 export function upsertSavedView(collectionPath: string, view: SavedView) {
   const next = normalizeSavedView(view)
-  reviveSavedViewIds(collectionPath, [next.id])
   const prev = serverViews.get(collectionPath) ?? []
   const idx = prev.findIndex((item) => item.id === next.id)
   const existing = idx >= 0 ? prev[idx] : undefined
-  if (existing && !viewIsFresher(next, existing)) return
+  if (existing && (existing.revision ?? 0) > (next.revision ?? 0)) return
   const updated = idx >= 0 ? prev.map((item, i) => (i === idx ? next : item)) : [...prev, next]
   serverViews.set(collectionPath, updated)
   noteLocalSavedViewsWrite(collectionPath)
@@ -796,31 +656,6 @@ export function persistCollapsedGroups(
   } catch {
     /* ignore */
   }
-}
-
-/** 仅修正索引/系统内置视图的默认分组约束，不再叠加 localStorage 覆盖。 */
-export function withViewDisplay(collectionPath: string, view: SavedView): SavedView {
-  const path = normalizeCollectionPath(collectionPath)
-  const forcedGroup =
-    isIndexCollection(collectionPath) && isBuiltinAllViewId(view.id)
-      ? path === EDITOR_BLOCKS_COLLECTION_PATH
-        ? !view.groupBy || view.groupBy === 'shareScope'
-          ? builtinAllGroupBy(collectionPath)
-          : undefined
-        : ''
-      : path === WORKSPACE_MEMBERS_COLLECTION_PATH &&
-          isBuiltinAllViewId(view.id) &&
-          (!view.groupBy || view.groupBy === 'shareScope')
-        ? builtinAllGroupBy(collectionPath)
-        : path === VIEWS_COLLECTION_PATH &&
-            isBuiltinAllViewId(view.id) &&
-            view.groupBy === 'shareScope'
-          ? builtinAllGroupBy(collectionPath)
-          : undefined
-  return normalizeSavedView({
-    ...view,
-    ...(forcedGroup !== undefined ? { groupBy: forcedGroup } : {}),
-  })
 }
 
 registerWorkspaceCache('view-storage', () => {

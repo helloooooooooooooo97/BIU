@@ -1,5 +1,4 @@
 import type { CollectionSchema, DbRecord } from '@biu/type-file-system'
-import { isBuiltinBlockKindViewId, isBuiltinTagViewId } from '../catalog-views.ts'
 import type { SavedView } from './saved-view.ts'
 import { listCollection, readJson } from './db-client.ts'
 import { FSDB_LIST_READY_EVENT } from './fsdb-events.ts'
@@ -180,16 +179,14 @@ function isCurrentView(opts: {
   return opts.path === opts.collectionPath && opts.view.id === opts.activeViewId
 }
 
-/** 块类型/标签内置视图很多，只给当前正在看的那一条拉总数。当前表的活动视图由 list 自己写入。 */
+/** 当前表的活动视图由 list 自己写入，其余视图按需拉总数。 */
 export function shouldFetchViewTotal(opts: {
   path: string
   view: Pick<SavedView, 'id'>
   collectionPath: string
   activeViewId?: string | null
 }) {
-  const current = isCurrentView(opts)
-  if (isBuiltinBlockKindViewId(opts.view.id) || isBuiltinTagViewId(opts.view.id)) return current
-  return !current
+  return !isCurrentView(opts)
 }
 
 /** 当前表已经拉过这一页，侧栏展开不再另开一次 list。 */

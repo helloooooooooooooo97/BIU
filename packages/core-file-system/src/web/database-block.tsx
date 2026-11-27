@@ -7,7 +7,7 @@ import { DATA_COLLECTION_PATH, sortDataCollections } from './database-path.ts'
 import { getDatabaseUi } from './database-ui.ts'
 import { readJson } from './db-client.ts'
 import { showRecordInInspector } from './inspector-db-route.ts'
-import { normalizeSavedView, viewIsFresher, type SavedView } from './saved-view.ts'
+import { normalizeSavedView, type SavedView } from './saved-view.ts'
 
 export type DatabaseBlockProps = {
   data: Record<string, unknown>
@@ -97,7 +97,9 @@ export function mergeBlockViewsOnConflict(remote: PersistedBlockViews, local: Pe
     const normLocal = normalizeSavedView(localView)
     const remoteView = remoteById.get(normLocal.id)
     seen.add(normLocal.id)
-    mergedViews.push(remoteView && !viewIsFresher(normLocal, remoteView) ? remoteView : normLocal)
+    const remoteVersion = Number(remoteView?.revision) || Number(remoteView?.updatedAt) || 0
+    const localVersion = Number(normLocal.revision) || Number(normLocal.updatedAt) || 0
+    mergedViews.push(remoteView && remoteVersion > localVersion ? remoteView : normLocal)
   }
   for (const remoteView of remote.views) {
     const normRemote = normalizeSavedView(remoteView)

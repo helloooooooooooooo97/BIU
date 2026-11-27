@@ -282,14 +282,14 @@ function SharePage({
 
   const [queryState, setQueryState] = useState<ShareQueryState | null>(null)
   useEffect(() => {
-    if (!snapshot || snapshot.kind !== 'rule') {
+    if (!snapshot || (snapshot.kind !== 'rule' && snapshot.kind !== 'view')) {
       setQueryState(null)
       return
     }
     setQueryState(loadShareQuery(token, shareQueryFromView(snapshot.view)))
   }, [snapshot, token])
   useEffect(() => {
-    if (!queryState || snapshot?.kind !== 'rule') return
+    if (!queryState || (snapshot?.kind !== 'rule' && snapshot?.kind !== 'view')) return
     saveShareQuery(token, queryState)
   }, [queryState, snapshot, token])
   const [page, setPage] = useState(0)
@@ -359,7 +359,7 @@ function SharePage({
 
   const schema = snapshot.schema
   const live = snapshot
-  const isCollectionShare = snapshot.kind === 'rule'
+  const isCollectionShare = snapshot.kind === 'rule' || snapshot.kind === 'view'
   const listed = isCollectionShare && queryState
     ? applyShareQuery(snapshot.records, schema, queryState, snapshot.contents, snapshot.tags)
     : snapshot.records
@@ -383,7 +383,7 @@ function SharePage({
 
   async function downloadShare() {
     const packed =
-      live.kind === 'rule' && live.records.some((row) => !Object.prototype.hasOwnProperty.call(live.contents, row.id))
+      (live.kind === 'rule' || live.kind === 'view') && live.records.some((row) => !Object.prototype.hasOwnProperty.call(live.contents, row.id))
         ? await loadSnapshot(token, password, { contents: 'all' })
         : live
     if (!packed || 'error' in packed || 'needsPassword' in packed) return

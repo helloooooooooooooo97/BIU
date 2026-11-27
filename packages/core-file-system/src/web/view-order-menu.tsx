@@ -1,4 +1,4 @@
-import { useEffect, useState, type CSSProperties, type ReactNode } from 'react'
+import { useState, type CSSProperties, type ReactNode } from 'react'
 import {
   DndContext,
   DragOverlay,
@@ -12,93 +12,102 @@ import {
 import { restrictToVerticalAxis } from '@dnd-kit/modifiers'
 import { SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import { CSS as DndCSS } from '@dnd-kit/utilities'
-import { CheckIcon, LockClosedIcon, PlusIcon, Square2StackIcon, UserIcon, UsersIcon } from '@heroicons/react/16/solid'
+import {
+  LockClosedIcon,
+  LockOpenIcon,
+  PlusIcon,
+  Square2StackIcon,
+  UserGroupIcon,
+  UserIcon,
+  UsersIcon,
+} from '@heroicons/react/16/solid'
 import { overlayZ } from '@biu/biu-ui/overlay-portal'
 import { TrashGlyph } from '@biu/web-session-view/trash-glyph'
-import { isBuiltinAllViewId, isBuiltinCatalogViewId, isNonPersonalView, isReadOnlyViewId } from '../catalog-views.ts'
 import { moveList } from '../query-logic.ts'
 import { DndGrip } from './dnd-grip.tsx'
 import { FlyoutEmpty, SearchableFlyout, flyoutQueryMatch } from './flyout-search.tsx'
 import { ViewModeGlyph } from './nav-glyphs.tsx'
-import { canDeleteSavedView, canEditSavedView, canRemoveCollectionView, type SavedView, type ViewProtection } from './saved-view.ts'
-import { loadViewerIdentity } from './view-settings-menu.tsx'
+import {
+  canDeleteSavedView,
+  canManageSavedView,
+  canRemoveCollectionView,
+  type SavedView,
+  type ViewShareScope,
+} from './saved-view.ts'
 
-export const PROTECTION_OPTIONS: Array<{
-  value: ViewProtection
-  label: string
-  desc: string
-  Icon: typeof UsersIcon
-}> = [
-  { value: 'public', label: '公共视图', desc: '所有成员可修改视图配置', Icon: UsersIcon },
-  { value: 'locked', label: '锁定视图', desc: '所有成员都不可修改视图配置', Icon: LockClosedIcon },
-  { value: 'personal', label: '个人视图', desc: '仅你自己可见', Icon: UserIcon },
-]
-
-export function isBuiltinAggregationView(view: Pick<SavedView, 'id'>): boolean {
-  return isBuiltinAllViewId(view.id) || isBuiltinCatalogViewId(view.id)
-}
-
-export function isAggregationView(view: Pick<SavedView, 'id'>): boolean {
-  return isBuiltinAggregationView(view)
-}
-
-export function resolveViewProtection(view: Pick<SavedView, 'id' | 'protection' | 'scope'>): ViewProtection {
-  if (isBuiltinAggregationView(view)) return 'personal'
-  if (view.protection === 'public' || view.protection === 'locked' || view.protection === 'personal') {
-    return view.protection
+export function viewScopeMeta(
+  view: Pick<SavedView, 'shareScope' | 'locked' | 'ephemeral'>,
+  opts?: { isMembersCollection?: boolean },
+) {
+  const scope: ViewShareScope = view.shareScope ?? 'workspace'
+  const ScopeIcon = scope === 'personal' ? UserIcon : scope === 'shared' ? UserGroupIcon : UsersIcon
+  const scopeLabel =
+    scope === 'personal'
+      ? '私人视图'
+      : scope === 'shared'
+        ? '共享视图'
+        : '空间视图'
+  const scopeDesc =
+    scope === 'personal'
+      ? '私人视图 · 仅自己可见'
+      : scope === 'shared'
+        ? '共享视图 · 指定成员可见'
+        : '空间视图 · 全员可见'
+  const lockSuffix = view.locked
+    ? opts?.isMembersCollection
+      ? ' · 动态成员组（管理员锁定）'
+      : ' · 已锁定配置'
+    : ''
+  return {
+    scope,
+    ScopeIcon,
+    scopeLabel,
+    title: `${scopeDesc}${lockSuffix}`,
   }
-  return view.scope === 'personal' ? 'personal' : 'public'
 }
 
-export function viewProtectionMeta(view: Pick<SavedView, 'id' | 'protection' | 'scope'>) {
-  const isBuiltinAgg = isBuiltinAggregationView(view)
-  const isAggregation = isAggregationView(view)
-  const protection = resolveViewProtection(view)
-  const option = PROTECTION_OPTIONS.find((item) => item.value === protection) ?? PROTECTION_OPTIONS[0]!
-  const title = isBuiltinAgg
-    ? '个人视图（数据聚合视角仅自己可见）'
-    : `${option.label}：${option.desc}`
-  return { protection, isAggregation, isBuiltinAgg, option, title }
-}
-
-export function ViewProtectionBadge({
+export function ViewStatusBadge({
   view,
+  isCloud = true,
+  isMembersCollection = false,
   className,
 }: {
-  view: Pick<SavedView, 'id' | 'protection' | 'scope'>
+  view: Pick<SavedView, 'shareScope' | 'locked' | 'ephemeral'>
+  isCloud?: boolean
+  isMembersCollection?: boolean
   className?: string
 }) {
-  const { protection, option, title } = viewProtectionMeta(view)
-  const ProtectionIcon = option.Icon
+  const { scope, ScopeIcon, scopeLabel, title } = viewScopeMeta(view, { isMembersCollection })
+  if (!isCloud && !view.locked) return null
   return (
     <span
-      className={['tasks-viewdd-protection', `is-${protection}`, className].filter(Boolean).join(' ')}
-      data-testid="fsdb-view-tab-protection"
-      data-protection={protection}
+      className={['tasks-viewdd-protection', `is-${scope}`, view.locked ? 'is-locked' : '', className].filter(Boolean).join(' ')}
+      data-testid="fsdb-view-tab-status"
+      data-scope={scope}
+      data-locked={view.locked ? '1' : '0'}
       title={title}
-      aria-label={option.label}
+      aria-label={scopeLabel}
+      style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}
     >
-      <ProtectionIcon aria-hidden className="size-[14px]" />
+      {view.locked ? (
+        <LockClosedIcon aria-hidden className="size-[14px]" style={{ color: 'var(--biu-color-emphasis)' }} />
+      ) : null}
+      {isCloud ? <ScopeIcon aria-hidden className="size-[14px]" /> : null}
     </span>
   )
-}
-
-function isLastPublicViewForTable(_view: SavedView, _views: SavedView[]): boolean {
-  return false
 }
 
 function ViewRowShell({
   view,
   active,
+  isCloud,
+  isMembersCollection,
   onSelect,
   onCopy,
   onDelete,
-  onChangeProtection,
-  protectionMenuOpen,
-  onToggleProtectionMenu,
+  onToggleLock,
+  onOpenShare,
   canRemove,
-  isLastPublic,
-  viewerIsAdmin,
   grip,
   rowRef,
   className,
@@ -106,30 +115,29 @@ function ViewRowShell({
 }: {
   view: SavedView
   active: boolean
+  isCloud?: boolean
+  isMembersCollection?: boolean
   onSelect: (view: SavedView) => void
   onCopy: (view: SavedView) => void
   onDelete: (view: SavedView) => void
-  onChangeProtection?: (view: SavedView, protection: ViewProtection) => void
-  protectionMenuOpen?: boolean
-  onToggleProtectionMenu?: () => void
+  onToggleLock?: (view: SavedView) => void
+  onOpenShare?: (view: SavedView) => void
   canRemove: boolean
-  isLastPublic?: boolean
-  viewerIsAdmin?: boolean
   grip: ReactNode
   rowRef?: (node: HTMLElement | null) => void
   className?: string
   style?: CSSProperties
 }) {
-  const { protection, isBuiltinAgg, option: meta, title: protectionTitle } = viewProtectionMeta(view)
-  const isReadOnlyStub = Boolean(view.builtin) || isReadOnlyViewId(view.id)
-  const ProtectionIcon = meta.Icon
-  const canSwitchProtection = Boolean(
-    !isReadOnlyStub &&
-      !isBuiltinAgg &&
-      onChangeProtection &&
-      (canEditSavedView(view) || canDeleteSavedView(view)),
-  )
-  const canLock = true
+  const { scope, ScopeIcon, scopeLabel, title: scopeTitle } = viewScopeMeta(view, { isMembersCollection })
+  const canLock = Boolean(!view.ephemeral && onToggleLock && canManageSavedView(view))
+  const lockTitle = view.locked
+    ? isMembersCollection
+      ? '已锁定 · 动态成员组（点击解锁）'
+      : '已锁定配置（点击解锁）'
+    : isMembersCollection
+      ? '锁定为管理员动态成员组'
+      : '锁定视图配置（防误改）'
+
   return (
     <div ref={rowRef} style={style}>
       <div
@@ -145,98 +153,54 @@ function ViewRowShell({
           <span className="tasks-viewdd-item-name font-medium">{view.name}</span>
         </button>
         <span className="tasks-viewdd-item-actions">
-          <button
-            type="button"
-            className={`tasks-viewdd-act${protection === 'locked' ? ' is-locked' : ''}`}
-            data-testid={`view-protection-btn-${view.id}`}
-            data-protection={protection}
-            title={protectionTitle}
-            aria-label={meta.label}
-            style={{
-              color: protection === 'locked' ? 'var(--biu-color-emphasis)' : undefined,
-              cursor: canSwitchProtection ? 'pointer' : 'default',
-            }}
-            onClick={(event) => {
-              event.stopPropagation()
-              if (canSwitchProtection) onToggleProtectionMenu?.()
-            }}
-          >
-            <ProtectionIcon aria-hidden className="size-[14px]" />
-          </button>
+          {canLock || view.locked ? (
+            <button
+              type="button"
+              className={`tasks-viewdd-act${view.locked ? ' is-locked' : ''}`}
+              data-testid={`view-lock-btn-${view.id}`}
+              data-locked={view.locked ? '1' : '0'}
+              title={lockTitle}
+              aria-label={view.locked ? '解锁视图' : '锁定视图'}
+              disabled={!canLock}
+              style={{
+                color: view.locked ? 'var(--biu-color-emphasis)' : undefined,
+                cursor: canLock ? 'pointer' : 'default',
+              }}
+              onClick={(event) => {
+                event.stopPropagation()
+                if (canLock) onToggleLock?.(view)
+              }}
+            >
+              {view.locked ? <LockClosedIcon aria-hidden className="size-[13px]" /> : <LockOpenIcon aria-hidden className="size-[13px]" />}
+            </button>
+          ) : null}
+          {isCloud && !view.ephemeral ? (
+            <button
+              type="button"
+              className="tasks-viewdd-act"
+              data-testid={`view-scope-btn-${view.id}`}
+              data-scope={scope}
+              title={onOpenShare ? `${scopeTitle}（点击管理分享）` : scopeTitle}
+              aria-label={scopeLabel}
+              style={{ cursor: onOpenShare ? 'pointer' : 'default' }}
+              onClick={(event) => {
+                event.stopPropagation()
+                onOpenShare?.(view)
+              }}
+            >
+              <ScopeIcon aria-hidden className="size-[14px]" />
+            </button>
+          ) : null}
           <button type="button" className="tasks-viewdd-act" title="拷贝视图" onClick={() => onCopy(view)}>
             <Square2StackIcon aria-hidden className="size-[14px]" />
           </button>
-          {canRemove && !isReadOnlyStub && !isLastPublic ? (
+          {canRemove && !view.ephemeral ? (
             <button type="button" className="tasks-viewdd-act is-danger" title="删除" onClick={() => onDelete(view)}>
               <TrashGlyph aria-hidden className="size-[14px]" />
             </button>
           ) : null}
         </span>
       </div>
-      {protectionMenuOpen && canSwitchProtection ? (
-        <div
-          data-testid={`view-protection-menu-${view.id}`}
-          style={{
-            margin: '4px 6px 6px 26px',
-            padding: 4,
-            borderRadius: 8,
-            background: 'var(--biu-color-bg-input)',
-            border: 'var(--biu-stroke-width) solid var(--biu-color-border)',
-            display: 'flex',
-            flexDirection: 'column',
-            gap: 2,
-          }}
-        >
-          {PROTECTION_OPTIONS.map((opt) => {
-            const Icon = opt.Icon
-            const selected = protection === opt.value
-            const disabled = (opt.value === 'personal' && Boolean(isLastPublic)) || (opt.value === 'locked' && !canLock)
-            const disabledHint =
-              opt.value === 'personal' && isLastPublic
-                ? '每张表至少保留一个公共/锁定视图'
-                : opt.value === 'locked' && !canLock
-                  ? '仅个人表拥有者可设为锁定视图'
-                  : opt.desc
-            return (
-              <button
-                key={opt.value}
-                type="button"
-                disabled={disabled}
-                data-testid={`view-protection-opt-${opt.value}`}
-                onClick={(event) => {
-                  event.stopPropagation()
-                  if (disabled) return
-                  onChangeProtection?.(view, opt.value)
-                  onToggleProtectionMenu?.()
-                }}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 8,
-                  padding: '6px 8px',
-                  borderRadius: 6,
-                  border: 'none',
-                  background: selected ? 'var(--biu-color-bg-hover)' : 'transparent',
-                  color: 'var(--biu-color-text)',
-                  textAlign: 'left',
-                  cursor: disabled ? 'not-allowed' : 'pointer',
-                  opacity: disabled ? 0.45 : 1,
-                  width: '100%',
-                }}
-              >
-                <Icon aria-hidden className="size-[15px] shrink-0" style={{ opacity: 0.85 }} />
-                <span style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 1 }}>
-                  <span style={{ fontSize: 12.5, fontWeight: 500, lineHeight: 1.25 }}>{opt.label}</span>
-                  <span style={{ fontSize: 11, color: 'var(--biu-color-text-muted)', lineHeight: 1.25 }}>{disabledHint}</span>
-                </span>
-                {selected ? (
-                  <CheckIcon aria-hidden className="size-[14px] shrink-0" style={{ color: 'var(--biu-color-emphasis)' }} />
-                ) : null}
-              </button>
-            )
-          })}
-        </div>
-      ) : null}
     </div>
   )
 }
@@ -244,42 +208,39 @@ function ViewRowShell({
 function SortableViewRow({
   view,
   active,
+  isCloud,
+  isMembersCollection,
   onSelect,
   onCopy,
   onDelete,
-  onChangeProtection,
-  protectionMenuOpen,
-  onToggleProtectionMenu,
+  onToggleLock,
+  onOpenShare,
   canRemove,
-  isLastPublic,
-  viewerIsAdmin,
 }: {
   view: SavedView
   active: boolean
+  isCloud?: boolean
+  isMembersCollection?: boolean
   onSelect: (view: SavedView) => void
   onCopy: (view: SavedView) => void
   onDelete: (view: SavedView) => void
-  onChangeProtection?: (view: SavedView, protection: ViewProtection) => void
-  protectionMenuOpen?: boolean
-  onToggleProtectionMenu?: () => void
+  onToggleLock?: (view: SavedView) => void
+  onOpenShare?: (view: SavedView) => void
   canRemove: boolean
-  isLastPublic?: boolean
-  viewerIsAdmin?: boolean
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: view.id })
   return (
     <ViewRowShell
       view={view}
       active={active}
+      isCloud={isCloud}
+      isMembersCollection={isMembersCollection}
       onSelect={onSelect}
       onCopy={onCopy}
       onDelete={onDelete}
-      onChangeProtection={onChangeProtection}
-      protectionMenuOpen={protectionMenuOpen}
-      onToggleProtectionMenu={onToggleProtectionMenu}
+      onToggleLock={onToggleLock}
+      onOpenShare={onOpenShare}
       canRemove={canRemove}
-      isLastPublic={isLastPublic}
-      viewerIsAdmin={viewerIsAdmin}
       rowRef={setNodeRef}
       className={isDragging ? 'is-drag' : undefined}
       style={{ transform: DndCSS.Transform.toString(transform), transition }}
@@ -295,34 +256,29 @@ function SortableViewRow({
 export function ViewOrderMenu({
   views,
   activeViewId,
+  isCloud = true,
+  isMembersCollection = false,
   onSelect,
   onCopy,
   onDelete,
-  onChangeProtection,
+  onToggleLock,
+  onOpenShare,
   onReorder,
   onAdd,
 }: {
   views: SavedView[]
   activeViewId: string | null
+  isCloud?: boolean
+  isMembersCollection?: boolean
   onSelect: (view: SavedView) => void
   onCopy: (view: SavedView) => void
   onDelete: (view: SavedView) => void
-  onChangeProtection?: (view: SavedView, protection: ViewProtection) => void
+  onToggleLock?: (view: SavedView) => void
+  onOpenShare?: (view: SavedView) => void
   onReorder: (ids: string[]) => void
   onAdd: () => void
 }) {
   const [activeId, setActiveId] = useState<string | null>(null)
-  const [protectionOpenId, setProtectionOpenId] = useState<string | null>(null)
-  const [viewerIsAdmin, setViewerIsAdmin] = useState(false)
-  useEffect(() => {
-    let alive = true
-    void loadViewerIdentity().then((viewer) => {
-      if (alive) setViewerIsAdmin(viewer.isAdmin)
-    })
-    return () => {
-      alive = false
-    }
-  }, [])
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }))
   const ids = views.map((view) => view.id)
   const canRemove = canRemoveCollectionView(views)
@@ -358,17 +314,14 @@ export function ViewOrderMenu({
                     key={view.id}
                     view={view}
                     active={view.id === activeViewId}
+                    isCloud={isCloud}
+                    isMembersCollection={isMembersCollection}
                     onSelect={onSelect}
                     onCopy={onCopy}
                     onDelete={onDelete}
-                    onChangeProtection={onChangeProtection}
-                    protectionMenuOpen={protectionOpenId === view.id}
-                    onToggleProtectionMenu={() =>
-                      setProtectionOpenId((prev) => (prev === view.id ? null : view.id))
-                    }
+                    onToggleLock={onToggleLock}
+                    onOpenShare={onOpenShare}
                     canRemove={canRemove && canDeleteSavedView(view)}
-                    isLastPublic={isLastPublicViewForTable(view, views)}
-                    viewerIsAdmin={viewerIsAdmin}
                     grip={
                       <span className="fsdb-query-grip is-locked" aria-hidden>
                         <DndGrip />
@@ -407,17 +360,14 @@ export function ViewOrderMenu({
                     key={view.id}
                     view={view}
                     active={view.id === activeViewId}
+                    isCloud={isCloud}
+                    isMembersCollection={isMembersCollection}
                     onSelect={onSelect}
                     onCopy={onCopy}
                     onDelete={onDelete}
-                    onChangeProtection={onChangeProtection}
-                    protectionMenuOpen={protectionOpenId === view.id}
-                    onToggleProtectionMenu={() =>
-                      setProtectionOpenId((prev) => (prev === view.id ? null : view.id))
-                    }
+                    onToggleLock={onToggleLock}
+                    onOpenShare={onOpenShare}
                     canRemove={canRemove && canDeleteSavedView(view)}
-                    isLastPublic={isLastPublicViewForTable(view, views)}
-                    viewerIsAdmin={viewerIsAdmin}
                   />
                 ))}
               </SortableContext>
@@ -427,6 +377,8 @@ export function ViewOrderMenu({
                     <ViewRowShell
                       view={active}
                       active={active.id === activeViewId}
+                      isCloud={isCloud}
+                      isMembersCollection={isMembersCollection}
                       onSelect={() => undefined}
                       onCopy={() => undefined}
                       onDelete={() => undefined}

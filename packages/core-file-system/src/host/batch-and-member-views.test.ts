@@ -9,7 +9,7 @@ import { CollabStore } from '@biu/host-account/store'
 import { workspaceMembersCollection } from '@biu/host-account/workspace-members-collection'
 import { REQUIRED_RECORD_FIELDS, type CollectionSpec, type DbRecord } from '@biu/type-file-system'
 import { DatabaseService } from './index.ts'
-import { SavedViewsStore } from './saved-views.ts'
+import { SavedViewsStore, viewRecordId, viewsCollection } from './saved-views.ts'
 import { registerDatabaseHttpRoutes } from './http-routes.ts'
 
 const dirs: string[] = []
@@ -121,6 +121,7 @@ async function setupHttpEnv() {
   }
   db.register(docsSpec)
   db.register(workspaceMembersCollection(collab))
+  db.register(viewsCollection(savedViews, () => db.collectionsList().map((item) => db.publishCollection(item)), () => ''))
 
   class AccountBridge extends Service {
     store = collab
@@ -144,23 +145,59 @@ async function setupHttpEnv() {
   collab.setActive(cara.id, ws.id)
 
   savedViews.setWorkspaceResolver(() => ws.id)
+  const authorizeView = (
+    wsId: string,
+    col: string,
+    view: { id: string },
+    accId: string,
+    action: 'resource:read' | 'resource:update' | 'resource:manage-permissions' | 'resource:delete',
+  ) =>
+    collab.authorization.authorize(
+      { type: 'account', accountId: accId, workspaceId: wsId },
+      action,
+      { type: 'record', workspaceId: wsId, collection: '/views', recordId: viewRecordId(col, view.id) },
+    )
   savedViews.setPolicyGuard({
     workspaceOwner: () => ada.id,
     isWorkspaceAdmin: (_wsId, accId) => {
       const r = collab.memberRole(accId, ws.id)
       return r === 'owner' || r === 'admin'
     },
+    isInternalMember: (wsId, accId) => collab.memberById(wsId, accId)?.member_kind === 'member',
     memberViewGrantCount: (wsId, viewId) => collab.memberViewGrantCount(wsId, viewId),
     onMemberViewChanged: () => collab.authorization.invalidateAll(),
+    canSeeView: (wsId, col, view, accId) => authorizeView(wsId, col, view, accId, 'resource:read').allowed,
+    canModifyView: (wsId, col, view, accId) => authorizeView(wsId, col, view, accId, 'resource:update').allowed,
+    canManageView: (wsId, col, view, accId) => authorizeView(wsId, col, view, accId, 'resource:manage-permissions').allowed,
+    canRemoveView: (wsId, col, view, accId) => authorizeView(wsId, col, view, accId, 'resource:delete').allowed,
+    viewRoleFor: (wsId, col, view, accId) => {
+      const d = authorizeView(wsId, col, view, accId, 'resource:read')
+      return d.allowed ? d.effectiveRole : null
+    },
+    shareScopesFor: (wsId) => collab.collectionOwnership(wsId, '/views'),
+    externalSharedIdsFor: (wsId) => collab.collectionExternalSharedIds(wsId, '/views'),
+    onCreated: (wsId, col, view, ownerId, initial) => {
+      collab.attachAs(wsId, '/views', viewRecordId(col, view.id), ownerId || ada.id, {
+        accessMode: initial?.accessMode ?? 'members',
+        memberDefaultRole: initial?.memberDefaultRole ?? (view.locked ? 'viewer' : 'editor'),
+      })
+    },
+    onRemoved: (wsId, col, viewId) => {
+      const recId = viewRecordId(col, viewId)
+      collab.detachRecord(wsId, '/views', recId)
+      db.shares.revokeRecord('/views', recId)
+    },
   })
   collab.authorization.setMemberViewLockChecker((wsId, viewId) => savedViews.isLockedMemberView(wsId, viewId))
   collab.authorization.setMemberViewMatcher((wsId, viewId, accId) => {
     const view = savedViews.getMemberView(wsId, viewId)
-    if (!view || view.protection !== 'locked') return false
+    if (!view || !view.locked) return false
     const m = collab.memberById(wsId, accId)
     if (!m) return false
     const roleFilter = view.filters?.role
     if (roleFilter && m.role !== roleFilter) return false
+    const kindFilter = view.filters?.membershipKind
+    if (kindFilter && m.member_kind !== kindFilter) return false
     return true
   })
 
@@ -184,12 +221,12 @@ test('member views API supports locked dynamic groups, unlocked snapshot resolve
   // Admin creates a locked member view (role=member -> matches Bob) and Bob creates a personal shortcut view
   savedViews.applyPatch(
     '/workspace-members',
-    { upsert: [{ id: 'mv-editors', name: '编辑成员', protection: 'locked', scope: 'workspace', filters: { role: 'member' } }] },
+    { upsert: [{ id: 'mv-editors', name: '编辑成员', locked: true, accessMode: 'members', filters: { role: 'member' } }] },
     ada.id,
   )
   savedViews.applyPatch(
     '/workspace-members',
-    { upsert: [{ id: 'mv-bob-shortcut', name: 'Bob快捷名单', protection: 'personal', scope: 'personal', filters: { role: 'viewer' } }] },
+    { upsert: [{ id: 'mv-bob-shortcut', name: 'Bob快捷名单', locked: false, accessMode: 'private', filters: { role: 'viewer' } }] },
     bob.id,
   )
 
@@ -197,9 +234,8 @@ test('member views API supports locked dynamic groups, unlocked snapshot resolve
   const adaViewsRes = await asUser(ada.id, () => http.call('GET', '/api/db/member-views'))
   assert.equal(adaViewsRes.status, 200)
   const adaViews = adaViewsRes.body.views as Array<{ id: string; isLocked: boolean; memberCount: number; grantCount: number }>
-  assert.deepEqual(adaViews.map((v) => v.id), ['mv-editors'])
-  assert.equal(adaViews[0]?.isLocked, true)
-  assert.equal(adaViews[0]?.memberCount, 1)
+  assert.equal(adaViews.some((v) => v.id === 'mv-editors' && v.isLocked && v.memberCount === 1), true)
+  assert.equal(adaViews.some((v) => v.id === 'mv-bob-shortcut'), false)
 
   // Bob sees both locked view and his own personal shortcut view, and can resolve shortcut members
   const bobResolve = await asUser(bob.id, () => http.call('GET', '/api/db/member-views/mv-bob-shortcut/resolve'))
@@ -219,7 +255,7 @@ test('member views API supports locked dynamic groups, unlocked snapshot resolve
     () =>
       savedViews.applyPatch(
         '/workspace-members',
-        { upsert: [{ id: 'mv-editors', name: '编辑成员', protection: 'public', scope: 'workspace', filters: { role: 'member' } }] },
+        { upsert: [{ id: 'mv-editors', locked: false }] },
         ada.id,
       ),
     /MEMBER_VIEW_REFERENCED/,
@@ -233,7 +269,7 @@ test('member views API supports locked dynamic groups, unlocked snapshot resolve
 
   // Admin releases with mode='freeze' -> Bob's access is frozen to static account grant and view becomes unlocked
   const freezeRes = await asUser(ada.id, () =>
-    http.call('POST', '/api/db/member-views/mv-editors/release', { action: 'unlock', mode: 'freeze', targetProtection: 'public' }),
+    http.call('POST', '/api/db/member-views/mv-editors/release', { action: 'unlock', mode: 'freeze' }),
   )
   assert.equal(freezeRes.status, 200)
   assert.equal(freezeRes.body.frozenRecords, 1)
@@ -245,7 +281,7 @@ test('member views API supports locked dynamic groups, unlocked snapshot resolve
   // Re-lock and test mode='revoke' + action='delete'
   savedViews.applyPatch(
     '/workspace-members',
-    { upsert: [{ id: 'mv-editors', name: '编辑成员', protection: 'locked', scope: 'workspace', filters: { role: 'member' } }] },
+    { upsert: [{ id: 'mv-editors', locked: true }] },
     ada.id,
   )
   await asUser(ada.id, () => db.create('/docs', [{ id: 'd2', title: '机密方案' }], { scope: 'personal' }))
@@ -354,4 +390,94 @@ test('batch permissions API previews manageable counts, skips unmanageable recor
   assert.equal(applyRevoke.status, 200)
   assert.equal(applyRevoke.body.updatedCount, 1)
   assert.equal((await asUser(cara.id, () => db.list('/docs'))).items.some((r) => r.id === 'b-done'), false)
+})
+
+test('unified /views record ACL, lazy seed views, field-level patch with revision, locked freeze, and zero-leak public view share', async () => {
+  const { db, collab, http, ada, bob, asUser } = await setupHttpEnv()
+
+  // 1. GET /api/db/saved-views lazily seeds default workspace view ('all') for /docs
+  const firstGet = await asUser(ada.id, () => http.call('GET', '/api/db/saved-views?path=/docs'))
+  assert.equal(firstGet.status, 200)
+  const seeded = firstGet.body.views as Array<{ id: string; name: string; locked: boolean; revision: number; shareScope?: string }>
+  assert.equal(seeded.length, 1)
+  assert.equal(seeded[0]?.id, 'all')
+  assert.equal(seeded[0]?.locked, false)
+  assert.equal(seeded[0]?.revision, 1)
+  assert.equal(seeded[0]?.shareScope, 'workspace')
+
+  // 2. Field-level patch updates columns without clobbering name/filters and increments server revision
+  const patch1 = await asUser(bob.id, () =>
+    http.call('POST', '/api/db/saved-views', {
+      path: '/docs',
+      upsert: [{ id: 'all', columns: ['title', 'status'] }],
+    }),
+  )
+  assert.equal(patch1.status, 200)
+  const afterPatch1 = (patch1.body.views as Array<{ id: string; name: string; columns: string[]; revision: number }>)[0]!
+  assert.equal(afterPatch1.name, seeded[0]!.name)
+  assert.deepEqual(afterPatch1.columns, ['title', 'status'])
+  assert.equal(afterPatch1.revision, 2)
+
+  // 3. Locking view freezes config edits (even for owner) until unlocked
+  const lockRes = await asUser(ada.id, () =>
+    http.call('POST', '/api/db/saved-views', { path: '/docs', upsert: [{ id: 'all', locked: true }] }),
+  )
+  assert.equal(lockRes.status, 200)
+  const blockedEdit = await asUser(ada.id, () =>
+    http.call('POST', '/api/db/saved-views', { path: '/docs', upsert: [{ id: 'all', query: 'should-fail' }] }),
+  )
+  assert.equal(blockedEdit.status, 403)
+  assert.match(String(blockedEdit.body.error), /VIEW_LOCKED/)
+
+  // 4. Ada creates a private view filtered on status=done, then shares ONLY the view with Bob via /views record grant
+  const createPriv = await asUser(ada.id, () =>
+    http.call('POST', '/api/db/saved-views', {
+      path: '/docs',
+      upsert: [{ id: 'v_done', name: '已完成视图', accessMode: 'private', filters: { status: 'done' } }],
+    }),
+  )
+  assert.equal(createPriv.status, 200)
+  const bobBeforeShare = await asUser(bob.id, () => http.call('GET', '/api/db/saved-views?path=/docs'))
+  assert.equal((bobBeforeShare.body.views as Array<{ id: string }>).some((v) => v.id === 'v_done'), false)
+
+  await asUser(ada.id, () => collab.shareWithEmail(ada.id, '/views', 'docs::v_done', bob.email, 'viewer', 'internal'))
+  const bobAfterShare = await asUser(bob.id, () => http.call('GET', '/api/db/saved-views?path=/docs'))
+  const sharedViewForBob = (bobAfterShare.body.views as Array<{ id: string; shareScope?: string; viewRole?: string }>).find(
+    (v) => v.id === 'v_done',
+  )
+  assert.ok(sharedViewForBob)
+  assert.equal(sharedViewForBob.shareScope, 'shared')
+  assert.equal(sharedViewForBob.viewRole, 'viewer')
+
+  // 5. Zero-leak public view share: 2 docs match status=done, but ONLY 1 doc has a public share
+  await asUser(ada.id, () =>
+    db.create(
+      '/docs',
+      [
+        { id: 'pub_done', title: '公开已完成', status: 'done' },
+        { id: 'priv_done', title: '私密已完成', status: 'done' },
+      ],
+      { scope: 'personal' },
+    ),
+  )
+  await asUser(ada.id, () => http.call('POST', '/api/db/shares', { kind: 'record', collection: '/docs', recordId: 'pub_done' }))
+  const viewShareRes = await asUser(ada.id, () =>
+    http.call('POST', '/api/db/shares', { kind: 'record', collection: '/views', recordId: 'docs::v_done' }),
+  )
+  assert.equal(viewShareRes.status, 200)
+  const token = String((viewShareRes.body.share as { token: string }).token)
+
+  // GET /api/db/shares returns real-time zero-leak stats: 2 matched, 1 public
+  const statsRes = await asUser(ada.id, () =>
+    http.call('GET', '/api/db/shares?kind=record&collection=%2Fviews&recordId=docs%3A%3Av_done'),
+  )
+  assert.equal(statsRes.status, 200)
+  assert.deepEqual(statsRes.body.viewPublicStats, { matchedCount: 2, publicCount: 1 })
+
+  // Opening the public link returns ONLY pub_done (priv_done is NEVER leaked)
+  const publicSnap = await http.call('GET', `/api/share/${encodeURIComponent(token)}`)
+  assert.equal(publicSnap.status, 200)
+  assert.equal(publicSnap.body.kind, 'view')
+  const rows = publicSnap.body.records as Array<{ id: string }>
+  assert.deepEqual(rows.map((r) => r.id), ['pub_done'])
 })
