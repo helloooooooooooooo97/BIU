@@ -3,9 +3,8 @@ import { basename, extname, isAbsolute, join, resolve, relative } from 'node:pat
 import { constants } from 'node:fs'
 import { DATA_DIR_NAME, LEGACY_DATA_DIR_NAME, dataDir, dataHome } from '@biu/host-plugin-loader/data-dir'
 
-/** 会话 artifacts 可收录的图片扩展名。视觉模型只认其中的光栅格式。 */
-export const IMAGE_EXTENSIONS = new Set(['.png', '.jpg', '.jpeg', '.gif', '.webp', '.svg'])
-export const VISION_IMAGE_EXTENSIONS = new Set(['.png', '.jpg', '.jpeg', '.gif', '.webp'])
+/** 视觉模型可识别的光栅图片扩展名。 */
+const VISION_IMAGE_EXTENSIONS = new Set(['.png', '.jpg', '.jpeg', '.gif', '.webp'])
 
 export type ArtifactMeta = {
   name: string

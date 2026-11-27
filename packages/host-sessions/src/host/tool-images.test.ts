@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test } from 'vitest'
 import assert from 'node:assert/strict'
-import { liftToolImages, stripDeclaredImagesFromToolDetail } from './tool-images.ts'
+import { liftToolImages } from './tool-images.ts'
 import { artifactsDir } from './artifacts.ts'
 import type { LlmMessage } from '@biu/host-llm'
 
@@ -12,18 +12,6 @@ const TINY_PNG = Buffer.from(
   'base64',
 )
 const DATA_URL = `data:image/png;base64,${TINY_PNG.toString('base64')}`
-
-test('stripDeclaredImagesFromToolDetail removes artifacts that would be lifted', () => {
-  assert.equal(
-    stripDeclaredImagesFromToolDetail(
-      JSON.stringify({
-        stdout: 'ok',
-        artifacts: [{ name: 'shot.png', mime: 'image/png', url: '/x/shot.png' }],
-      }),
-    ),
-    JSON.stringify({ stdout: 'ok' }),
-  )
-})
 
 test('liftToolImages skip leaves tool JSON as text', async () => {
   const lifted = await liftToolImages(
