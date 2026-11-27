@@ -15,6 +15,7 @@ export function noticesCollection(store: NoticesStore): CollectionSpec {
       route: '/db-notices',
       title: '通知',
       inspector: false,
+      sidebar: false,
       icon: 'bell',
       blurb: '给人看的收件箱。列表 db_list /notices。未读 read=false。不要 db_create。系统不再为审批或回合写通知。',
       order: 18,

@@ -491,6 +491,30 @@ body {
   color: var(--biu-color-text-muted);
 }
 
+.shell-notify-head-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.shell-notify-all {
+  display: inline-flex;
+  align-items: center;
+  height: 24px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--biu-color-text-muted);
+  font-size: var(--biu-font-size-2);
+  cursor: pointer;
+}
+
+.shell-notify-all:hover {
+  color: var(--biu-color-text);
+  background: var(--biu-color-bg-hover);
+}
+
 .shell-notify-clear {
   display: inline-flex;
   align-items: center;

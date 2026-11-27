@@ -151,8 +151,24 @@ test('data overview lists each source record, includes tags, and skips other ind
   assert.equal(published?.view?.inspector, true)
   assert.equal(published?.view?.title, '数据')
   assert.equal(isDataOverviewSource('/tags'), true)
-  assert.equal(isDataOverviewSource('/editor-blocks'), false)
+  assert.equal(isDataOverviewSource('/editor-blocks'), true)
+  assert.equal(isDataOverviewSource('/views'), true)
+  assert.equal(isDataOverviewSource('/notices'), true)
   assert.equal(isDataOverviewSource('/trash'), false)
+  assert.equal(isDataOverviewSource('/workspace-members'), false)
+  assert.equal(isDataOverviewSource('/data'), false)
+  assert.equal(
+    readFileSync(resolve(import.meta.dirname, './saved-views.ts'), 'utf8').includes('sidebar: false'),
+    true,
+  )
+  assert.equal(
+    readFileSync(resolve(import.meta.dirname, '../../../core-page/src/host/page-blocks-collection.ts'), 'utf8').includes('sidebar: false'),
+    true,
+  )
+  assert.equal(
+    readFileSync(resolve(import.meta.dirname, '../../../core-notices/src/host/notices-collection.ts'), 'utf8').includes('sidebar: false'),
+    true,
+  )
   assert.equal(listed.schema?.fields.title?.writable, true)
   assert.equal(listed.schema?.fields.table?.type, 'select')
   assert.ok((listed.schema?.fields.table?.enum ?? []).includes('笔记2号'))

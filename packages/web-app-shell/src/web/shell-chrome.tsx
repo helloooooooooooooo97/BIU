@@ -3285,18 +3285,31 @@ function NoticeBell({
         >
           <div className="shell-notify-head">
             <span className="shell-notify-head-title">通知</span>
-            {inbox.length ? (
+            <div className="shell-notify-head-actions">
+              {inbox.length ? (
+                <button
+                  type="button"
+                  className="shell-notify-clear"
+                  data-testid="chrome-notify-clear"
+                  title="全部已读并清空"
+                  aria-label="全部已读并清空"
+                  onClick={() => clearAll()}
+                >
+                  <CheckIcon className="size-3.5" aria-hidden />
+                </button>
+              ) : null}
               <button
                 type="button"
-                className="shell-notify-clear"
-                data-testid="chrome-notify-clear"
-                title="全部已读并清空"
-                aria-label="全部已读并清空"
-                onClick={() => clearAll()}
+                className="shell-notify-all"
+                data-testid="chrome-notify-all"
+                onClick={() => {
+                  onOpenChange(false)
+                  navigate('/database/notices')
+                }}
               >
-                <CheckIcon className="size-3.5" aria-hidden />
+                查看全部
               </button>
-            ) : null}
+            </div>
           </div>
           {inbox.length ? (
             <ul className="shell-notify-list">
