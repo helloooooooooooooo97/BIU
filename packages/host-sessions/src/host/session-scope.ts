@@ -1,6 +1,6 @@
 import { AsyncLocalStorage } from 'node:async_hooks'
 
-export interface SessionScope {
+interface SessionScope {
   sessionId: string
 }
 

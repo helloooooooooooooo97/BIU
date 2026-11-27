@@ -57,7 +57,7 @@ export function findOrphanToolCalls(
   return [...pending.entries()].map(([id, name]) => ({ id, name }))
 }
 
-export function orphanToolResultBodies(
+function orphanToolResultBodies(
   orphans: Array<{ id: string; name: string }>,
 ): SessionEventBody[] {
   return orphans.map((call) => ({
