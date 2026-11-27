@@ -823,3 +823,51 @@ test('recordAccess, collectionInheritedSources, and collectInheritingDescendants
     'commenter',
   )
 })
+
+test('setRecordAccessMode and batchUpdateRecordPermissions protect the last live workspace view even with orphan ghost policies', () => {
+  const collab = store()
+  const ada = collab.register('Ada', Date.now(), 'secret1', 'ws-view-guard@example.com')
+  const ws = collab.createWorkspace(ada.id, 'Acme')
+  collab.setActive(ada.id, ws.id)
+
+  const db = (collab as unknown as { db: import('node:sqlite').DatabaseSync }).db
+  const insertSavedView = (viewId: string) => {
+    db.prepare(
+      `INSERT INTO saved_views (workspace_id, collection, view_id, payload_json, updated_at, revision)
+       VALUES (?, '/pages', ?, ?, ?, 1)`,
+    ).run(ws.id, viewId, JSON.stringify({ id: viewId, name: viewId, mode: 'table' }), Date.now())
+  }
+
+  // 1. 模拟历史已删除视图残留的幽灵策略行（仅在 resource_policies 中为 members，不在 saved_views 中）
+  collab.attachAs(ws.id, '/views', 'pages::builtin-all:/pages', ada.id, {
+    accessMode: 'members',
+    memberDefaultRole: 'viewer',
+  })
+
+  // 2. 当前 saved_views 中只有 1 个有效空间视图 v_ws_1 和 1 个私人视图 v_priv_1
+  insertSavedView('v_ws_1')
+  insertSavedView('v_priv_1')
+  collab.attachAs(ws.id, '/views', 'pages::v_ws_1', ada.id, { accessMode: 'members', memberDefaultRole: 'editor' })
+  collab.attachAs(ws.id, '/views', 'pages::v_priv_1', ada.id, { accessMode: 'private', memberDefaultRole: 'viewer' })
+
+  // 3. 不能把唯一有效的空间视图切回 private（哪怕存在幽灵策略行）
+  assert.throws(
+    () => collab.setRecordAccessMode(ada.id, '/views', 'pages::v_ws_1', 'private'),
+    /至少保留一个空间视图/,
+  )
+
+  // 4. 批量将两个有效空间视图同时切为 private 时，最多只转换 1 个，最后一个被保留
+  insertSavedView('v_ws_2')
+  collab.attachAs(ws.id, '/views', 'pages::v_ws_2', ada.id, { accessMode: 'members', memberDefaultRole: 'editor' })
+  const batchRes = collab.batchUpdateRecordPermissions(ada.id, {
+    collection: '/views',
+    recordIds: ['pages::v_ws_1', 'pages::v_ws_2'],
+    mode: 'access_mode',
+    accessMode: 'private',
+  })
+  assert.equal(batchRes.updatedCount, 1)
+  assert.equal(batchRes.skippedCount, 1)
+  const remainingScopes = collab.collectionOwnership(ws.id, '/views')
+  const liveWorkspaceCount = ['pages::v_ws_1', 'pages::v_ws_2'].filter((id) => remainingScopes.get(id) === 'workspace').length
+  assert.equal(liveWorkspaceCount, 1)
+})
