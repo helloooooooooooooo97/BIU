@@ -3,11 +3,19 @@ import { resolve } from 'node:path'
 import { test } from 'vitest'
 import assert from 'node:assert/strict'
 
+function readShareUiSource() {
+  return [
+    './share-popover.tsx',
+    './share-workspace-access.tsx',
+    './share-controls.tsx',
+    './share-chain-detail.tsx',
+  ]
+    .map((file) => readFileSync(resolve(import.meta.dirname, file), 'utf8'))
+    .join('\n')
+}
+
 test('share panel does not load or show resource counts', () => {
-  const src =
-    readFileSync(resolve(import.meta.dirname, './share-popover.tsx'), 'utf8') +
-    '\n' +
-    readFileSync(resolve(import.meta.dirname, './share-chain-detail.tsx'), 'utf8')
+  const src = readShareUiSource()
   const host =
     readFileSync(resolve(import.meta.dirname, '../host/index.ts'), 'utf8') +
     '\n' +
@@ -20,10 +28,7 @@ test('share panel does not load or show resource counts', () => {
 })
 
 test('share panel copies link and password together, without a separate pin copy', () => {
-  const src =
-    readFileSync(resolve(import.meta.dirname, './share-popover.tsx'), 'utf8') +
-    '\n' +
-    readFileSync(resolve(import.meta.dirname, './share-chain-detail.tsx'), 'utf8')
+  const src = readShareUiSource()
   assert.match(src, /shareClipboardText/)
   assert.match(src, /开启并复制/)
   assert.match(src, /复制时会同时包含链接和密码/)
@@ -35,10 +40,7 @@ test('share panel copies link and password together, without a separate pin copy
 })
 
 test('share setting patches stay quiet and do not emit a database reload', () => {
-  const src =
-    readFileSync(resolve(import.meta.dirname, './share-popover.tsx'), 'utf8') +
-    '\n' +
-    readFileSync(resolve(import.meta.dirname, './share-chain-detail.tsx'), 'utf8')
+  const src = readShareUiSource()
   const host =
     readFileSync(resolve(import.meta.dirname, '../host/index.ts'), 'utf8') +
     '\n' +
@@ -52,10 +54,7 @@ test('share setting patches stay quiet and do not emit a database reload', () =>
 })
 
 test('share panel uses a compact settings section and custom toggles', () => {
-  const src =
-    readFileSync(resolve(import.meta.dirname, './share-popover.tsx'), 'utf8') +
-    '\n' +
-    readFileSync(resolve(import.meta.dirname, './share-chain-detail.tsx'), 'utf8')
+  const src = readShareUiSource()
   const css = readFileSync(resolve(import.meta.dirname, './fsdb-style.ts'), 'utf8')
   assert.match(src, /公开链接设置/)
   assert.match(src, /fsdb-share-toggle/)
@@ -75,10 +74,7 @@ test('open share panel sits above the table toolbar', () => {
 })
 
 test('permission column opens the same kind of chain as data scope', () => {
-  const src =
-    readFileSync(resolve(import.meta.dirname, './share-popover.tsx'), 'utf8') +
-    '\n' +
-    readFileSync(resolve(import.meta.dirname, './share-chain-detail.tsx'), 'utf8')
+  const src = readShareUiSource()
   const labelSrc = readFileSync(resolve(import.meta.dirname, './share-scope-label.tsx'), 'utf8')
   const browser =
     readFileSync(resolve(import.meta.dirname, './browser.tsx'), 'utf8') +
@@ -103,14 +99,11 @@ test('permission column opens the same kind of chain as data scope', () => {
 })
 
 test('private records grant workspace members and member views from unified search and edit roles inline', () => {
-  const src =
-    readFileSync(resolve(import.meta.dirname, './share-popover.tsx'), 'utf8') +
-    '\n' +
-    readFileSync(resolve(import.meta.dirname, './share-chain-detail.tsx'), 'utf8')
+  const src = readShareUiSource()
   assert.match(src, /搜索空间成员或成员视图/)
   assert.match(src, /inline\s*\n\s*value=\{row\.role/)
   assert.match(src, /调整 \$\{row\.name\} 的权限/)
-  assert.match(src, /renderPersonAvatar\(row\.id \|\| row\.name, row\.avatar, 'is-sm', 26\)/)
+  assert.match(src, /renderShareAvatar\(row\.id \|\| row\.name, row\.avatar, \{ extraClass: 'is-sm', size: 26 \}\)/)
   assert.match(src, /<AiAvatar seed=/)
   assert.match(src, /String\(row\.title \?\? ''\)\.trim\(\) \|\| String\(row\.name \?\? ''\)\.trim\(\) \|\| email/)
   assert.match(src, /columns: \['title', 'name', 'avatar', 'email', 'role', 'membershipKind'\]/)
@@ -125,10 +118,7 @@ test('private records grant workspace members and member views from unified sear
 })
 
 test('share panel separates public sharing from internal and external collaboration', () => {
-  const src =
-    readFileSync(resolve(import.meta.dirname, './share-popover.tsx'), 'utf8') +
-    '\n' +
-    readFileSync(resolve(import.meta.dirname, './share-chain-detail.tsx'), 'utf8')
+  const src = readShareUiSource()
   const accountHost = readFileSync(resolve(import.meta.dirname, '../../../host-account/src/host/index.ts'), 'utf8')
   const databaseHost =
     readFileSync(resolve(import.meta.dirname, '../host/index.ts'), 'utf8') +
@@ -169,10 +159,7 @@ test('table titles do not show a cloud mark', () => {
 })
 
 test('device workspace keeps LAN links but hides collaboration and cloud publishing', () => {
-  const src =
-    readFileSync(resolve(import.meta.dirname, './share-popover.tsx'), 'utf8') +
-    '\n' +
-    readFileSync(resolve(import.meta.dirname, './share-chain-detail.tsx'), 'utf8')
+  const src = readShareUiSource()
   const browser =
     readFileSync(resolve(import.meta.dirname, './browser.tsx'), 'utf8') +
     '\n' +
@@ -198,10 +185,7 @@ test('device workspace keeps LAN links but hides collaboration and cloud publish
 })
 
 test('list permission column uses the same capsule and loads the chain on click', () => {
-  const src =
-    readFileSync(resolve(import.meta.dirname, './share-popover.tsx'), 'utf8') +
-    '\n' +
-    readFileSync(resolve(import.meta.dirname, './share-chain-detail.tsx'), 'utf8')
+  const src = readShareUiSource()
   const labelSrc = readFileSync(resolve(import.meta.dirname, './share-scope-label.tsx'), 'utf8')
   const css = readFileSync(resolve(import.meta.dirname, './fsdb-style.ts'), 'utf8')
   const browser =
@@ -245,10 +229,7 @@ test('builtin plugins keep shared ownership in the scope chain', () => {
 })
 
 test('list share column uses the same capsule and loads the chain on click', () => {
-  const src =
-    readFileSync(resolve(import.meta.dirname, './share-popover.tsx'), 'utf8') +
-    '\n' +
-    readFileSync(resolve(import.meta.dirname, './share-chain-detail.tsx'), 'utf8')
+  const src = readShareUiSource()
   const labelSrc = readFileSync(resolve(import.meta.dirname, './share-scope-label.tsx'), 'utf8')
   const css = readFileSync(resolve(import.meta.dirname, './fsdb-style.ts'), 'utf8')
   const browser =
@@ -315,10 +296,7 @@ function sharesPostOf(host: string) {
 }
 
 test('collaborator sections are stacked without a redundant popover heading', () => {
-  const src =
-    readFileSync(resolve(import.meta.dirname, './share-popover.tsx'), 'utf8') +
-    '\n' +
-    readFileSync(resolve(import.meta.dirname, './share-chain-detail.tsx'), 'utf8')
+  const src = readShareUiSource()
   const internalAt = src.indexOf('<h3>内部协作者</h3>')
   const externalAt = src.indexOf('<h3>外部协作者</h3>')
   assert.ok(internalAt >= 0)
@@ -335,7 +313,7 @@ test('table share/role suspense fallbacks render capsule labels immediately with
 })
 
 test('share panel exposes inheritance toggle wired to PATCH /api/account/access', () => {
-  const src = readFileSync(resolve(import.meta.dirname, './share-popover.tsx'), 'utf8')
+  const src = readShareUiSource()
   const accountHost = readFileSync(resolve(import.meta.dirname, '../../../host-account/src/host/index.ts'), 'utf8')
   assert.match(src, /testId="fsdb-share-inherit-toggle"/)
   assert.match(src, /继承上级权限/)
@@ -345,13 +323,16 @@ test('share panel exposes inheritance toggle wired to PATCH /api/account/access'
 })
 
 test('ShareSelect calls useFloatingPosition with positional (anchor, menuRef, opts) arguments', () => {
-  const src = readFileSync(resolve(import.meta.dirname, './share-popover.tsx'), 'utf8')
+  const src = readFileSync(resolve(import.meta.dirname, './share-controls.tsx'), 'utf8')
+  const batchSrc = readFileSync(resolve(import.meta.dirname, './batch-share-dialog.tsx'), 'utf8')
   assert.match(src, /useFloatingPosition\(open \? triggerRef\.current : null,\s*menuRef,\s*\{/)
   assert.doesNotMatch(src, /useFloatingPosition\(\{\s*anchor:/)
+  assert.match(batchSrc, /from '\.\/share-controls\.tsx'/)
+  assert.doesNotMatch(batchSrc, /function BatchSelect/)
 })
 
 test('commenter role maps consistently, ShareButton checks inheritedShare & memberViews, and dead grantedBy code is removed', () => {
-  const popover = readFileSync(resolve(import.meta.dirname, './share-popover.tsx'), 'utf8')
+  const popover = readShareUiSource()
   const detail = readFileSync(resolve(import.meta.dirname, './share-chain-detail.tsx'), 'utf8')
   const label = readFileSync(resolve(import.meta.dirname, './share-scope-label.tsx'), 'utf8')
   const css = readFileSync(resolve(import.meta.dirname, './fsdb-style.ts'), 'utf8')

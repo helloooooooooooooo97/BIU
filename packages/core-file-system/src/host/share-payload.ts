@@ -68,23 +68,25 @@ export type ShareSnapshotOpts = {
   workspaceId?: string
 }
 
-function effectivePublicRecordIds(
-  shares: SharesStore | undefined,
+export function collectEffectivePublicRecordIds(
+  shares: Pick<SharesStore, 'listRecords'> & Partial<Pick<SharesStore, 'list'>> | undefined,
   targetCollection: string,
   workspaceId: string | undefined,
   collabStore?: ShareCollabStore,
-): string[] {
-  if (!shares) return []
+): Set<string> {
   const ids = new Set<string>()
+  if (!shares) return ids
   const directKeys = new Set<string>()
   const allShares = typeof shares.list === 'function'
     ? shares.list().filter((item) => item.kind === 'record')
     : shares.listRecords(targetCollection)
   for (const item of allShares) {
-    if (!item.recordId) continue
     if (workspaceId && item.workspaceId && item.workspaceId !== workspaceId) continue
-    directKeys.add(`${item.collection}\t${item.recordId}`)
-    if (item.collection === targetCollection) ids.add(item.recordId)
+    const recordId = String(item.recordId ?? '').trim()
+    if (!recordId) continue
+    const shareCol = item.collection || targetCollection
+    directKeys.add(`${shareCol}\t${recordId}`)
+    if (shareCol === targetCollection) ids.add(recordId)
   }
   if (collabStore?.collectionInheritedSources && workspaceId && directKeys.size > 0) {
     const inherited = collabStore.collectionInheritedSources(workspaceId, targetCollection, directKeys)
@@ -92,7 +94,7 @@ function effectivePublicRecordIds(
       ids.add(recordId)
     }
   }
-  return [...ids]
+  return ids
 }
 
 function shareTagCatalog(
@@ -170,7 +172,7 @@ export async function computeViewPublicStats(
     },
   )) as { items?: DbRecord[]; total?: number }
   const items = listed.items ?? []
-  const publicIds = new Set(effectivePublicRecordIds(shares, targetCollection, workspaceId, collabStore))
+  const publicIds = collectEffectivePublicRecordIds(shares, targetCollection, workspaceId, collabStore)
   let publicCount = 0
   for (const row of items) {
     if (publicIds.has(String(row.id ?? ''))) publicCount += 1
@@ -200,7 +202,7 @@ export async function buildShareSnapshot(
     if (targetStat.kind !== 'collection' || !targetStat.schema) throw new Error('unknown collection')
     const schema = freezeSchema(targetStat.schema)
     const collectionLabel = String(targetStat.view?.title ?? targetStat.label ?? targetCollection.replace(/^\//, ''))
-    const publicRecordIds = effectivePublicRecordIds(
+    const publicRecordIds = collectEffectivePublicRecordIds(
       opts?.shares,
       targetCollection,
       share.workspaceId || opts?.workspaceId,

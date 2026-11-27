@@ -1,18 +1,23 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { CheckIcon, ChevronDownIcon, LockClosedIcon, ShieldCheckIcon, UserGroupIcon, XMarkIcon } from '@heroicons/react/16/solid'
-import { AiAvatar } from '@biu/biu-ui/ai-avatar'
+import { CheckIcon, LockClosedIcon, ShieldCheckIcon, UserGroupIcon, XMarkIcon } from '@heroicons/react/16/solid'
 import { apiFetch } from '@biu/biu-ui/api-client'
-import { useFloatingPosition } from '@biu/biu-ui/floating-position'
 import { HeadlessDismiss } from '@biu/biu-ui/headless-dismiss'
 import { OVERLAY_Z, overlayPortalRoot, overlayZ } from '@biu/biu-ui/overlay-portal'
 import { emitFsdbChange } from '@biu/type-file-system'
 import { WORKSPACE_MEMBERS_COLLECTION_PATH } from './database-path.ts'
 import { listCollection } from './db-client.ts'
 import { FSDB_SHARES_CHANGE_EVENT, emitFsdbEvent } from './fsdb-events.ts'
+import {
+  MEMBER_DEFAULT_ROLE_OPTIONS,
+  ROLE_OPTIONS,
+  ShareSelect,
+  renderShareAvatar,
+  type ShareRole,
+} from './share-controls.tsx'
 import { registerWorkspaceCache } from './workspace-client-store.ts'
 
-export type BatchShareRole = 'viewer' | 'commenter' | 'editor' | 'manager'
+export type BatchShareRole = ShareRole
 
 export type BatchShareTarget = {
   collectionPath: string
@@ -50,127 +55,6 @@ type PreviewResult = {
   totalCount: number
   manageableCount: number
   skippedCount: number
-}
-
-type BatchSelectOption<T extends string> = {
-  value: T
-  label: string
-  hint?: string
-}
-
-const ROLE_OPTIONS: ReadonlyArray<BatchSelectOption<BatchShareRole>> = [
-  { value: 'viewer', label: '可查看', hint: '仅查看内容' },
-  { value: 'commenter', label: '可评论', hint: '查看与添加批注' },
-  { value: 'editor', label: '可编辑', hint: '修改属性与正文' },
-  { value: 'manager', label: '可管理', hint: '分享与权限管理' },
-]
-
-const MEMBER_DEFAULT_ROLE_OPTIONS: ReadonlyArray<BatchSelectOption<'viewer' | 'editor'>> = [
-  { value: 'viewer', label: '可查看', hint: '空间成员默认只读' },
-  { value: 'editor', label: '可编辑', hint: '空间成员默认可改' },
-]
-
-function BatchSelect<T extends string>({
-  value,
-  options,
-  ariaLabel,
-  minMenuWidth = 156,
-  className,
-  onChange,
-}: {
-  value: T
-  options: ReadonlyArray<BatchSelectOption<T>>
-  ariaLabel: string
-  minMenuWidth?: number
-  className?: string
-  onChange: (next: T) => void
-}) {
-  const [open, setOpen] = useState(false)
-  const triggerRef = useRef<HTMLButtonElement>(null)
-  const menuRef = useRef<HTMLDivElement>(null)
-  const current = options.find((opt) => opt.value === value) ?? options[0]
-  const pos = useFloatingPosition(open ? triggerRef.current : null, menuRef, {
-    enabled: open,
-    placement: 'bottom-end',
-    offset: 4,
-    fallbackWidth: minMenuWidth,
-    fallbackHeight: options.length * 42 + 10,
-  })
-  const portalRoot = typeof document !== 'undefined' ? overlayPortalRoot() : null
-
-  return (
-    <div className={className}>
-      <button
-        ref={triggerRef}
-        type="button"
-        className={`fsdb-share-select-trigger${open ? ' is-open' : ''}`}
-        aria-label={ariaLabel}
-        aria-haspopup="listbox"
-        aria-expanded={open}
-        onClick={() => setOpen((prev) => !prev)}
-      >
-        <span>{current?.label ?? value}</span>
-        <ChevronDownIcon aria-hidden className="fsdb-share-select-chevron size-3.5" />
-      </button>
-      {open && portalRoot
-        ? createPortal(
-            <HeadlessDismiss onDismiss={() => setOpen(false)} insideRef={triggerRef}>
-              <div
-                ref={menuRef}
-                className="fsdb-share-select-menu"
-                role="listbox"
-                aria-label={ariaLabel}
-                style={{
-                  position: 'fixed',
-                  top: pos.top,
-                  left: pos.left,
-                  minWidth: Math.max(minMenuWidth, pos.anchorWidth),
-                  maxHeight: pos.maxHeight,
-                  zIndex: overlayZ(OVERLAY_Z.menu),
-                }}
-              >
-                {options.map((opt) => {
-                  const selected = opt.value === value
-                  return (
-                    <button
-                      key={opt.value}
-                      type="button"
-                      role="option"
-                      aria-selected={selected}
-                      className={`fsdb-share-select-option${selected ? ' is-selected' : ''}`}
-                      onClick={() => {
-                        onChange(opt.value)
-                        setOpen(false)
-                      }}
-                    >
-                      <span className="fsdb-share-select-option-copy">
-                        <strong>{opt.label}</strong>
-                        {opt.hint ? <em>{opt.hint}</em> : null}
-                      </span>
-                      {selected ? <CheckIcon aria-hidden className="fsdb-share-select-check size-3.5" /> : null}
-                    </button>
-                  )
-                })}
-              </div>
-            </HeadlessDismiss>,
-            portalRoot,
-          )
-        : null}
-    </div>
-  )
-}
-
-function isImageAvatar(value?: string) {
-  return Boolean(value && /^(https?:\/\/|\/|data:image\/)/i.test(value.trim()))
-}
-
-function renderMiniAvatar(seed: string, avatar?: string) {
-  const trimmed = avatar?.trim() ?? ''
-  return (
-    <span className="fsdb-share-avatar" aria-hidden style={{ width: 20, height: 20, fontSize: 10 }}>
-      {isImageAvatar(trimmed) ? <img src={trimmed} alt="" /> : trimmed || <AiAvatar seed={seed || 'biu'} size={20} />}
-    </span>
-  )
 }
 
 let cachedBatchMembers: MemberOption[] | null = null
@@ -533,7 +417,7 @@ export function BatchShareDialog({
               {accessMode === 'members' ? (
                 <div className="fsdb-batch-default-row">
                   <span>空间成员默认权限</span>
-                  <BatchSelect
+                  <ShareSelect
                     ariaLabel="空间成员默认权限"
                     className="fsdb-batch-role-select"
                     value={memberDefaultRole}
@@ -554,7 +438,7 @@ export function BatchShareDialog({
                   placeholder="搜索成员或成员视图…"
                 />
                 {mode === 'grant' ? (
-                  <BatchSelect
+                  <ShareSelect
                     ariaLabel="授予权限"
                     className="fsdb-batch-role-select"
                     value={role}
@@ -637,7 +521,7 @@ export function BatchShareDialog({
                           onClick={() => toggleMember(m)}
                         >
                           <span className="fsdb-batch-row-main">
-                            {renderMiniAvatar(m.id, m.avatar)}
+                            {renderShareAvatar(m.id, m.avatar, { mini: true })}
                             <span className="fsdb-batch-row-name">{m.name}</span>
                             {m.memberKind === 'external' || m.memberKind === 'guest' ? (
                               <span className="fsdb-batch-row-tag">外部</span>
