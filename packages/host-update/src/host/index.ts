@@ -8,7 +8,7 @@ import { behindMain, fetchMain, mergeMain, scheduleRestart, updateSource } from 
 export const name = 'update'
 export const inject = ['http']
 
-export type UpdateStatus = {
+type UpdateStatus = {
   behind: number
   ready: boolean
   remote?: string

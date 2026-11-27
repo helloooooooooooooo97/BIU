@@ -6,8 +6,8 @@ import { promisify } from 'node:util'
 const execFileAsync = promisify(execFile)
 
 /** 所有客户都从这份上游 main 拉更新，不跟本机 origin（可能是 fork / 私有镜像）绑定。 */
-export const DEFAULT_UPDATE_REMOTE = 'https://github.com/helloooooooooooooo97/biu.git'
-export const DEFAULT_UPDATE_REF = 'main'
+const DEFAULT_UPDATE_REMOTE = 'https://github.com/helloooooooooooooo97/biu.git'
+const DEFAULT_UPDATE_REF = 'main'
 
 export function updateSource() {
   return {
@@ -25,7 +25,7 @@ export async function git(root: string, args: string[], timeoutMs = 60_000) {
   return { stdout: String(stdout).trim(), stderr: String(stderr).trim() }
 }
 
-export async function gitAvailable(): Promise<boolean> {
+async function gitAvailable(): Promise<boolean> {
   try {
     await execFileAsync('git', ['--version'], { timeout: 10_000, encoding: 'utf8' })
     return true
@@ -48,7 +48,7 @@ async function hasHead(root: string) {
 }
 
 /** 没有 git 仓库时先 init，这样 zip 分发的客户机也能从官方 main 拉更新。 */
-export async function ensureGitRepo(root: string) {
+async function ensureGitRepo(root: string) {
   if (!(await gitAvailable())) {
     throw new Error('本机未安装 git，无法初始化仓库或拉取更新')
   }
