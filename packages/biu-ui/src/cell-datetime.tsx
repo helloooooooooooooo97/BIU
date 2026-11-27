@@ -7,16 +7,15 @@ function asStamp(value: unknown) {
   return Number.isFinite(n) && n > 0 ? n : 0
 }
 
-export function formatDateTimeLabel(value: unknown) {
+function pad(n: number) {
+  return String(n).padStart(2, '0')
+}
+
+function formatDateTimeLabel(value: unknown) {
   const n = asStamp(value)
   if (!n) return ''
   const d = new Date(n)
-  const pad = (n: number) => String(n).padStart(2, '0')
   return `${d.getFullYear()}/${pad(d.getMonth() + 1)}/${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`
-}
-
-function pad(n: number) {
-  return String(n).padStart(2, '0')
 }
 
 function timeValue(stamp: number) {

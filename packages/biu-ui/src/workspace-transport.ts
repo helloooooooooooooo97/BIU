@@ -56,7 +56,7 @@ export function isHostControlPath(pathname: string): boolean {
 
 const AGENT_ARTIFACT_PATH_RE = /^\/api\/agents\/[^/]+\/artifacts\/[^/]+$/
 
-export function isSignedAssetPath(pathname: string): boolean {
+function isSignedAssetPath(pathname: string): boolean {
   const clean = pathname.split('?')[0] || ''
   return (
     clean.startsWith('/api/db/file/') ||
@@ -271,7 +271,7 @@ export function rewriteElementAssetUrls(root: { querySelectorAll?: (selector: st
 
 let assetObserverCleanup: (() => void) | null = null
 
-export function installAssetUrlObserver(): () => void {
+function installAssetUrlObserver(): () => void {
   if (assetObserverCleanup || typeof document === 'undefined' || typeof MutationObserver === 'undefined') {
     return () => {}
   }
@@ -384,7 +384,7 @@ export function getPendingWorkspaceEndpointSync(): Promise<WorkspaceEndpoint> | 
  * Wait for any in-flight `syncWorkspaceEndpoint()` call to finish before dispatching
  * workspace-scoped `/api/*` requests, preventing boot-time and workspace-switch races.
  */
-export async function waitForWorkspaceEndpointReady(): Promise<WorkspaceEndpoint> {
+async function waitForWorkspaceEndpointReady(): Promise<WorkspaceEndpoint> {
   if (endpointSyncPromise) {
     try {
       await endpointSyncPromise

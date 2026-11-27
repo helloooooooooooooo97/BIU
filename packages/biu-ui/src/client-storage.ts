@@ -39,7 +39,7 @@ export function currentStorageWorkspaceId(): string {
  * Namespaces a logical storage key by the active workspace ID so switching between
  * local and cloud workspaces (or multiple cloud workspaces) never leaks cached state.
  */
-export function workspaceScopedKey(key: string): string {
+function workspaceScopedKey(key: string): string {
   const ws = currentStorageWorkspaceId()
   return ws ? `${key}::ws:${ws}` : key
 }

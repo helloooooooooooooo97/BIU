@@ -57,27 +57,14 @@ export function OutlineNav({
     }, 140)
   }
 
-  function outlineExpandOn() {
-    return true
-  }
-
-  useEffect(() => {
-    const onPrefs = () => {
-      if (!outlineExpandOn()) setHoverId(null)
-    }
-    window.addEventListener('biu:page-prefs', onPrefs)
-    return () => window.removeEventListener('biu:page-prefs', onPrefs)
-  }, [])
-
   function hoverTick(id: string) {
     keepOpen()
-    if (!outlineExpandOn()) return
     setHoverId(id)
   }
 
   function hoverRail(event: ReactMouseEvent) {
     keepOpen()
-    if (!outlineExpandOn() || !items.length) return
+    if (!items.length) return
     const hit = event.target instanceof Element ? event.target.closest('[data-outline-row]') : null
     const rowId = hit?.getAttribute('data-outline-row')
     if (rowId) {

@@ -19,8 +19,8 @@ export const SHARE_OVERLAY_Z = OVERLAY_Z.shareLift
 export const EXPAND_OVERLAY_Z = OVERLAY_Z.expandLift
 export const CHAT_OVERLAY_Z = OVERLAY_Z.chatLift
 export const TOOLTIP_OVERLAY_Z = OVERLAY_Z.tooltip
-export const EXPAND_OVERLAY_SEL = '[data-page-host-expanded],[data-sandbox-expanded],[data-testid="html-deck"]'
-export const CHAT_OVERLAY_SEL = '[data-testid="chat-overlay-panel"]'
+const EXPAND_OVERLAY_SEL = '[data-page-host-expanded],[data-sandbox-expanded],[data-testid="html-deck"]'
+const CHAT_OVERLAY_SEL = '[data-testid="chat-overlay-panel"]'
 
 /** 聊天浮窗置顶计数必须限制在 [400, 449] 区间，绝不允许越过 CHAT_OVERLAY_Z(500) 或 Pick 遮罩。 */
 export function clampChatOverlayZ(z: number): number {
