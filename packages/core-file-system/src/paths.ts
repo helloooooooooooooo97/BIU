@@ -23,8 +23,12 @@ const SYSTEM_COLLECTION_ORDER = [
   TRASH_COLLECTION_PATH,
 ] as const
 
-/** 组件和标签仍是反查索引（每人一份、没有分享）。 */
-const INDEX_COLLECTION_ORDER = [PAGE_BLOCKS_COLLECTION_PATH, TAGS_COLLECTION_PATH] as const
+/** 组件、标签和批注属于衍生索引数据（权限跟随源记录、无独立分享）。 */
+const INDEX_COLLECTION_ORDER = [
+  PAGE_BLOCKS_COLLECTION_PATH,
+  TAGS_COLLECTION_PATH,
+  COMMENTS_COLLECTION_PATH,
+] as const
 
 /** 纯私人集合（仅创建者本人可见，不支持任何分享或批量权限设置）。 */
 const PERSONAL_ONLY_COLLECTIONS = new Set<string>([

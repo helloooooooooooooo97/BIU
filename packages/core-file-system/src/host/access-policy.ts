@@ -5,11 +5,13 @@ import { type Action as PermissionAction, type AuthorizationService } from '@biu
 import { isRegisteredBuiltinPlugin } from '@biu/host-account/store'
 import type { CollectionSpec, DbRecord } from '@biu/type-file-system'
 import {
+  COMMENTS_COLLECTION_PATH,
   DATA_COLLECTION_PATH,
   EDITOR_BLOCKS_COLLECTION_PATH,
   PLUGINS_COLLECTION_PATH,
   TAGS_COLLECTION_PATH,
   TRASH_COLLECTION_PATH,
+  splitResourcePath,
 } from '../paths.ts'
 import type { SharesStore } from './shares-store.ts'
 import { collectEffectivePublicRecordIds } from './share-payload.ts'
@@ -96,6 +98,13 @@ export function resolveScopeTarget(
     if (parts.length >= 3) {
       const parent = parts[0]!.startsWith('/') ? parts[0]! : `/${parts[0]}`
       return { collection: parent, id: parts[1]! }
+    }
+  }
+  if (collection === COMMENTS_COLLECTION_PATH) {
+    const targetPath = String(row?.targetPath ?? '').trim()
+    const parsed = targetPath ? splitResourcePath(targetPath) : null
+    if (parsed?.collection && parsed.recordId && parsed.collection !== COMMENTS_COLLECTION_PATH) {
+      return { collection: parsed.collection, id: parsed.recordId }
     }
   }
   return { collection, id }
@@ -258,7 +267,39 @@ export class DatabaseAccessPolicy {
     return Boolean(this.host.tags.get(id))
   }
 
-  visibleRecords<T extends { id?: unknown; pageId?: unknown; collection?: unknown; sessionId?: unknown; sourceId?: unknown; tablePath?: unknown }>(
+  /** 批注为文档衍生数据：禁止独立分享；读/改/删跟随源文档，且批注作者本人在仍有批注权时可修改/删除自己的批注。 */
+  private canActOnComment(
+    authorization: AuthorizationService,
+    actor: NonNullable<ReturnType<AuthorizationService['currentActor']>>,
+    commentId: string,
+    action: PermissionAction,
+    targetResource: {
+      type: 'record'
+      workspaceId: string
+      collection: string
+      recordId: string
+      record?: Record<string, unknown>
+    },
+  ): boolean {
+    if (action === 'resource:share' || action === 'resource:manage-permissions') {
+      return false
+    }
+    if (targetResource.collection === COMMENTS_COLLECTION_PATH) {
+      return false
+    }
+    if (authorization.authorize(actor, action, targetResource).allowed) {
+      return true
+    }
+    if (action === 'resource:update' || action === 'resource:delete') {
+      const authorId = this.host.tags.recordMeta(COMMENTS_COLLECTION_PATH, commentId)?.createdBy?.accountId
+      if (authorId && authorId === actor.accountId) {
+        return authorization.authorize(actor, 'resource:comment', targetResource).allowed
+      }
+    }
+    return false
+  }
+
+  visibleRecords<T extends { id?: unknown; pageId?: unknown; collection?: unknown; sessionId?: unknown; sourceId?: unknown; tablePath?: unknown; targetPath?: unknown }>(
     collection: string,
     rows: T[],
     action: PermissionAction = 'resource:read',
@@ -273,7 +314,8 @@ export class DatabaseAccessPolicy {
         if (isBuiltinPluginRow(collection, row as { builtin?: unknown })) {
           return action === 'resource:read' || action === 'resource:list'
         }
-        const target = resolveScopeTarget(collection, String(row.id ?? ''), row)
+        const rowId = String(row.id ?? '')
+        const target = resolveScopeTarget(collection, rowId, row)
         const resource = {
           type: 'record' as const,
           workspaceId: actor.workspaceId,
@@ -281,8 +323,11 @@ export class DatabaseAccessPolicy {
           recordId: target.id,
           record: row as Record<string, unknown>,
         }
+        if (collection === COMMENTS_COLLECTION_PATH) {
+          return this.canActOnComment(authorization, actor, rowId, action, resource)
+        }
         if (collection === TAGS_COLLECTION_PATH && !String(row.sourceId ?? '') && !String(row.tablePath ?? '')) {
-          return this.indexTagVisible(String(row.id ?? ''), actor.accountId)
+          return this.indexTagVisible(rowId, actor.accountId)
         }
         return authorization.authorize(actor, action, resource).allowed
       })
@@ -435,13 +480,20 @@ export class DatabaseAccessPolicy {
     const actor = authorization?.currentActor()
     if (authorization && actor) {
       const target = resolveScopeTarget(spec.path, id, record)
-      const decision = authorization.authorize(actor, action, {
-        type: 'record',
+      const resource = {
+        type: 'record' as const,
         workspaceId: actor.workspaceId,
         collection: target.collection,
         recordId: target.id,
         ...(record ? { record: record as Record<string, unknown> } : {}),
-      })
+      }
+      if (spec.path === COMMENTS_COLLECTION_PATH) {
+        if (!this.canActOnComment(authorization, actor, id, action, resource)) {
+          throw new Error(`unknown record: ${spec.path}/${id}`)
+        }
+        return
+      }
+      const decision = authorization.authorize(actor, action, resource)
       if (!decision.allowed) {
         if (
           spec.path === TAGS_COLLECTION_PATH &&
@@ -463,7 +515,7 @@ export class DatabaseAccessPolicy {
       if (rbac) throw new Error(`unknown record: ${spec.path}/${id}`)
       return
     }
-    const target = resolveScopeTarget(spec.path, id)
+    const target = resolveScopeTarget(spec.path, id, record)
     if (!isRecordInWorkspace(membership, target.collection, target.id)) {
       throw new Error(`unknown record: ${spec.path}/${id}`)
     }

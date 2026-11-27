@@ -2881,6 +2881,191 @@ test('index rows follow the user records each person can read and omit share', a
   assert.equal(adaStamps.items.length, 1)
 })
 
+test('comments follow target document permissions across viewer, commenter, editor, and owner roles', async () => {
+  const ctx = new Context()
+  const db = new DatabaseService(ctx)
+  const pages = new Map<string, { id: string; title: string }>()
+  const comments = new Map<string, { id: string; title: string; body: string; targetPath: string; status: string }>()
+  db.register({
+    id: 'pages',
+    path: '/pages',
+    records: { create: true, update: true },
+    schema: { fields: { ...REQUIRED_RECORD_FIELDS, title: { type: 'string', writable: true } } },
+    list: () => [...pages.values()],
+    get: (id) => pages.get(id) ?? null,
+    create: (records) =>
+      records.map((record) => {
+        const row = { id: `p${pages.size + 1}`, title: String(record.title ?? '') }
+        pages.set(row.id, row)
+        return row
+      }),
+    update: (id, patch) => {
+      const row = { ...pages.get(id)!, ...patch, id }
+      pages.set(id, row)
+      return row
+    },
+  })
+  db.register({
+    id: 'comments',
+    path: '/comments',
+    records: { create: true, update: true, delete: true, allocateId: true },
+    schema: {
+      fields: {
+        ...REQUIRED_RECORD_FIELDS,
+        title: { type: 'string' },
+        body: { type: 'string', writable: true },
+        targetPath: { type: 'string', writable: true },
+        status: { type: 'select', writable: true, enum: ['open', 'resolved'] },
+      },
+    },
+    list: () => [...comments.values()],
+    get: (id) => comments.get(id) ?? null,
+    create: (records) =>
+      records.map((record) => {
+        const id = String(record.id ?? `c${comments.size + 1}`)
+        const body = String(record.body ?? '')
+        const row = {
+          id,
+          title: body || '批注',
+          body,
+          targetPath: String(record.targetPath ?? ''),
+          status: String(record.status ?? 'open'),
+        }
+        comments.set(id, row)
+        return row
+      }),
+    update: (id, patch) => {
+      const cur = comments.get(id)!
+      const next = {
+        ...cur,
+        ...(patch.body !== undefined ? { body: String(patch.body), title: String(patch.body) } : {}),
+        ...(patch.status !== undefined ? { status: String(patch.status) } : {}),
+      }
+      comments.set(id, next)
+      return next
+    },
+    remove: (query) => {
+      const ids = typeof query === 'string' ? [query] : (query?.ids ?? [])
+      const removed: string[] = []
+      for (const id of ids) {
+        if (comments.delete(id)) removed.push(id)
+      }
+      return removed
+    },
+  })
+
+  const dir = mkdtempSync(join(tmpdir(), 'biu-db-comments-authz-'))
+  const collab = new CollabStore(openAndMigrateBiu(join(dir, 'biu.sqlite')))
+  class AccountBridge extends Service {
+    store = collab
+    authorization = collab.authorization
+    workspaceLocation = () => 'cloud' as const
+    constructor(inner: Context) {
+      super(inner, 'account')
+    }
+  }
+  await ctx.plugin(AccountBridge)
+
+  const ada = collab.register('', Date.now(), 'secret1', 'c-ada@example.com')
+  const viewer = collab.register('', Date.now(), 'secret1', 'c-viewer@example.com')
+  const commenter = collab.register('', Date.now(), 'secret1', 'c-commenter@example.com')
+  const editor = collab.register('', Date.now(), 'secret1', 'c-editor@example.com')
+  const workspace = collab.createWorkspace(ada.id, 'Comments')
+  collab.addMemberByEmail(ada.id, workspace.id, viewer.email)
+  collab.addMemberByEmail(ada.id, workspace.id, commenter.email)
+  collab.addMemberByEmail(ada.id, workspace.id, editor.email)
+  for (const user of [ada, viewer, commenter, editor]) collab.setActive(user.id, workspace.id)
+
+  const privPage = await runWithAccount(ada.id, () => db.create('/pages', [{ title: '私密文档' }], { scope: 'personal' }))
+  const sharedPage = await runWithAccount(ada.id, () => db.create('/pages', [{ title: '协作文档' }], { scope: 'personal' }))
+  const privId = String(privPage.items[0]!.value.id)
+  const sharedId = String(sharedPage.items[0]!.value.id)
+
+  collab.shareWithEmail(ada.id, '/pages', sharedId, viewer.email, 'viewer', 'internal')
+  collab.shareWithEmail(ada.id, '/pages', sharedId, commenter.email, 'commenter', 'internal')
+  collab.shareWithEmail(ada.id, '/pages', sharedId, editor.email, 'editor', 'internal')
+
+  // /comments does not expose independent shareScope
+  const commentStat = await runWithAccount(ada.id, () => db.stat('/comments'))
+  if (commentStat.kind === 'collection') assert.equal(commentStat.schema.fields.shareScope, undefined)
+
+  // Owner comments on both private and shared pages
+  const privComment = await runWithAccount(ada.id, () =>
+    db.create('/comments', [{ body: '私密批注', targetPath: `/pages/${privId}` }]),
+  )
+  const adaSharedComment = await runWithAccount(ada.id, () =>
+    db.create('/comments', [{ body: '作者批注', targetPath: `/pages/${sharedId}` }]),
+  )
+  const privCommentId = String(privComment.items[0]!.value.id)
+  const adaSharedCommentId = String(adaSharedComment.items[0]!.value.id)
+  assert.equal(adaSharedComment.items[0]!.value.shareScope, undefined)
+
+  // Viewer can read shared doc comments (and NOT private doc comments), but cannot create/update/delete
+  const viewerList = asCollection(await runWithAccount(viewer.id, () => db.list('/comments')))
+  assert.deepEqual(viewerList.items.map((row) => row.id), [adaSharedCommentId])
+  await assert.rejects(() =>
+    runWithAccount(viewer.id, () => db.create('/comments', [{ body: '越权批注', targetPath: `/pages/${sharedId}` }])),
+  )
+  await assert.rejects(() =>
+    runWithAccount(viewer.id, () => db.update(`/comments/${adaSharedCommentId}`, { status: 'resolved' })),
+  )
+
+  // Commenter cannot comment on private doc, CAN comment on shared doc, CAN edit/delete own comment, CANNOT edit/delete others'
+  await assert.rejects(() =>
+    runWithAccount(commenter.id, () => db.create('/comments', [{ body: '偷看私密', targetPath: `/pages/${privId}` }])),
+  )
+  const commenterCreated = await runWithAccount(commenter.id, () =>
+    db.create('/comments', [{ body: '协作批注', targetPath: `/pages/${sharedId}` }]),
+  )
+  const commenterCommentId = String(commenterCreated.items[0]!.value.id)
+
+  // Everyone with read access on shared doc immediately sees commenter's comment
+  const adaList = asCollection(await runWithAccount(ada.id, () => db.list('/comments')))
+  assert.deepEqual(adaList.items.map((row) => row.id).sort(), [privCommentId, adaSharedCommentId, commenterCommentId].sort())
+  const viewerListAfter = asCollection(await runWithAccount(viewer.id, () => db.list('/comments')))
+  assert.deepEqual(viewerListAfter.items.map((row) => row.id).sort(), [adaSharedCommentId, commenterCommentId].sort())
+
+  // Commenter can edit own comment, cannot edit Ada's comment
+  await runWithAccount(commenter.id, () => db.update(`/comments/${commenterCommentId}`, { body: '已修改批注' }))
+  await assert.rejects(() =>
+    runWithAccount(commenter.id, () => db.update(`/comments/${adaSharedCommentId}`, { status: 'resolved' })),
+  )
+
+  // Editor can resolve Ada's comment, cannot delete Ada's comment
+  await runWithAccount(editor.id, () => db.update(`/comments/${adaSharedCommentId}`, { status: 'resolved' }))
+  const editorDelAda = await runWithAccount(editor.id, () => db.remove('/comments', { ids: [adaSharedCommentId], purge: true }))
+  assert.deepEqual(editorDelAda.ids, [])
+
+  // Commenter can delete own comment; owner can delete any comment on their doc
+  const commenterDelOwn = await runWithAccount(commenter.id, () =>
+    db.remove('/comments', { ids: [commenterCommentId], purge: true }),
+  )
+  assert.deepEqual(commenterDelOwn.ids, [commenterCommentId])
+
+  const editorCreated = await runWithAccount(editor.id, () =>
+    db.create('/comments', [{ body: '编辑者批注', targetPath: `/pages/${sharedId}` }]),
+  )
+  const editorCommentId = String(editorCreated.items[0]!.value.id)
+  const ownerDelEditor = await runWithAccount(ada.id, () =>
+    db.remove('/comments', { ids: [editorCommentId], purge: true }),
+  )
+  assert.deepEqual(ownerDelEditor.ids, [editorCommentId])
+
+  // Independent sharing of /comments is rejected
+  assert.throws(() => collab.setRecordAccessMode(ada.id, '/comments', adaSharedCommentId, 'members'))
+
+  // External collaborator with commenter role on the target doc can read & comment too
+  const ext = collab.register('', Date.now(), 'secret1', 'c-ext@example.com')
+  collab.shareWithEmail(ada.id, '/pages', sharedId, ext.email, 'commenter', 'external')
+  collab.setActive(ext.id, workspace.id)
+  const extCreated = await runWithAccount(ext.id, () =>
+    db.create('/comments', [{ body: '外部协作者批注', targetPath: `/pages/${sharedId}` }]),
+  )
+  assert.equal(extCreated.items.length, 1)
+  const extList = asCollection(await runWithAccount(ext.id, () => db.list('/comments')))
+  assert.equal(extList.items.some((row) => row.id === extCreated.items[0]!.value.id), true)
+})
+
 test('builtin plugins stay visible in the workspace plugin list', async () => {
   const previous = process.env.BIU_ONLINE
   process.env.BIU_ONLINE = '1'
