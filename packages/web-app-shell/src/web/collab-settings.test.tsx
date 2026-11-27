@@ -830,3 +830,102 @@ test('ShellWorkspaceSwitcher keeps per-tab sessionStorage workspace isolated fro
   localStorage.clear()
   sessionStorage.clear()
 })
+
+test('ShellWorkspaceSwitcher renders workspace avatar instead of cloud icon', async () => {
+  localStorage.clear()
+  sessionStorage.clear()
+  localStorage.setItem('biu.account.token', 'tok_ws_icon')
+  const customAvatar = 'data:image/png;base64,wsavatar'
+  globalThis.fetch = (async (path: string) => {
+    const url = String(path)
+    if (url.endsWith('/api/account/me')) return json({ id: 'acc_1', name: 'Ada', email: 'ada@example.com' })
+    if (url.endsWith('/api/account/workspaces')) {
+      return json({
+        workspaces: [
+          { id: 'ws_custom', name: '云端研发', role: 'owner', location: 'cloud', avatar: customAvatar },
+          { id: 'ws_default', name: '默认空间', role: 'member', location: 'cloud', avatar: '' },
+        ],
+      })
+    }
+    if (url.endsWith('/api/account/active')) return json({ workspaceId: 'ws_custom' })
+    if (url.endsWith('/api/account/cloud')) return json({ accounts: [] })
+    return json({})
+  }) as typeof fetch
+
+  render(<ShellWorkspaceSwitcher />)
+  const avatar = await screen.findByTestId('shell-workspace-switch-avatar')
+  assert.equal(avatar.tagName, 'IMG')
+  assert.equal(avatar.getAttribute('src'), customAvatar)
+
+  cleanup()
+  localStorage.clear()
+  sessionStorage.clear()
+})
+
+test('transferring workspace owner requires typing workspace name and warns irreversible', async () => {
+  localStorage.clear()
+  sessionStorage.clear()
+  localStorage.setItem('biu.account.token', 'tok_transfer')
+  sessionStorage.setItem('biu.workspaceId', 'ws_team')
+
+  const patchCalls: Array<{ url: string; role?: string }> = []
+  globalThis.fetch = (async (path: string, init?: RequestInit) => {
+    const url = String(path)
+    if (url.endsWith('/api/account/workspaces')) {
+      return json({
+        workspaces: [{ id: 'ws_team', name: '核心产品组', role: 'owner', location: 'cloud' }],
+      })
+    }
+    if (url.endsWith('/api/account/active')) return json({ workspaceId: 'ws_team' })
+    if (url.endsWith('/api/account/workspaces/ws_team/members') && (!init?.method || init.method === 'GET')) {
+      return json({
+        members: [
+          { id: 'acc_owner', name: 'Ada', email: 'ada@example.com', role: 'owner' },
+          { id: 'acc_bob', name: 'Bob', email: 'bob@example.com', role: 'admin' },
+        ],
+      })
+    }
+    if (url.endsWith('/api/account/presence')) return json({ presence: [] })
+    if (url.endsWith('/api/account/workspaces/ws_team/members/acc_bob') && init?.method === 'PATCH') {
+      const body = JSON.parse(String(init.body)) as { role?: string }
+      patchCalls.push({ url, role: body.role })
+      return json({
+        members: [
+          { id: 'acc_owner', name: 'Ada', email: 'ada@example.com', role: 'admin' },
+          { id: 'acc_bob', name: 'Bob', email: 'bob@example.com', role: 'owner' },
+        ],
+      })
+    }
+    return json({})
+  }) as typeof fetch
+
+  render(<ShellSettingsMembers />)
+  const roleTrigger = await screen.findByTestId('settings-member-role-acc_bob')
+  fireEvent.click(roleTrigger)
+  const ownerOption = await screen.findByRole('option', { name: /所有者/ })
+  fireEvent.click(ownerOption)
+
+  // 选择「移交所有者」后不应直接发 PATCH，而是先弹出确认框并提示不可撤回
+  assert.equal(patchCalls.length, 0)
+  const dialog = await screen.findByTestId('settings-member-transfer-owner-dialog')
+  assert.match(dialog.textContent ?? '', /不可撤回/)
+  assert.match(dialog.textContent ?? '', /核心产品组/)
+
+  const confirmBtn = dialog.querySelector('.biu-confirm-submit') as HTMLButtonElement
+  assert.equal(confirmBtn.disabled, true)
+
+  const input = screen.getByTestId('settings-member-transfer-owner-input')
+  fireEvent.change(input, { target: { value: '错误名称' } })
+  assert.equal(confirmBtn.disabled, true)
+
+  fireEvent.change(input, { target: { value: '核心产品组' } })
+  assert.equal(confirmBtn.disabled, false)
+  fireEvent.click(confirmBtn)
+
+  await waitFor(() => assert.equal(patchCalls.length, 1))
+  assert.equal(patchCalls[0]?.role, 'owner')
+
+  cleanup()
+  localStorage.clear()
+  sessionStorage.clear()
+})
