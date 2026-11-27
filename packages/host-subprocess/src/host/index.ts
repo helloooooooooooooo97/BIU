@@ -27,7 +27,7 @@ export interface SpawnResult {
 const KILL_GRACE_MS = 800
 const DEFAULT_CLOUD_MAX_CONCURRENCY = 20
 
-export function sandboxMaxConcurrency(): number {
+function sandboxMaxConcurrency(): number {
   const raw = Number(process.env.BIU_SANDBOX_MAX_CONCURRENCY)
   if (Number.isInteger(raw) && raw > 0) return raw
   return getRuntimePolicy().enforceTenantQuotas ? DEFAULT_CLOUD_MAX_CONCURRENCY : 0
