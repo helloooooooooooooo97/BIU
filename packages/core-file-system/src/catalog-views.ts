@@ -1,6 +1,7 @@
 import {
   DATA_COLLECTION_PATH,
   EDITOR_BLOCKS_COLLECTION_PATH,
+  PAGES_COLLECTION_PATH,
   TAGS_COLLECTION_PATH,
   VIEWS_COLLECTION_PATH,
   WORKSPACE_MEMBERS_COLLECTION_PATH,
@@ -78,6 +79,7 @@ const MEMBER_SEED_VIEWS = [
 
 /**
  * 集合首次初始化时写入数据库的普通默认种子视图（写库后与用户自建视图 100% 平权）。
+ * - /pages：1 条「全部页面」（树形目录展开、展示序号、按分享权限分组、默认锁定、空间只读）
  * - 普通业务表：1 条「全部<表名>」（空间可编辑，未锁定）
  * - /workspace-members：3 条默认锁定成员视图（空间成员 / 外部成员 / 临时访客，开箱即用作为动态成员组）
  * - /data：1 条「全部数据」（空间可编辑，未锁定）
@@ -108,28 +110,30 @@ export function defaultSeedViewsForCollection(table: TableRef): SeedViewSpec[] {
       memberDefaultRole: 'viewer',
     }))
   }
-  const name = path === DATA_COLLECTION_PATH ? '全部数据' : `全部${collectionNoun({ ...table, path })}`
+  const isPages = path === PAGES_COLLECTION_PATH
+  const name = path === DATA_COLLECTION_PATH ? '全部数据' : isPages ? '全部页面' : `全部${collectionNoun({ ...table, path })}`
   return [
     {
       view: normalizeSavedView({
         id: 'all',
         name,
         mode: 'table',
-        locked: false,
+        locked: isPages,
         revision: 1,
         sortField: DEFAULT_VIEW_SORT_FIELD,
         sortDir: DEFAULT_VIEW_SORT_DIR,
         filters: {},
         columns: path === DATA_COLLECTION_PATH ? ['title', 'actions', 'table'] : [],
-        groupBy: defaultGroupByForCollection(path),
-        tree: false,
+        groupBy: isPages ? 'shareScope' : defaultGroupByForCollection(path),
+        tree: isPages,
+        rowNumbers: isPages,
         wrap: false,
         truncate: true,
         query: '',
         rank: 0,
       }),
       accessMode: 'members',
-      memberDefaultRole: 'editor',
+      memberDefaultRole: isPages ? 'viewer' : 'editor',
     },
   ]
 }
