@@ -8,10 +8,12 @@ import { getRuntimePolicy } from '@biu/host-plugin-loader/runtime'
 import {
   STR_REPLACE_EDITOR_DESCRIPTION,
   STR_REPLACE_EDITOR_PARAMETERS,
+  formatNumberedLines,
+  parseViewRange,
   runStrReplaceEditor,
 } from './str-replace-editor.ts'
 
-export const SANDBOX_VIRTUAL_WORKSPACE = '/workspace'
+const SANDBOX_VIRTUAL_WORKSPACE = '/workspace'
 
 function requireWorkspaceSegment(id: string): string {
   const safe = id.trim().replace(/[^a-zA-Z0-9_-]/g, '')
@@ -156,19 +158,10 @@ export function apply(ctx: Context, config: { root?: string } = {}) {
     execute: async (args) => {
       const text = await fs.read(String(args.path))
       let output = text
-      const hasRange = Array.isArray(args.view_range) && args.view_range.length > 0
-      if (hasRange) {
-        const lines = text.split('\n')
-        const start = Number((args.view_range as unknown[])[0])
-        const endRaw = (args.view_range as unknown[]).length > 1 ? Number((args.view_range as unknown[])[1]) : start
-        if (!Number.isInteger(start) || start < 1) throw new Error('view_range start must be a positive integer')
-        const end = endRaw === -1 ? lines.length : endRaw
-        if (!Number.isInteger(end) || end < start) throw new Error('invalid view_range')
-        const width = String(Math.max(lines.length, 1)).length
-        output = lines
-          .slice(start - 1, Math.min(end, lines.length))
-          .map((line, i) => `${String(start + i).padStart(width)}\t${line}`)
-          .join('\n')
+      const lines = text.split('\n')
+      const range = parseViewRange(args.view_range, lines.length)
+      if (range) {
+        output = formatNumberedLines(lines.slice(range.start - 1, range.end), range.start, lines.length)
       }
       const limit = typeof args.max_bytes === 'number' && args.max_bytes > 0
         ? args.max_bytes

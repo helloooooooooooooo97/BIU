@@ -4,7 +4,7 @@ import type { FsService } from './index.ts'
 
 const MAX_OUTPUT = 16_000
 
-export type EditorCommand = 'view' | 'create' | 'str_replace' | 'insert'
+type EditorCommand = 'view' | 'create' | 'str_replace' | 'insert'
 
 export async function runStrReplaceEditor(fs: FsService, args: Record<string, unknown>): Promise<string> {
   const command = String(args.command ?? '') as EditorCommand
@@ -36,10 +36,9 @@ async function view(fs: FsService, abs: string, rel: string, viewRange: unknown)
   const content = await fs.read(rel)
   const lines = content.split('\n')
   // trailing empty from final newline is kept as an empty last line for cat -n parity when file ends with \n
-  const numbered = numberLines(lines)
-  const range = parseViewRange(viewRange, numbered.length)
-  if (!range) return numbered.join('\n')
-  return numbered.slice(range.start - 1, range.end).join('\n')
+  const range = parseViewRange(viewRange, lines.length)
+  if (!range) return formatNumberedLines(lines)
+  return formatNumberedLines(lines.slice(range.start - 1, range.end), range.start, lines.length)
 }
 
 async function create(fs: FsService, abs: string, rel: string, fileText: unknown) {
@@ -75,12 +74,12 @@ async function insert(fs: FsService, abs: string, rel: string, insertLine: unkno
   return `The file ${rel} has been edited. Please review the changes and make sure they are correct.`
 }
 
-function numberLines(lines: string[]) {
-  const width = String(lines.length).length
-  return lines.map((line, index) => `${String(index + 1).padStart(width)}\t${line}`)
+export function formatNumberedLines(lines: string[], start = 1, totalLines = lines.length): string {
+  const width = String(Math.max(totalLines, 1)).length
+  return lines.map((line, index) => `${String(start + index).padStart(width)}\t${line}`).join('\n')
 }
 
-function parseViewRange(viewRange: unknown, lineCount: number): { start: number; end: number } | null {
+export function parseViewRange(viewRange: unknown, lineCount: number): { start: number; end: number } | null {
   if (!Array.isArray(viewRange) || viewRange.length === 0) return null
   const start = Number(viewRange[0])
   const endRaw = viewRange.length > 1 ? Number(viewRange[1]) : start
