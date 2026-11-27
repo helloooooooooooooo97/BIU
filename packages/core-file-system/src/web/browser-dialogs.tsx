@@ -1,4 +1,9 @@
-import { TagIcon } from '@heroicons/react/16/solid'
+import { useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
+import { CheckIcon, ChevronDownIcon, TagIcon } from '@heroicons/react/16/solid'
+import { useFloatingPosition } from '@biu/biu-ui/floating-position'
+import { HeadlessDismiss } from '@biu/biu-ui/headless-dismiss'
+import { OVERLAY_Z, overlayPortalRoot, overlayZ } from '@biu/biu-ui/overlay-portal'
 import type { CollectionActionInfo, DbRecord, FieldSpec } from '@biu/type-file-system'
 import { AppDialog, CheckRow } from './controls.tsx'
 import { TRASH_COLLECTION_PATH } from './database-path.ts'
@@ -12,7 +17,149 @@ export type BrowserDialogState =
   | { kind: 'delete-records'; ids: string[] }
   | { kind: 'bulk-edit'; ids: string[] }
   | { kind: 'bulk-tag'; ids: string[] }
+  | {
+      kind: 'release-member-view'
+      viewName: string
+      action: 'unlock' | 'delete'
+      grantCount: number
+      resolve: (mode: 'freeze' | 'revoke' | null) => void
+    }
   | null
+
+function BulkFieldSelect({
+  value,
+  fields,
+  onChange,
+}: {
+  value: string
+  fields: Array<{ key: string; field: FieldSpec }>
+  onChange: (next: string) => void
+}) {
+  const [open, setOpen] = useState(false)
+  const triggerRef = useRef<HTMLButtonElement>(null)
+  const menuRef = useRef<HTMLDivElement>(null)
+  const current = fields.find((item) => item.key === value) ?? fields[0]
+  const pos = useFloatingPosition(open ? triggerRef.current : null, menuRef, {
+    enabled: open,
+    placement: 'bottom-start',
+    offset: 4,
+    fallbackWidth: 220,
+    fallbackHeight: Math.min(fields.length * 36 + 10, 260),
+  })
+  const portalRoot = typeof document !== 'undefined' ? overlayPortalRoot() : null
+  return (
+    <>
+      <button
+        ref={triggerRef}
+        type="button"
+        className={`fsdb-share-select-trigger${open ? ' is-open' : ''}`}
+        aria-label="选择字段"
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        onClick={() => setOpen((prev) => !prev)}
+      >
+        <span>{current ? current.field.label || current.key : '选择字段'}</span>
+        <ChevronDownIcon aria-hidden className="fsdb-share-select-chevron size-3.5" />
+      </button>
+      {open && portalRoot
+        ? createPortal(
+            <HeadlessDismiss onDismiss={() => setOpen(false)} insideRef={triggerRef}>
+              <div
+                ref={menuRef}
+                className="fsdb-share-select-menu"
+                role="listbox"
+                aria-label="选择字段"
+                style={{
+                  position: 'fixed',
+                  top: pos.top,
+                  left: pos.left,
+                  minWidth: Math.max(200, pos.anchorWidth),
+                  maxHeight: pos.maxHeight,
+                  zIndex: overlayZ(OVERLAY_Z.menu),
+                }}
+              >
+                {fields.map((item) => {
+                  const selected = item.key === value
+                  return (
+                    <button
+                      key={item.key}
+                      type="button"
+                      role="option"
+                      aria-selected={selected}
+                      className={`fsdb-share-select-option${selected ? ' is-selected' : ''}`}
+                      onClick={() => {
+                        onChange(item.key)
+                        setOpen(false)
+                      }}
+                    >
+                      <span className="fsdb-share-select-option-copy">
+                        <strong>{item.field.label || item.key}</strong>
+                      </span>
+                      {selected ? <CheckIcon aria-hidden className="fsdb-share-select-check size-3.5" /> : null}
+                    </button>
+                  )
+                })}
+              </div>
+            </HeadlessDismiss>,
+            portalRoot,
+          )
+        : null}
+    </>
+  )
+}
+
+function ReleaseMemberViewDialog({
+  viewName,
+  action,
+  grantCount,
+  onDone,
+}: {
+  viewName: string
+  action: 'unlock' | 'delete'
+  grantCount: number
+  onDone: (mode: 'freeze' | 'revoke' | null) => void
+}) {
+  const [mode, setMode] = useState<'freeze' | 'revoke'>('freeze')
+  const verb = action === 'delete' ? '删除' : '解锁'
+  return (
+    <AppDialog
+      title={`${verb}动态成员视图`}
+      confirm={mode === 'freeze' ? `固化名单并${verb}` : `取消授权并${verb}`}
+      danger={mode === 'revoke' || action === 'delete'}
+      onCancel={() => onDone(null)}
+      onConfirm={() => onDone(mode)}
+      body={
+        <>
+          <p>
+            锁定成员视图「{viewName}」正被 {grantCount} 条记录动态引用，请选择处理方式：
+          </p>
+          <div className="fsdb-release-choices" role="radiogroup" aria-label="动态引用处理方式">
+            <button
+              type="button"
+              role="radio"
+              aria-checked={mode === 'freeze'}
+              className={`fsdb-release-choice${mode === 'freeze' ? ' is-on' : ''}`}
+              onClick={() => setMode('freeze')}
+            >
+              <strong>固化为当前静态名单</strong>
+              <span>保留这 {grantCount} 条记录现有成员的访问权限，再{verb}视图</span>
+            </button>
+            <button
+              type="button"
+              role="radio"
+              aria-checked={mode === 'revoke'}
+              className={`fsdb-release-choice${mode === 'revoke' ? ' is-on' : ''}`}
+              onClick={() => setMode('revoke')}
+            >
+              <strong>取消所有关联授权</strong>
+              <span>撤销这 {grantCount} 条记录对该成员视图的动态授权，再{verb}视图</span>
+            </button>
+          </div>
+        </>
+      }
+    />
+  )
+}
 
 export function BrowserDialogs({
   dlg,
@@ -106,13 +253,7 @@ export function BrowserDialogs({
           <div className="fsdb-bulk-form">
             <label className="fsdb-bulk-label">
               字段
-              <select className="fsdb-dlg-input" value={bulkEditKey} onChange={(event) => setBulkEditKey(event.target.value)}>
-                {bulkFields.map((item) => (
-                  <option key={item.key} value={item.key}>
-                    {item.field.label || item.key}
-                  </option>
-                ))}
-              </select>
+              <BulkFieldSelect value={bulkEditKey} fields={bulkFields} onChange={setBulkEditKey} />
             </label>
             <label className="fsdb-bulk-label">
               值
@@ -192,6 +333,20 @@ export function BrowserDialogs({
         onCancel={() => setDlg(null)}
         onConfirm={() => setDlg(null)}
         body={<p>{dlg.body}</p>}
+      />
+    )
+  }
+  if (dlg.kind === 'release-member-view') {
+    return (
+      <ReleaseMemberViewDialog
+        viewName={dlg.viewName}
+        action={dlg.action}
+        grantCount={dlg.grantCount}
+        onDone={(mode) => {
+          const done = dlg.resolve
+          setDlg(null)
+          done(mode)
+        }}
       />
     )
   }

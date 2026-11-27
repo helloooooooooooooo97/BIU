@@ -1,9 +1,11 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { CheckIcon, LockClosedIcon, ShieldCheckIcon, UserGroupIcon, XMarkIcon } from '@heroicons/react/16/solid'
+import { CheckIcon, ChevronDownIcon, LockClosedIcon, ShieldCheckIcon, UserGroupIcon, XMarkIcon } from '@heroicons/react/16/solid'
 import { AiAvatar } from '@biu/biu-ui/ai-avatar'
 import { apiFetch } from '@biu/biu-ui/api-client'
-import { OVERLAY_Z, overlayPortalRoot } from '@biu/biu-ui/overlay-portal'
+import { useFloatingPosition } from '@biu/biu-ui/floating-position'
+import { HeadlessDismiss } from '@biu/biu-ui/headless-dismiss'
+import { OVERLAY_Z, overlayPortalRoot, overlayZ } from '@biu/biu-ui/overlay-portal'
 import { emitFsdbChange } from '@biu/type-file-system'
 import { WORKSPACE_MEMBERS_COLLECTION_PATH } from './database-path.ts'
 import { listCollection } from './db-client.ts'
@@ -50,12 +52,113 @@ type PreviewResult = {
   skippedCount: number
 }
 
-const ROLE_OPTIONS: Array<{ value: BatchShareRole; label: string }> = [
-  { value: 'viewer', label: '可查看' },
-  { value: 'commenter', label: '可评论' },
-  { value: 'editor', label: '可编辑' },
-  { value: 'manager', label: '可管理' },
+type BatchSelectOption<T extends string> = {
+  value: T
+  label: string
+  hint?: string
+}
+
+const ROLE_OPTIONS: ReadonlyArray<BatchSelectOption<BatchShareRole>> = [
+  { value: 'viewer', label: '可查看', hint: '仅查看内容' },
+  { value: 'commenter', label: '可评论', hint: '查看与添加批注' },
+  { value: 'editor', label: '可编辑', hint: '修改属性与正文' },
+  { value: 'manager', label: '可管理', hint: '分享与权限管理' },
 ]
+
+const MEMBER_DEFAULT_ROLE_OPTIONS: ReadonlyArray<BatchSelectOption<'viewer' | 'editor'>> = [
+  { value: 'viewer', label: '可查看', hint: '空间成员默认只读' },
+  { value: 'editor', label: '可编辑', hint: '空间成员默认可改' },
+]
+
+function BatchSelect<T extends string>({
+  value,
+  options,
+  ariaLabel,
+  minMenuWidth = 156,
+  className,
+  onChange,
+}: {
+  value: T
+  options: ReadonlyArray<BatchSelectOption<T>>
+  ariaLabel: string
+  minMenuWidth?: number
+  className?: string
+  onChange: (next: T) => void
+}) {
+  const [open, setOpen] = useState(false)
+  const triggerRef = useRef<HTMLButtonElement>(null)
+  const menuRef = useRef<HTMLDivElement>(null)
+  const current = options.find((opt) => opt.value === value) ?? options[0]
+  const pos = useFloatingPosition(open ? triggerRef.current : null, menuRef, {
+    enabled: open,
+    placement: 'bottom-end',
+    offset: 4,
+    fallbackWidth: minMenuWidth,
+    fallbackHeight: options.length * 42 + 10,
+  })
+  const portalRoot = typeof document !== 'undefined' ? overlayPortalRoot() : null
+
+  return (
+    <div className={className}>
+      <button
+        ref={triggerRef}
+        type="button"
+        className={`fsdb-share-select-trigger${open ? ' is-open' : ''}`}
+        aria-label={ariaLabel}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        onClick={() => setOpen((prev) => !prev)}
+      >
+        <span>{current?.label ?? value}</span>
+        <ChevronDownIcon aria-hidden className="fsdb-share-select-chevron size-3.5" />
+      </button>
+      {open && portalRoot
+        ? createPortal(
+            <HeadlessDismiss onDismiss={() => setOpen(false)} insideRef={triggerRef}>
+              <div
+                ref={menuRef}
+                className="fsdb-share-select-menu"
+                role="listbox"
+                aria-label={ariaLabel}
+                style={{
+                  position: 'fixed',
+                  top: pos.top,
+                  left: pos.left,
+                  minWidth: Math.max(minMenuWidth, pos.anchorWidth),
+                  maxHeight: pos.maxHeight,
+                  zIndex: overlayZ(OVERLAY_Z.menu),
+                }}
+              >
+                {options.map((opt) => {
+                  const selected = opt.value === value
+                  return (
+                    <button
+                      key={opt.value}
+                      type="button"
+                      role="option"
+                      aria-selected={selected}
+                      className={`fsdb-share-select-option${selected ? ' is-selected' : ''}`}
+                      onClick={() => {
+                        onChange(opt.value)
+                        setOpen(false)
+                      }}
+                    >
+                      <span className="fsdb-share-select-option-copy">
+                        <strong>{opt.label}</strong>
+                        {opt.hint ? <em>{opt.hint}</em> : null}
+                      </span>
+                      {selected ? <CheckIcon aria-hidden className="fsdb-share-select-check size-3.5" /> : null}
+                    </button>
+                  )
+                })}
+              </div>
+            </HeadlessDismiss>,
+            portalRoot,
+          )
+        : null}
+    </div>
+  )
+}
 
 function isImageAvatar(value?: string) {
   return Boolean(value && /^(https?:\/\/|\/|data:image\/)/i.test(value.trim()))
@@ -328,96 +431,44 @@ export function BatchShareDialog({
       onClick={onClose}
     >
       <div
-        className="biu-float"
+        className="fsdb-batch-dialog"
         role="dialog"
         aria-modal="true"
         aria-label="批量权限设置"
-        style={{
-          width: 'min(480px, 92vw)',
-          maxHeight: '82vh',
-          display: 'flex',
-          flexDirection: 'column',
-          padding: 0,
-          overflow: 'hidden',
-        }}
         onClick={(e) => e.stopPropagation()}
       >
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'flex-start',
-            justifyContent: 'space-between',
-            gap: 12,
-            padding: '16px 18px 12px',
-          }}
-        >
-          <div style={{ minWidth: 0 }}>
-            <div style={{ fontSize: 15, fontWeight: 600, color: 'var(--biu-color-text)', lineHeight: 1.3 }}>
-              批量权限设置
-            </div>
-            <div
-              style={{
-                fontSize: 12,
-                color: 'var(--biu-color-text-muted)',
-                marginTop: 3,
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-                whiteSpace: 'nowrap',
-              }}
-            >
-              {scopeLabel}
-            </div>
+        <div className="fsdb-batch-head">
+          <div className="fsdb-batch-head-copy">
+            <h2 className="fsdb-batch-title">批量权限设置</h2>
+            <div className="fsdb-batch-sub">{scopeLabel}</div>
           </div>
           <button
             type="button"
             className="biu-float-close"
             onClick={onClose}
             aria-label="关闭"
-            style={{
-              position: 'static',
-              width: 28,
-              height: 28,
-              display: 'inline-flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              borderRadius: 6,
-              flexShrink: 0,
-            }}
           >
             <XMarkIcon className="size-4" />
           </button>
         </div>
 
-        <div style={{ padding: '0 18px 14px', display: 'flex', flexDirection: 'column', gap: 12, minHeight: 0, flex: 1 }}>
-          <div
-            data-testid="fsdb-batch-share-preview"
-            style={{
-              display: 'flex',
-              flexWrap: 'wrap',
-              alignItems: 'center',
-              gap: 6,
-              padding: '7px 10px',
-              borderRadius: 7,
-              background: 'var(--biu-color-bg-hover)',
-              fontSize: 12,
-              color: 'var(--biu-color-text-muted)',
-            }}
-          >
+        <div className="fsdb-batch-body">
+          <div className="fsdb-batch-preview" data-testid="fsdb-batch-share-preview">
             {loadingPreview ? (
               <span>正在统计可操作记录数…</span>
             ) : preview ? (
               <>
                 <span>
-                  命中 <strong style={{ color: 'var(--biu-color-text)' }}>{preview.totalCount}</strong> 条
+                  命中 <strong>{preview.totalCount}</strong> 条
                 </span>
                 <span>·</span>
                 <span>
-                  可操作 <strong style={{ color: 'var(--biu-color-text)' }}>{preview.manageableCount}</strong> 条
+                  可操作 <strong>{preview.manageableCount}</strong> 条
                 </span>
                 {preview.skippedCount > 0 ? (
                   <>
                     <span>·</span>
-                    <span style={{ color: 'var(--biu-color-warning, #f59e0b)' }}>
+                    <span className="fsdb-batch-preview-warn">
                       自动跳过 {preview.skippedCount} 条无管理权限
                     </span>
                   </>
@@ -428,17 +479,7 @@ export function BatchShareDialog({
             )}
           </div>
 
-          <div
-            role="tablist"
-            style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
-              gap: 3,
-              padding: 3,
-              borderRadius: 8,
-              background: 'var(--biu-color-bg-hover)',
-            }}
-          >
+          <div role="tablist" className="fsdb-batch-tabs">
             {([
               { id: 'grant', label: '批量授权' },
               { id: 'revoke', label: '批量回收' },
@@ -452,20 +493,10 @@ export function BatchShareDialog({
                   role="tab"
                   aria-selected={active}
                   data-testid={`fsdb-batch-mode-${tab.id}`}
+                  className={`fsdb-batch-tab${active ? ' is-on' : ''}`}
                   onClick={() => {
                     setMode(tab.id)
                     setDoneNotice('')
-                  }}
-                  style={{
-                    height: 28,
-                    borderRadius: 6,
-                    fontSize: 12,
-                    fontWeight: active ? 600 : 500,
-                    border: 'none',
-                    background: active ? 'var(--biu-color-bg-panel, var(--biu-color-bg))' : 'transparent',
-                    color: active ? 'var(--biu-color-text)' : 'var(--biu-color-text-muted)',
-                    boxShadow: active ? '0 1px 2px rgba(0,0,0,0.18)' : 'none',
-                    cursor: 'pointer',
                   }}
                 >
                   {tab.label}
@@ -476,155 +507,73 @@ export function BatchShareDialog({
 
           {mode === 'access_mode' ? (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-              <div style={{ fontSize: 12, color: 'var(--biu-color-text-muted)' }}>
+              <div className="fsdb-batch-access-note">
                 切换后仅修改通用访问档位，不会清空已添加的成员或外链授权。
               </div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+              <div className="fsdb-batch-access-grid">
                 <button
                   type="button"
                   data-testid="fsdb-batch-access-members"
+                  className={`fsdb-batch-access-card${accessMode === 'members' ? ' is-on' : ''}`}
                   onClick={() => setAccessMode('members')}
-                  style={{
-                    padding: '10px 12px',
-                    borderRadius: 8,
-                    textAlign: 'left',
-                    border: `1px solid ${accessMode === 'members' ? 'var(--biu-color-accent, var(--biu-color-emphasis))' : 'var(--biu-color-border)'}`,
-                    background: accessMode === 'members' ? 'var(--biu-color-bg-hover)' : 'transparent',
-                    color: 'var(--biu-color-text)',
-                    cursor: 'pointer',
-                  }}
                 >
-                  <div style={{ fontSize: 13, fontWeight: 600 }}>空间全员可访问</div>
-                  <div style={{ fontSize: 11, color: 'var(--biu-color-text-muted)', marginTop: 3 }}>
-                    空间内所有成员均可访问
-                  </div>
+                  <strong>空间全员可访问</strong>
+                  <span>空间内所有成员均可访问</span>
                 </button>
                 <button
                   type="button"
                   data-testid="fsdb-batch-access-private"
+                  className={`fsdb-batch-access-card${accessMode === 'private' ? ' is-on' : ''}`}
                   onClick={() => setAccessMode('private')}
-                  style={{
-                    padding: '10px 12px',
-                    borderRadius: 8,
-                    textAlign: 'left',
-                    border: `1px solid ${accessMode === 'private' ? 'var(--biu-color-accent, var(--biu-color-emphasis))' : 'var(--biu-color-border)'}`,
-                    background: accessMode === 'private' ? 'var(--biu-color-bg-hover)' : 'transparent',
-                    color: 'var(--biu-color-text)',
-                    cursor: 'pointer',
-                  }}
                 >
-                  <div style={{ fontSize: 13, fontWeight: 600 }}>仅受邀人员</div>
-                  <div style={{ fontSize: 11, color: 'var(--biu-color-text-muted)', marginTop: 3 }}>
-                    仅所有者与显式授权成员可访问
-                  </div>
+                  <strong>仅受邀人员</strong>
+                  <span>仅所有者与显式授权成员可访问</span>
                 </button>
               </div>
               {accessMode === 'members' ? (
-                <label
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    fontSize: 12,
-                    color: 'var(--biu-color-text-muted)',
-                    paddingTop: 2,
-                  }}
-                >
+                <div className="fsdb-batch-default-row">
                   <span>空间成员默认权限</span>
-                  <select
+                  <BatchSelect
+                    ariaLabel="空间成员默认权限"
+                    className="fsdb-batch-role-select"
                     value={memberDefaultRole}
-                    onChange={(e) => setMemberDefaultRole(e.target.value === 'editor' ? 'editor' : 'viewer')}
-                    style={{
-                      height: 30,
-                      padding: '0 8px',
-                      borderRadius: 6,
-                      fontSize: 12,
-                      border: 'var(--biu-stroke-width) solid var(--biu-color-border)',
-                      background: 'var(--biu-color-bg)',
-                      color: 'var(--biu-color-text)',
-                    }}
-                  >
-                    <option value="viewer">可查看</option>
-                    <option value="editor">可编辑</option>
-                  </select>
-                </label>
+                    options={MEMBER_DEFAULT_ROLE_OPTIONS}
+                    onChange={(next) => setMemberDefaultRole(next)}
+                  />
+                </div>
               ) : null}
             </div>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10, minHeight: 0, flex: 1 }}>
-              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              <div className="fsdb-batch-search-row">
                 <input
                   type="text"
+                  className="fsdb-batch-search"
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                   placeholder="搜索成员或成员视图…"
-                  style={{
-                    flex: 1,
-                    height: 32,
-                    padding: '0 10px',
-                    borderRadius: 7,
-                    fontSize: 12,
-                    border: 'var(--biu-stroke-width) solid var(--biu-color-border)',
-                    background: 'var(--biu-color-bg)',
-                    color: 'var(--biu-color-text)',
-                    outline: 'none',
-                  }}
                 />
                 {mode === 'grant' ? (
-                  <select
-                    aria-label="授予权限"
+                  <BatchSelect
+                    ariaLabel="授予权限"
+                    className="fsdb-batch-role-select"
                     value={role}
-                    onChange={(e) => setRole(e.target.value as BatchShareRole)}
-                    style={{
-                      height: 32,
-                      padding: '0 8px',
-                      borderRadius: 7,
-                      fontSize: 12,
-                      border: 'var(--biu-stroke-width) solid var(--biu-color-border)',
-                      background: 'var(--biu-color-bg)',
-                      color: 'var(--biu-color-text)',
-                    }}
-                  >
-                    {ROLE_OPTIONS.map((opt) => (
-                      <option key={opt.value} value={opt.value}>
-                        {opt.label}
-                      </option>
-                    ))}
-                  </select>
+                    options={ROLE_OPTIONS}
+                    onChange={(next) => setRole(next)}
+                  />
                 ) : null}
               </div>
 
               {selected.length > 0 ? (
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                <div className="fsdb-batch-chips">
                   {selected.map((s) => (
-                    <span
-                      key={`${s.type}:${s.id}`}
-                      style={{
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        gap: 5,
-                        height: 24,
-                        padding: '0 8px',
-                        borderRadius: 999,
-                        fontSize: 11,
-                        background: 'var(--biu-color-bg-hover)',
-                        color: 'var(--biu-color-text)',
-                      }}
-                    >
+                    <span key={`${s.type}:${s.id}`} className="fsdb-batch-chip">
                       {s.type === 'member_view' ? <LockClosedIcon className="size-3" /> : null}
                       <span>{s.label}</span>
                       <button
                         type="button"
                         aria-label={`移除 ${s.label}`}
                         onClick={() => setSelected((prev) => prev.filter((item) => !(item.type === s.type && item.id === s.id)))}
-                        style={{
-                          background: 'none',
-                          border: 'none',
-                          cursor: 'pointer',
-                          padding: 0,
-                          color: 'var(--biu-color-text-muted)',
-                          lineHeight: 1,
-                        }}
                       >
                         ×
                       </button>
@@ -633,30 +582,11 @@ export function BatchShareDialog({
                 </div>
               ) : null}
 
-              <div
-                style={{
-                  overflowY: 'auto',
-                  maxHeight: 260,
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: 10,
-                  margin: '0 -4px',
-                  padding: '0 4px',
-                }}
-              >
+              <div className="fsdb-batch-list">
                 {filteredViews.length > 0 ? (
                   <div>
-                    <div
-                      style={{
-                        fontSize: 11,
-                        fontWeight: 500,
-                        color: 'var(--biu-color-text-muted)',
-                        padding: '0 6px 4px',
-                      }}
-                    >
-                      成员视图
-                    </div>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                    <div className="fsdb-batch-section-title">成员视图</div>
+                    <div className="fsdb-batch-rows">
                       {filteredViews.map((v) => {
                         const picked = selectedKeySet.has(`member_view:${v.id}`)
                         return (
@@ -664,45 +594,21 @@ export function BatchShareDialog({
                             key={v.id}
                             type="button"
                             disabled={expandingViewId === v.id}
+                            className={`fsdb-batch-row${picked ? ' is-picked' : ''}`}
                             onClick={() => (v.isLocked ? toggleLockedView(v) : void expandUnlockedView(v))}
-                            style={{
-                              display: 'flex',
-                              alignItems: 'center',
-                              justifyContent: 'space-between',
-                              gap: 10,
-                              padding: '7px 8px',
-                              borderRadius: 7,
-                              border: 'none',
-                              background: picked ? 'var(--biu-color-bg-hover)' : 'transparent',
-                              color: 'var(--biu-color-text)',
-                              fontSize: 12,
-                              cursor: 'pointer',
-                              textAlign: 'left',
-                            }}
                           >
-                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 7, minWidth: 0 }}>
+                            <span className="fsdb-batch-row-main">
                               {v.isLocked ? (
-                                <LockClosedIcon className="size-3.5 shrink-0" style={{ color: 'var(--biu-color-text-muted)' }} />
+                                <LockClosedIcon className="fsdb-batch-row-icon size-3.5" />
                               ) : (
-                                <UserGroupIcon className="size-3.5 shrink-0" style={{ color: 'var(--biu-color-text-muted)' }} />
+                                <UserGroupIcon className="fsdb-batch-row-icon size-3.5" />
                               )}
-                              <span style={{ fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                {v.name}
-                              </span>
-                              <span style={{ fontSize: 11, color: 'var(--biu-color-text-muted)', flexShrink: 0 }}>
+                              <span className="fsdb-batch-row-name">{v.name}</span>
+                              <span className="fsdb-batch-row-meta">
                                 {v.isLocked ? `动态组 · ${v.memberCount} 人` : `名单 · ${v.memberCount} 人`}
                               </span>
                             </span>
-                            <span
-                              style={{
-                                display: 'inline-flex',
-                                alignItems: 'center',
-                                gap: 3,
-                                fontSize: 11,
-                                flexShrink: 0,
-                                color: picked ? 'var(--biu-color-accent, var(--biu-color-emphasis))' : 'var(--biu-color-text-muted)',
-                              }}
-                            >
+                            <span className="fsdb-batch-row-action">
                               {v.isLocked ? (
                                 picked ? <CheckIcon className="size-3.5" /> : '选择'
                               ) : expandingViewId === v.id ? (
@@ -719,76 +625,32 @@ export function BatchShareDialog({
                 ) : null}
 
                 <div>
-                  <div
-                    style={{
-                      fontSize: 11,
-                      fontWeight: 500,
-                      color: 'var(--biu-color-text-muted)',
-                      padding: '0 6px 4px',
-                    }}
-                  >
-                    空间成员（{filteredMembers.length}）
-                  </div>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                  <div className="fsdb-batch-section-title">空间成员（{filteredMembers.length}）</div>
+                  <div className="fsdb-batch-rows">
                     {filteredMembers.map((m) => {
                       const picked = selectedKeySet.has(`account:${m.id}`)
                       return (
                         <button
                           key={m.id}
                           type="button"
+                          className={`fsdb-batch-row${picked ? ' is-picked' : ''}`}
                           onClick={() => toggleMember(m)}
-                          style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'space-between',
-                            gap: 10,
-                            padding: '6px 8px',
-                            borderRadius: 7,
-                            border: 'none',
-                            background: picked ? 'var(--biu-color-bg-hover)' : 'transparent',
-                            color: 'var(--biu-color-text)',
-                            fontSize: 12,
-                            cursor: 'pointer',
-                            textAlign: 'left',
-                          }}
                         >
-                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+                          <span className="fsdb-batch-row-main">
                             {renderMiniAvatar(m.id, m.avatar)}
-                            <span style={{ fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                              {m.name}
-                            </span>
+                            <span className="fsdb-batch-row-name">{m.name}</span>
                             {m.memberKind === 'external' || m.memberKind === 'guest' ? (
-                              <span
-                                style={{
-                                  fontSize: 10,
-                                  padding: '1px 5px',
-                                  borderRadius: 999,
-                                  background: 'var(--biu-color-bg-hover)',
-                                  color: 'var(--biu-color-text-muted)',
-                                }}
-                              >
-                                外部
-                              </span>
+                              <span className="fsdb-batch-row-tag">外部</span>
                             ) : null}
                           </span>
-                          <span
-                            style={{
-                              display: 'inline-flex',
-                              alignItems: 'center',
-                              fontSize: 11,
-                              flexShrink: 0,
-                              color: picked ? 'var(--biu-color-accent, var(--biu-color-emphasis))' : 'var(--biu-color-text-muted)',
-                            }}
-                          >
+                          <span className="fsdb-batch-row-action">
                             {picked ? <CheckIcon className="size-3.5" /> : '选择'}
                           </span>
                         </button>
                       )
                     })}
                     {filteredMembers.length === 0 ? (
-                      <div style={{ fontSize: 12, color: 'var(--biu-color-text-muted)', padding: '6px 8px' }}>
-                        无匹配成员
-                      </div>
+                      <div className="fsdb-batch-empty">无匹配成员</div>
                     ) : null}
                   </div>
                 </div>
@@ -797,64 +659,27 @@ export function BatchShareDialog({
           )}
 
           {error ? (
-            <div style={{ fontSize: 12, color: 'var(--biu-color-danger, #ef4444)' }} role="alert">
+            <div className="fsdb-batch-error" role="alert">
               {error}
             </div>
           ) : null}
           {doneNotice ? (
-            <div style={{ fontSize: 12, color: 'var(--biu-color-success, #22c55e)' }} data-testid="fsdb-batch-share-done">
+            <div className="fsdb-batch-done" data-testid="fsdb-batch-share-done">
               {doneNotice}
             </div>
           ) : null}
         </div>
 
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'flex-end',
-            gap: 8,
-            padding: '12px 18px',
-            borderTop: 'var(--biu-stroke-width) solid var(--biu-color-border)',
-          }}
-        >
-          <button
-            type="button"
-            onClick={onClose}
-            style={{
-              height: 32,
-              padding: '0 14px',
-              borderRadius: 7,
-              fontSize: 12,
-              fontWeight: 500,
-              border: 'var(--biu-stroke-width) solid var(--biu-color-border)',
-              background: 'transparent',
-              color: 'var(--biu-color-text)',
-              cursor: 'pointer',
-            }}
-          >
+        <div className="fsdb-batch-foot">
+          <button type="button" className="fsdb-batch-cancel" onClick={onClose}>
             关闭
           </button>
           <button
             type="button"
             disabled={!canSubmit}
             data-testid="fsdb-batch-share-submit"
+            className="fsdb-batch-submit"
             onClick={() => void handleApply()}
-            style={{
-              height: 32,
-              padding: '0 14px',
-              borderRadius: 7,
-              fontSize: 12,
-              fontWeight: 500,
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: 6,
-              border: 'none',
-              background: 'var(--biu-color-accent, var(--biu-color-emphasis))',
-              color: '#fff',
-              cursor: canSubmit ? 'pointer' : 'not-allowed',
-              opacity: canSubmit ? 1 : 0.45,
-            }}
           >
             <ShieldCheckIcon className="size-3.5" aria-hidden />
             <span>
