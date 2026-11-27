@@ -56,12 +56,16 @@ function isLandingPreview() {
   return new URLSearchParams(window.location.search).get('landingPreview') === '1'
 }
 
+function readCurrentWorkspaceId() {
+  return readStorageString('biu.workspaceId', 'session') || readStorageString('biu.workspaceId') || ''
+}
+
 /** 快照比 shell 的 fetch 包装更早上；自己带上空间，避免本机第一次 /api/snapshot 没有 workspaceId。 */
 function snapshotRequestHeaders(): HeadersInit {
   const headers: Record<string, string> = {}
   if (typeof window === 'undefined' || isLandingPreview()) return headers
   try {
-    const workspaceId = readStorageString('biu.workspaceId', 'session') || readStorageString('biu.workspaceId') || ''
+    const workspaceId = readCurrentWorkspaceId()
     if (workspaceId) headers['x-biu-workspace-id'] = workspaceId
     const token = readStorageString('biu.account.token') || ''
     if (token) headers.authorization = `Bearer ${token}`
@@ -233,8 +237,8 @@ export class SnapshotService extends Service {
 
   private connect() {
     const seq = ++this.connectSeq
-    const preview = new URLSearchParams(location.search).get('landingPreview') === '1'
-    const workspaceId = preview ? '' : (readStorageString('biu.workspaceId', 'session') || readStorageString('biu.workspaceId') || '')
+    const preview = isLandingPreview()
+    const workspaceId = preview ? '' : readCurrentWorkspaceId()
     const query = preview ? '?landingPreview=1' : workspaceId ? `?workspaceId=${encodeURIComponent(workspaceId)}` : ''
     const ep = getWorkspaceEndpoint()
     if (!preview && ep.mode === 'cloud' && ep.origin) {
