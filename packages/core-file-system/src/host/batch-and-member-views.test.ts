@@ -218,6 +218,9 @@ async function setupHttpEnv() {
 test('member views API supports locked dynamic groups, unlocked snapshot resolve, and freeze/revoke release', async () => {
   const { db, collab, savedViews, http, ada, bob, cara, asUser } = await setupHttpEnv()
 
+  // Seed default workspace member views (member/external/guest) first
+  savedViews.ensureSeedViews('/workspace-members', { path: '/workspace-members', label: '空间成员' })
+
   // Admin creates a locked member view (role=member -> matches Bob) and Bob creates a personal shortcut view
   savedViews.applyPatch(
     '/workspace-members',
@@ -429,16 +432,29 @@ test('unified /views record ACL, lazy seed views, field-level patch with revisio
   assert.equal(blockedEdit.status, 403)
   assert.match(String(blockedEdit.body.error), /VIEW_LOCKED/)
 
-  // 4. Ada creates a private view filtered on status=done, then shares ONLY the view with Bob via /views record grant
+  // 4. Ada creates a view WITHOUT explicit accessMode -> defaults to personal (private), invisible to Bob until shared
   const createPriv = await asUser(ada.id, () =>
     http.call('POST', '/api/db/saved-views', {
       path: '/docs',
-      upsert: [{ id: 'v_done', name: '已完成视图', accessMode: 'private', filters: { status: 'done' } }],
+      upsert: [{ id: 'v_done', name: '已完成视图', filters: { status: 'done' } }],
     }),
   )
   assert.equal(createPriv.status, 200)
+  const adaCreated = (createPriv.body.views as Array<{ id: string; shareScope?: string }>).find((v) => v.id === 'v_done')
+  assert.equal(adaCreated?.shareScope, 'personal')
   const bobBeforeShare = await asUser(bob.id, () => http.call('GET', '/api/db/saved-views?path=/docs'))
   assert.equal((bobBeforeShare.body.views as Array<{ id: string }>).some((v) => v.id === 'v_done'), false)
+
+  // 4b. Nobody (even workspace owner Ada) can delete or privatize the ONLY remaining workspace view ('all')
+  const delLastWs = await asUser(ada.id, () =>
+    http.call('POST', '/api/db/saved-views', { path: '/docs', remove: ['all'] }),
+  )
+  assert.equal(delLastWs.status, 400)
+  assert.match(String(delLastWs.body.error), /至少保留一个空间视图/)
+  assert.throws(
+    () => asUser(ada.id, () => collab.setRecordAccessMode(ada.id, '/views', 'docs::all', 'private')),
+    /至少保留一个空间视图/,
+  )
 
   await asUser(ada.id, () => collab.shareWithEmail(ada.id, '/views', 'docs::v_done', bob.email, 'viewer', 'internal'))
   const bobAfterShare = await asUser(bob.id, () => http.call('GET', '/api/db/saved-views?path=/docs'))

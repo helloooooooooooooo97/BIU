@@ -84,11 +84,12 @@ describe('view role permissions & UI guards', () => {
 
     // H1 view title only renders editable input when canEditSavedView(activeView)
     assert.match(toolbarSrc, /activeView && canEditSavedView\(activeView\)/)
-    // ViewSettingsMenu uses canEditSavedView & canManageSavedView (respecting both viewRole and locked)
+    // ViewSettingsMenu uses canEditSavedView & canManageSavedView and omits permission/lock rows
     assert.match(settingsSrc, /canEditSavedView\(activeView\)/)
     assert.match(settingsSrc, /canManageSavedView\(activeView\)/)
-    // ViewOrderMenu gates delete per view via canDeleteSavedView(view)
-    assert.match(orderSrc, /canRemove=\{canRemove && canDeleteSavedView\(view\)\}/)
+    assert.doesNotMatch(settingsSrc, /fsdb-vset-share-row|fsdb-vset-lock-row/)
+    // ViewOrderMenu gates delete per view via canDeleteSavedView(view) and last workspace view protection
+    assert.match(orderSrc, /canRemove=\{canRemove && canDeleteSavedView\(view\) && canRemoveCollectionView\(views, view\)\}/)
     // CRUD keeps viewer edits local-only without server POST or localStorage pollution
     assert.match(crudSrc, /if \(!externalViews && !canEditSavedView\(current\)\)/)
     assert.match(crudSrc, /if \(!externalViews && !canEditSavedView\(target\)\) return/)

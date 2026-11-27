@@ -320,8 +320,17 @@ export function normalizeSavedView(view: SavedView): SavedView {
   return out
 }
 
-export function canRemoveCollectionView(views: Array<{ id: string; ephemeral?: boolean }>) {
-  return views.filter((v) => !v.ephemeral).length > 1
+export function canRemoveCollectionView(
+  views: Array<{ id: string; ephemeral?: boolean; shareScope?: ViewShareScope }>,
+  target?: { id: string; ephemeral?: boolean; shareScope?: ViewShareScope } | null,
+) {
+  const persisted = views.filter((v) => !v.ephemeral)
+  if (persisted.length <= 1) return false
+  if (target?.shareScope === 'workspace') {
+    const workspaceCount = persisted.filter((v) => v.shareScope === 'workspace').length
+    if (workspaceCount <= 1) return false
+  }
+  return true
 }
 
 export function sortViewsByRank(views: SavedView[]): SavedView[] {

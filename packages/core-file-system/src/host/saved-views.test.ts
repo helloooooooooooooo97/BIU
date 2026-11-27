@@ -347,7 +347,7 @@ test('unified PolicyViewGuard enforces visibility, edit/manage/delete ACL, and o
       return view.createdBy === acc || acc === 'admin-1'
     },
     canRemoveView: (_ws, _col, view, acc) => view.createdBy === acc || acc === 'admin-1',
-    shareScopesFor: () => new Map([['pages::v-private', 'personal'], ['pages::v-team', 'workspace']]),
+    shareScopesFor: () => new Map([['pages::v-private', 'personal'], ['pages::v-team', 'workspace'], ['pages::v-all', 'workspace']]),
     viewRoleFor: (_ws, _col, view, acc) =>
       roles.get(`${view.id}:${acc}`) ??
       (view.createdBy === acc ? 'owner' : acc === 'admin-1' ? 'manager' : 'viewer'),
@@ -400,7 +400,14 @@ test('unified PolicyViewGuard enforces visibility, edit/manage/delete ACL, and o
   store.applyPatch('/pages', { upsert: [{ id: 'v-team', name: 'Unlocked Again' }] }, 'bob')
   assert.equal(store.viewsFor('/pages', 'bob').find((v) => v.id === 'v-team')?.name, 'Unlocked Again')
 
-  // Delete triggers onRemoved
+  // Cannot delete the ONLY remaining workspace view even as admin when a personal view exists
+  assert.throws(
+    () => store.applyPatch('/pages', { remove: ['v-team'] }, 'admin-1'),
+    /至少保留一个空间视图/,
+  )
+
+  // Adding a second workspace view allows deleting v-team and triggers onRemoved
+  store.applyPatch('/pages', { upsert: [{ id: 'v-all', name: 'All Pages', accessMode: 'members' }] }, 'admin-1')
   store.applyPatch('/pages', { remove: ['v-team'] }, 'admin-1')
   assert.deepEqual(removedCalls, ['/pages:v-team'])
 })

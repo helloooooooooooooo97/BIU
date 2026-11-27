@@ -2341,6 +2341,31 @@ export class CollabStore {
     if (!workspaceId) throw new CollabError('没有工作区', 400)
     this.requireMember(actorId, workspaceId)
     const target = this.resolveRecordTarget(collection, recordId)
+    if (target.collection === '/views' && accessMode === 'private') {
+      const sep = target.recordId.indexOf('::')
+      if (sep > 0) {
+        const tablePrefix = `${target.recordId.slice(0, sep)}::`
+        const current = this.db
+          .prepare(
+            `SELECT access_mode FROM resource_policies
+             WHERE workspace_id = ? AND collection = '/views' AND record_id = ?`,
+          )
+          .get(workspaceId, target.recordId) as { access_mode?: string } | undefined
+        if (current?.access_mode === 'members') {
+          const row = this.db
+            .prepare(
+              `SELECT COUNT(*) AS cnt FROM resource_policies
+               WHERE workspace_id = ? AND collection = '/views'
+                 AND substr(record_id, 1, ?) = ?
+                 AND access_mode = 'members'`,
+            )
+            .get(workspaceId, tablePrefix.length, tablePrefix) as { cnt?: number } | undefined
+          if (Number(row?.cnt ?? 0) <= 1) {
+            throw new CollabError('至少保留一个空间视图', 400)
+          }
+        }
+      }
+    }
     const resource = { type: 'record' as const, workspaceId, collection: target.collection, recordId: target.recordId }
     try {
       this.authorization.setAccessMode(

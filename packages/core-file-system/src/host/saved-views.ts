@@ -272,6 +272,24 @@ export class SavedViewsStore {
     }
   }
 
+  private assertWorkspaceViewRemains(
+    workspaceId: string,
+    path: string,
+    prevViews: StoredView[],
+    remainingViews: StoredView[],
+  ) {
+    if (remainingViews.length < 1) {
+      throw new Error('至少保留一个视图')
+    }
+    if (isIndexCollection(path) || !workspaceId || !this.policyGuard?.shareScopesFor) return
+    const scopes = this.policyGuard.shareScopesFor(workspaceId)
+    const countWorkspace = (list: StoredView[]) =>
+      list.filter((view) => scopes.get(viewRecordId(path, view.id)) === 'workspace').length
+    if (countWorkspace(prevViews) >= 1 && countWorkspace(remainingViews) < 1) {
+      throw new Error('至少保留一个空间视图')
+    }
+  }
+
   private assertCanRemoveView(
     workspaceId: string,
     path: string,
@@ -498,13 +516,10 @@ export class SavedViewsStore {
             : 'editor'
       return { accessMode: 'members', memberDefaultRole: defaultRole }
     }
-    // /data 聚合表默认个人视图；普通表默认空间可编辑（与历史行为一致）
-    if (path === DATA_COLLECTION_PATH) {
-      return { accessMode: 'private', memberDefaultRole: 'viewer' }
-    }
+    // 默认新建视图均为私人（仅创建者可见），需共享或公开给全员时通过分享弹窗主动调整
     return {
-      accessMode: 'members',
-      memberDefaultRole: incoming.locked ? 'viewer' : 'editor',
+      accessMode: 'private',
+      memberDefaultRole: 'viewer',
     }
   }
 
@@ -548,8 +563,8 @@ export class SavedViewsStore {
     }
 
     const mergedAll = [...keptForeign, ...incomingList]
-    if (removedIds.length > 0 && mergedAll.length < 1) {
-      throw new Error('至少保留一个视图')
+    if (removedIds.length > 0) {
+      this.assertWorkspaceViewRemains(workspaceId, path, prev, mergedAll)
     }
     this.persistDelta(path, incomingList, removedIds, workspaceId)
     this.byPath.set(key, mergedAll)
@@ -612,8 +627,8 @@ export class SavedViewsStore {
       }
     }
 
-    if (removedIds.length > 0 && next.length < 1) {
-      throw new Error('至少保留一个视图')
+    if (removedIds.length > 0) {
+      this.assertWorkspaceViewRemains(workspaceId, path, prev, next)
     }
 
     this.persistDelta(path, upsertedViews, removedIds, workspaceId)
@@ -757,7 +772,7 @@ export class SavedViewsStore {
       if (!hit) continue
       this.assertCanRemoveView(workspaceId, path, viewId, accountId, hit)
       const remaining = views.filter((view) => view !== hit)
-      if (remaining.length < 1) throw new Error('至少保留一个视图')
+      this.assertWorkspaceViewRemains(workspaceId, path, views, remaining)
       this.persistDelta(path, [], [viewId], workspaceId)
       this.byPath.set(key, remaining)
       this.policyGuard?.onRemoved?.(workspaceId, path, viewId)

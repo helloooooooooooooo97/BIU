@@ -2740,8 +2740,8 @@ export function apply(ctx: Context) {
       const ownerId = ownerAccountId || account.store.workspaceOwnerId?.(workspaceId) || ''
       if (!ownerId) return
       account.store.attachAs(workspaceId, VIEWS_COLLECTION_PATH, recId, ownerId, {
-        accessMode: initialPolicy?.accessMode ?? 'members',
-        memberDefaultRole: initialPolicy?.memberDefaultRole ?? (view.locked ? 'viewer' : 'editor'),
+        accessMode: initialPolicy?.accessMode ?? 'private',
+        memberDefaultRole: initialPolicy?.memberDefaultRole ?? 'viewer',
       })
     },
     onRemoved: (workspaceId, collection, viewId) => {

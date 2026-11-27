@@ -268,13 +268,14 @@ export function createBrowserViewCrud(opts: BrowserViewCrudOptions) {
     const listed = target === collectionPath ? paintListedViews(target) : allListed
     const extraFilters: Record<string, string> =
       !isDataAgg && scope ? { $scope: scope } : {}
-    const accessMode: 'private' | 'members' = isDataAgg || scope === 'personal' ? 'private' : 'members'
+    const accessMode: 'private' | 'members' = !isDataAgg && scope === 'workspace' ? 'members' : 'private'
     const view: SavedViewFieldPatch = {
       ...makeEmptyView(
         listed,
         target === collectionPath ? [...schemaDefaultKeys] : [],
         extraFilters,
       ),
+      shareScope: accessMode === 'members' ? 'workspace' : 'personal',
       accessMode,
       ...(accessMode === 'members' ? { memberDefaultRole: 'editor' } : {}),
     }
@@ -300,7 +301,7 @@ export function createBrowserViewCrud(opts: BrowserViewCrudOptions) {
     const isDataAgg = normalizeCollectionPath(collectionPath) === DATA_COLLECTION_PATH
     const { accessMode: explicitAccessMode, ...viewOverrides } = overrides ?? {}
     const accessMode: 'private' | 'members' =
-      explicitAccessMode ?? (isDataAgg || viewOverrides.shareScope === 'personal' ? 'private' : 'members')
+      explicitAccessMode ?? (!isDataAgg && viewOverrides.shareScope === 'workspace' ? 'members' : 'private')
     const baseView: SavedView = source
       ? {
           ...source,
@@ -311,7 +312,7 @@ export function createBrowserViewCrud(opts: BrowserViewCrudOptions) {
           ephemeral: undefined,
           createdBy: undefined,
           viewRole: undefined,
-          shareScope: undefined,
+          shareScope: accessMode === 'members' ? 'workspace' : 'personal',
           hasExternal: undefined,
           revision: undefined,
         }
@@ -488,8 +489,8 @@ export function createBrowserViewCrud(opts: BrowserViewCrudOptions) {
     if (!canDeleteSavedView(view)) return
     const stored = loadViews(path)
     const currentVisible = path === collectionPath ? viewsRef.current : stored
-    if (!canRemoveCollectionView(currentVisible)) {
-      setViewsSaveError('至少保留一个视图')
+    if (!canRemoveCollectionView(currentVisible, view)) {
+      setViewsSaveError(view.shareScope === 'workspace' ? '至少保留一个空间视图' : '至少保留一个视图')
       return
     }
     const removedId = view.id

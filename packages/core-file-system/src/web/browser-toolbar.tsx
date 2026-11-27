@@ -783,12 +783,10 @@ export const BrowserListChrome = memo(function BrowserListChrome(props: BrowserL
                         sheet={sheet && !hasExternalViews}
                         collectionPath={collectionPath}
                         title={title}
-                        localData={localData}
                         activeView={activeView}
                         commitViewName={commitViewName}
                         onSaveAsPersonal={activeView ? () => copyView(activeView, { accessMode: 'private' }) : undefined}
                         onToggleViewLock={toggleViewLock}
-                        onOpenViewShare={isCloud ? () => openViewShare(activeView) : undefined}
                         mode={mode}
                         setMode={setMode}
                         extraViews={extraViews}

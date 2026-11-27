@@ -259,6 +259,7 @@ html.dark .fsdb-views {
 .app-side-bar.is-narrow .sidebar-chat-count,
 .app-side-bar.is-narrow .chat-session-row-delete,
 .app-side-bar.is-narrow .chat-session-row-star,
+.app-side-bar.is-narrow .sidebar-view-status,
 .app-side-bar.is-narrow .sidebar-trail-icon {
   display: none;
 }
