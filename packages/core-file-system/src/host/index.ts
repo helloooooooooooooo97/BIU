@@ -1108,6 +1108,10 @@ export class DatabaseService extends Service implements Database {
     http?.broadcast?.(DATABASE_CHANNEL, databaseChannelPayload('tags'))
   }
 
+  purgeWorkspaceCaches() {
+    this.clearVisibleCaches()
+  }
+
   private clearVisibleCaches() {
     this.visibleGen += 1
     this.access.clearCaches()
@@ -2634,6 +2638,7 @@ export function apply(ctx: Context) {
   db.savedViews = savedViews
   ctx.on('workspace/deleted' as never, ({ workspaceId }: { workspaceId?: string }) => {
     if (workspaceId) savedViews.clearWorkspace(workspaceId)
+    db.purgeWorkspaceCaches()
   })
   db.recordViews.open(biuSqlitePath())
   const account = ctx.get('account') as {

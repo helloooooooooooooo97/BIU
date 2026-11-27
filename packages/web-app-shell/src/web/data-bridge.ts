@@ -1,5 +1,6 @@
 import { createElement, type ComponentType, type ReactNode } from 'react'
 import { apiFetch } from '@biu/biu-ui/api-client'
+import { registerWorkspaceCache } from '@biu/biu-ui/cache'
 import type { CollectionActionInfo, CollectionSchemaPack, DbRecord } from '@biu/type-file-system'
 
 /**
@@ -75,6 +76,8 @@ async function defaultGetWorkspaceProfile(): Promise<ShellWorkspaceProfile | nul
 function defaultResetWorkspaceProfileGet() {
   defaultProfileInflight = null
 }
+
+registerWorkspaceCache('shell-data-bridge-profile', defaultResetWorkspaceProfileGet)
 
 const EmptyComponent: ComponentType<Record<string, unknown>> = () => null
 const DEFAULT_PAGE_PREFS: ShellPagePrefs = {}

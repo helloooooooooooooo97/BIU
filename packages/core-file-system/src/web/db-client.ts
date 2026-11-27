@@ -1,10 +1,44 @@
-import type { CollectionSchema, DbRecord } from '@biu/type-file-system'
+import type { CollectionInfo, CollectionSchema, DbRecord } from '@biu/type-file-system'
 import { ApiHttpError, apiJson, invalidateApiInflight } from '@biu/biu-ui/api-client'
+import { registerWorkspaceCache } from '@biu/biu-ui/cache'
 
 /** Unified HTTP error alias so callers checking `instanceof HttpError` share `@biu/biu-ui/api-client`. */
 export { ApiHttpError as HttpError }
 
 const GET_INFLIGHT_HOLD_MS = 400
+
+let cachedRootCollections: CollectionInfo[] | null = null
+let rootCollectionsInflight: Promise<CollectionInfo[]> | null = null
+let rootCollectionsGen = 0
+
+registerWorkspaceCache('db-client-root-collections', () => {
+  rootCollectionsGen += 1
+  cachedRootCollections = null
+  rootCollectionsInflight = null
+})
+
+export function peekRootCollections(): CollectionInfo[] | null {
+  return cachedRootCollections
+}
+
+/** Cached workspace-scoped `/api/db/stat?path=/` collection list shared across embedded blocks. */
+export function loadRootCollections(): Promise<CollectionInfo[]> {
+  if (cachedRootCollections) return Promise.resolve(cachedRootCollections)
+  if (rootCollectionsInflight) return rootCollectionsInflight
+  const startGen = rootCollectionsGen
+  const req = readJson<{ collections?: CollectionInfo[] }>('/api/db/stat?path=/')
+    .then((body) => {
+      const next = body.collections ?? []
+      if (rootCollectionsGen === startGen) cachedRootCollections = next
+      return next
+    })
+    .catch(() => [])
+    .finally(() => {
+      if (rootCollectionsInflight === req) rootCollectionsInflight = null
+    })
+  rootCollectionsInflight = req
+  return req
+}
 
 export async function readJson<T>(path: string, init?: RequestInit, opts?: { fresh?: boolean }): Promise<T> {
   return apiJson<T>(path, init, {

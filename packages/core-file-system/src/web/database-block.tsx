@@ -5,7 +5,7 @@ import { normalizeCollectionPath } from '../paths.ts'
 import { CollectionBrowser } from './browser.tsx'
 import { DATA_COLLECTION_PATH, sortDataCollections } from './database-path.ts'
 import { getDatabaseUi } from './database-ui.ts'
-import { readJson } from './db-client.ts'
+import { loadRootCollections, peekRootCollections } from './db-client.ts'
 import { showRecordInInspector } from './inspector-db-route.ts'
 import { normalizeSavedView, type SavedView } from './saved-view.ts'
 
@@ -20,9 +20,6 @@ type PersistedBlockViews = {
   views: SavedView[]
   activeViewId: string
 }
-
-let cachedTables: CollectionInfo[] | null = null
-let tablesInflight: Promise<CollectionInfo[]> | null = null
 
 export function newDatabaseBlockFile() {
   const id =
@@ -142,18 +139,7 @@ async function saveJsonAsset(
 }
 
 function loadBlockTables(): Promise<CollectionInfo[]> {
-  if (cachedTables) return Promise.resolve(cachedTables)
-  if (tablesInflight) return tablesInflight
-  tablesInflight = readJson<{ collections?: CollectionInfo[] }>('/api/db/stat?path=/')
-    .then((body) => {
-      cachedTables = body.collections ?? []
-      return cachedTables
-    })
-    .catch(() => [])
-    .finally(() => {
-      tablesInflight = null
-    })
-  return tablesInflight
+  return loadRootCollections()
 }
 
 function defaultBlockView(collectionPath: string, legacyView?: unknown): SavedView {
@@ -207,7 +193,7 @@ export function DatabaseBlockView({ data, update, writable, selected }: Database
   const file = typeof data.file === 'string' ? data.file.trim() : ''
   const hasInlineLegacy = Boolean(data.views !== undefined || data.view !== undefined || data.activeViewId !== undefined)
 
-  const [tables, setTables] = useState<CollectionInfo[]>(() => cachedTables ?? [])
+  const [tables, setTables] = useState<CollectionInfo[]>(() => peekRootCollections() ?? [])
   const [loadedViews, setLoadedViews] = useState<PersistedBlockViews | null>(() =>
     !file ? parseBlockViews(data, collectionPath) : null,
   )
@@ -219,8 +205,9 @@ export function DatabaseBlockView({ data, update, writable, selected }: Database
   const migratedFileRef = useRef('')
 
   useEffect(() => {
-    if (cachedTables) {
-      setTables(cachedTables)
+    const cached = peekRootCollections()
+    if (cached) {
+      setTables(cached)
       return
     }
     let alive = true

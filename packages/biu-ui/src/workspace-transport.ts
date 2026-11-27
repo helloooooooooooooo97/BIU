@@ -1,4 +1,5 @@
 import { abortApiScope, apiFetch } from './api-client.ts'
+import { resetWorkspaceClientCaches } from './cache.ts'
 import { readStorageString } from './client-storage.ts'
 
 export type AssetTicket = {
@@ -85,13 +86,15 @@ export function setWorkspaceEndpoint(next: WorkspaceEndpoint): void {
     ...(next.token ? { token: next.token } : {}),
     assetTicket: next.assetTicket ?? null,
   }
-  const changed =
+  const scopeChanged =
     normalized.mode !== activeEndpoint.mode ||
     normalized.origin !== activeEndpoint.origin ||
-    normalized.workspaceId !== activeEndpoint.workspaceId ||
-    normalized.token !== activeEndpoint.token
+    normalized.workspaceId !== activeEndpoint.workspaceId
+  const changed = scopeChanged || normalized.token !== activeEndpoint.token
   activeEndpoint = normalized
-  if (changed) {
+  if (scopeChanged) {
+    resetWorkspaceClientCaches()
+  } else if (changed) {
     abortApiScope('workspace-endpoint-changed')
   }
   for (const fn of endpointListeners) {

@@ -1,11 +1,11 @@
 import { apiFetch } from '@biu/biu-ui/api-client'
+import { BoundedMap, registerWorkspaceCache } from '@biu/biu-ui/cache'
 import { useSyncExternalStore } from 'react'
 import { BIU_ASSET_CHANGED_EVENT } from '@biu/type-file-system'
 import type { RecordSandboxView } from '@biu/type-file-system/record-views'
 import { parseRecordLayouts, parseRecordSandboxes, seedRecordSandbox } from '@biu/type-file-system/record-views'
 import { normalizeCollectionPath } from '../paths.ts'
 import { emitViewCatalogChange, getRecordViewCatalog, patchRecordViewCatalog } from './record-view-catalog.ts'
-import { registerWorkspaceCache } from './workspace-client-store.ts'
 
 function recordViewFileUrl(collectionPath: string, recordId: string, name: string) {
   const path = `${normalizeCollectionPath(collectionPath)}/${recordId}`
@@ -18,7 +18,7 @@ function assetEtag(raw: string) {
 }
 
 const MAX_FILE_CACHE_ENTRIES = 200
-const fileCache = new Map<string, { text: string; etag: string }>()
+const fileCache = new BoundedMap<string, { text: string; etag: string }>(MAX_FILE_CACHE_ENTRIES)
 let fileSeq = 0
 const fileListeners = new Set<() => void>()
 
@@ -49,13 +49,7 @@ function bumpFile() {
 }
 
 function touchCache(key: string, entry: { text: string; etag: string }) {
-  if (fileCache.has(key)) fileCache.delete(key)
   fileCache.set(key, entry)
-  while (fileCache.size > MAX_FILE_CACHE_ENTRIES) {
-    const oldest = fileCache.keys().next().value
-    if (oldest === undefined) break
-    fileCache.delete(oldest)
-  }
 }
 
 export function rememberRecordViewFile(collectionPath: string, recordId: string, name: string, text: string, etag = '') {
@@ -63,11 +57,7 @@ export function rememberRecordViewFile(collectionPath: string, recordId: string,
 }
 
 export function peekRecordViewFile(collectionPath: string, recordId: string, name: string) {
-  const key = cacheKey(collectionPath, recordId, name)
-  const hit = fileCache.get(key)
-  if (!hit) return undefined
-  touchCache(key, hit)
-  return hit.text
+  return fileCache.get(cacheKey(collectionPath, recordId, name))?.text
 }
 export function subscribeRecordViewFileTick(fn: () => void) {
   fileListeners.add(fn)

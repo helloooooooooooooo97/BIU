@@ -1,4 +1,5 @@
 import { apiFetch } from '@biu/biu-ui/api-client'
+import { registerWorkspaceCache } from '@biu/biu-ui/cache'
 import { registerShellDataBridge, type ShellDatabaseUi } from '@biu/web-app-shell/data-bridge'
 import { getPagePrefs, getWorkspaceProfile, hydratePagePrefs, resetWorkspaceProfileGet, subscribePageWidth } from './page-width.ts'
 import { overlayDataRoute } from './main-data-route.ts'
@@ -326,6 +327,10 @@ function CollectionPage(props: SlotProps) {
 }
 
 let collectionsInflight: Promise<CollectionInfo[]> | null = null
+
+registerWorkspaceCache('core-fs-collections-inflight', () => {
+  collectionsInflight = null
+})
 
 async function loadCollections(): Promise<CollectionInfo[]> {
   if (collectionsInflight) return collectionsInflight

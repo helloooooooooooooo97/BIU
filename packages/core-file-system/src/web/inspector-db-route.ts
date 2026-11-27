@@ -1,6 +1,7 @@
 /** 检查器里每个数据库 Tab 有自己的路径，不改中间主界面。 */
 
 import { readStorageString, writeStorageString } from '@biu/biu-ui/client-storage'
+import { registerWorkspaceCache } from '@biu/biu-ui/cache'
 import { CONTENT_JUMP_EVENT, parseContentJump } from '@biu/type-file-system'
 import { parseAppPath } from '@biu/web-session-view'
 import { normalizeCollectionPath } from '../paths.ts'
@@ -30,6 +31,15 @@ const workingViews = new Map<string, string>()
 const abandonedPanes = new Set<string>()
 const working = new Set<string>()
 const workingListeners = new Set<() => void>()
+
+registerWorkspaceCache('inspector-db-route', () => {
+  paths.clear()
+  workingViews.clear()
+  abandonedPanes.clear()
+  working.clear()
+  for (const fn of listeners) fn()
+  for (const fn of workingListeners) fn()
+})
 const FOLLOW_KEY = 'inspector.agentFollow'
 const followListeners = new Set<() => void>()
 let followLoaded = false
