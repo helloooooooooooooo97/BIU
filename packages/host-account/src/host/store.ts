@@ -2220,8 +2220,7 @@ export class CollabStore {
     this.authorization.invalidate(workspaceId, collection)
   }
 
-  /** 查询某集合内存在外部/访客协作者授权的 record_id 集合（正交外部标记）。 */
-  collectionExternalSharedIds(workspaceId: string, collection: string): Set<string> {
+  private directExternalRecordIds(workspaceId: string, collection: string): Set<string> {
     if (!workspaceId || !collection) return new Set()
     const rows = this.db
       .prepare(
@@ -2235,6 +2234,11 @@ export class CollabStore {
       )
       .all(workspaceId, collection) as Array<{ record_id: string }>
     return new Set(rows.map((r) => r.record_id))
+  }
+
+  /** 查询某集合内存在外部/访客协作者授权的 record_id 集合（正交外部标记）。 */
+  collectionExternalSharedIds(workspaceId: string, collection: string): Set<string> {
+    return this.directExternalRecordIds(workspaceId, collection)
   }
 
   canReadRecord(collection: string, recordId: string, record?: Record<string, unknown>, actorId?: string) {
@@ -2539,9 +2543,11 @@ export class CollabStore {
     return this.accessRows(workspaceId, target.collection, target.recordId)
   }
 
-  /** Notion 对齐三态内部域：'workspace'（空间全员） / 'shared'（仅受邀协作者，不论内外，含继承链） / 'personal'（仅创建者）。 */
-  collectionOwnership(workspaceId: string, collection: string) {
-    type PolicyRow = {
+  /**
+   * 预加载主集合的 `resource_policies`，并为跨集合父子继承提供按需懒查与环路保护的记忆化 DFS 求解器。
+   */
+  private createCollectionPolicyGraph(workspaceId: string, collection: string) {
+    type PolicySummary = {
       record_id: string
       access_mode: string
       owner_account_id: string
@@ -2554,11 +2560,57 @@ export class CollabStore {
          FROM resource_policies
          WHERE workspace_id = ? AND collection = ?`,
       )
-      .all(workspaceId, collection) as PolicyRow[]
-    const policyByKey = new Map<string, PolicyRow>()
-    for (const row of policies) {
-      policyByKey.set(`${collection}\t${row.record_id}`, row)
+      .all(workspaceId, collection) as PolicySummary[]
+    const policyById = new Map(policies.map((row) => [row.record_id, row]))
+    const crossPolicyCache = new Map<string, PolicySummary | null>()
+
+    const getPolicy = (col: string, recId: string): PolicySummary | null => {
+      if (col === collection) return policyById.get(recId) ?? null
+      const key = `${col}\t${recId}`
+      if (crossPolicyCache.has(key)) return crossPolicyCache.get(key) ?? null
+      const row = this.db
+        .prepare(
+          `SELECT record_id, access_mode, owner_account_id, parent_collection, parent_record_id
+           FROM resource_policies
+           WHERE workspace_id = ? AND collection = ? AND record_id = ?`,
+        )
+        .get(workspaceId, col, recId) as PolicySummary | undefined
+      const found = row ?? null
+      crossPolicyCache.set(key, found)
+      return found
     }
+
+    const createResolver = <T>(
+      fallbackOnCycle: T,
+      evaluate: (
+        col: string,
+        recId: string,
+        policy: PolicySummary | null,
+        resolveParent: (parentCol: string, parentId: string) => T,
+      ) => T,
+    ) => {
+      const memo = new Map<string, T>()
+      const walk = (col: string, recId: string, visiting = new Set<string>(), depth = 0): T => {
+        const key = `${col}\t${recId}`
+        if (memo.has(key)) return memo.get(key)!
+        if (visiting.has(key) || depth > 64) return fallbackOnCycle
+        visiting.add(key)
+        const value = evaluate(col, recId, getPolicy(col, recId), (parentCol, parentId) =>
+          walk(parentCol, parentId, visiting, depth + 1),
+        )
+        visiting.delete(key)
+        memo.set(key, value)
+        return value
+      }
+      return walk
+    }
+
+    return { policies, policyById, getPolicy, createResolver }
+  }
+
+  /** Notion 对齐三态内部域：'workspace'（空间全员） / 'shared'（仅受邀协作者，不论内外，含继承链） / 'personal'（仅创建者）。 */
+  collectionOwnership(workspaceId: string, collection: string) {
+    const { policies, policyById, createResolver } = this.createCollectionPolicyGraph(workspaceId, collection)
 
     const grants = this.db
       .prepare(
@@ -2567,43 +2619,23 @@ export class CollabStore {
          WHERE workspace_id = ? AND collection = ?`,
       )
       .all(workspaceId, collection) as Array<{ record_id: string; subject_type: string; subject_id: string }>
-    const directSharedKeys = new Set<string>()
+    const directSharedIds = new Set<string>()
     for (const grant of grants) {
-      const key = `${collection}\t${grant.record_id}`
-      const ownerId = policyByKey.get(key)?.owner_account_id ?? ''
+      const ownerId = policyById.get(grant.record_id)?.owner_account_id ?? ''
       if (grant.subject_type === 'account' && ownerId && grant.subject_id === ownerId) continue
-      directSharedKeys.add(key)
+      directSharedIds.add(grant.record_id)
     }
 
     const ownedRows = this.db
-      .prepare(
-        `SELECT record_id FROM record_owners WHERE workspace_id = ? AND collection = ?`,
-      )
+      .prepare(`SELECT record_id FROM record_owners WHERE workspace_id = ? AND collection = ?`)
       .all(workspaceId, collection) as Array<{ record_id: string }>
-    const legacyOwnedKeys = new Set<string>(ownedRows.map((row) => `${collection}\t${row.record_id}`))
+    const legacyOwnedIds = new Set<string>(ownedRows.map((row) => row.record_id))
 
-    // 跨集合继承按需懒查询（极少触发，避免全库扫描）
-    const crossPolicyCache = new Map<string, PolicyRow | null>()
     const crossSharedCache = new Map<string, boolean>()
     const crossLegacyCache = new Map<string, boolean>()
-    const getPolicy = (col: string, recId: string): PolicyRow | null => {
-      const key = `${col}\t${recId}`
-      if (col === collection) return policyByKey.get(key) ?? null
-      if (crossPolicyCache.has(key)) return crossPolicyCache.get(key) ?? null
-      const row = this.db
-        .prepare(
-          `SELECT record_id, access_mode, owner_account_id, parent_collection, parent_record_id
-           FROM resource_policies
-           WHERE workspace_id = ? AND collection = ? AND record_id = ?`,
-        )
-        .get(workspaceId, col, recId) as PolicyRow | undefined
-      const found = row ?? null
-      crossPolicyCache.set(key, found)
-      return found
-    }
     const hasDirectGrant = (col: string, recId: string, ownerId: string): boolean => {
+      if (col === collection) return directSharedIds.has(recId)
       const key = `${col}\t${recId}`
-      if (col === collection) return directSharedKeys.has(key)
       if (crossSharedCache.has(key)) return crossSharedCache.get(key)!
       const rows = this.db
         .prepare(
@@ -2616,52 +2648,34 @@ export class CollabStore {
       return shared
     }
     const hasLegacyOwner = (col: string, recId: string): boolean => {
+      if (col === collection) return legacyOwnedIds.has(recId)
       const key = `${col}\t${recId}`
-      if (col === collection) return legacyOwnedKeys.has(key)
       if (crossLegacyCache.has(key)) return crossLegacyCache.get(key)!
-      const row = this.db
-        .prepare(`SELECT 1 FROM record_owners WHERE workspace_id = ? AND collection = ? AND record_id = ? LIMIT 1`)
-        .get(workspaceId, col, recId)
-      const hit = Boolean(row)
+      const hit = Boolean(
+        this.db
+          .prepare(`SELECT 1 FROM record_owners WHERE workspace_id = ? AND collection = ? AND record_id = ? LIMIT 1`)
+          .get(workspaceId, col, recId),
+      )
       crossLegacyCache.set(key, hit)
       return hit
     }
 
-    const resolved = new Map<string, 'personal' | 'workspace' | 'shared'>()
-    const resolveScope = (
-      col: string,
-      recId: string,
-      visiting = new Set<string>(),
-      depth = 0,
-    ): 'personal' | 'workspace' | 'shared' => {
-      const key = `${col}\t${recId}`
-      const cached = resolved.get(key)
-      if (cached) return cached
-      if (visiting.has(key) || depth > 64) return 'personal'
-      visiting.add(key)
-      const policy = getPolicy(col, recId)
-      let scope: 'personal' | 'workspace' | 'shared'
-      if (!policy) {
-        scope = hasLegacyOwner(col, recId) ? 'workspace' : hasDirectGrant(col, recId, '') ? 'shared' : 'personal'
-      } else if (policy.access_mode === 'members') {
-        scope = 'workspace'
-      } else if (policy.access_mode === 'inherit' && policy.parent_record_id) {
-        const parentCol = policy.parent_collection || col
-        const parentScope = resolveScope(parentCol, policy.parent_record_id, visiting, depth + 1)
-        if (parentScope === 'workspace') {
-          scope = 'workspace'
-        } else if (parentScope === 'shared' || hasDirectGrant(col, recId, policy.owner_account_id)) {
-          scope = 'shared'
-        } else {
-          scope = 'personal'
+    const resolveScope = createResolver<'personal' | 'workspace' | 'shared'>(
+      'personal',
+      (col, recId, policy, resolveParent) => {
+        if (!policy) {
+          return hasLegacyOwner(col, recId) ? 'workspace' : hasDirectGrant(col, recId, '') ? 'shared' : 'personal'
         }
-      } else {
-        scope = hasDirectGrant(col, recId, policy.owner_account_id) ? 'shared' : 'personal'
-      }
-      visiting.delete(key)
-      resolved.set(key, scope)
-      return scope
-    }
+        if (policy.access_mode === 'members') return 'workspace'
+        if (policy.access_mode === 'inherit' && policy.parent_record_id) {
+          const parentScope = resolveParent(policy.parent_collection || col, policy.parent_record_id)
+          if (parentScope === 'workspace') return 'workspace'
+          if (parentScope === 'shared' || hasDirectGrant(col, recId, policy.owner_account_id)) return 'shared'
+          return 'personal'
+        }
+        return hasDirectGrant(col, recId, policy.owner_account_id) ? 'shared' : 'personal'
+      },
+    )
 
     const map = new Map<string, 'personal' | 'workspace' | 'shared'>()
     for (const row of policies) {
@@ -2675,90 +2689,39 @@ export class CollabStore {
 
   /** 返回该集合下存在外部协作者/访客授权的记录 ID 集合（含继承链，正交外部标记，不覆盖内部三态）。 */
   collectionExternalCollaborators(workspaceId: string, collection: string): Set<string> {
-    const directRows = this.db
-      .prepare(
-        `SELECT DISTINCT g.record_id
-         FROM record_grants g
-         JOIN workspace_members m
-           ON g.subject_type = 'account'
-          AND m.workspace_id = g.workspace_id
-          AND m.account_id = g.subject_id
-          AND m.member_kind IN ('external', 'guest')
-         WHERE g.workspace_id = ? AND g.collection = ?`,
-      )
-      .all(workspaceId, collection) as Array<{ record_id: string }>
-    const directSet = new Set(directRows.map((r) => r.record_id))
-
-    const policies = this.db
-      .prepare(
-        `SELECT record_id, access_mode, parent_collection, parent_record_id
-         FROM resource_policies
-         WHERE workspace_id = ? AND collection = ?`,
-      )
-      .all(workspaceId, collection) as Array<{
-      record_id: string
-      access_mode: string
-      parent_collection: string
-      parent_record_id: string
-    }>
-    const policyById = new Map(policies.map((p) => [p.record_id, p]))
-    const memo = new Map<string, boolean>()
+    const directSet = this.directExternalRecordIds(workspaceId, collection)
+    const { policies, createResolver } = this.createCollectionPolicyGraph(workspaceId, collection)
     const crossExtCache = new Map<string, boolean>()
 
-    const hasExternalOn = (col: string, recId: string, visiting = new Set<string>(), depth = 0): boolean => {
+    const hasDirectExternal = (col: string, recId: string): boolean => {
+      if (col === collection) return directSet.has(recId)
       const key = `${col}\t${recId}`
-      if (memo.has(key)) return memo.get(key)!
-      if (visiting.has(key) || depth > 64) return false
-      visiting.add(key)
-      let result = false
-      if (col === collection) {
-        if (directSet.has(recId)) {
-          result = true
-        } else {
-          const p = policyById.get(recId)
-          if (p?.access_mode === 'inherit' && p.parent_record_id) {
-            result = hasExternalOn(p.parent_collection || col, p.parent_record_id, visiting, depth + 1)
-          }
-        }
-      } else {
-        if (crossExtCache.has(key)) {
-          result = crossExtCache.get(key)!
-        } else {
-          const hit = this.db
-            .prepare(
-              `SELECT 1 FROM record_grants g
-               JOIN workspace_members m
-                 ON g.subject_type = 'account'
-                AND m.workspace_id = g.workspace_id
-                AND m.account_id = g.subject_id
-                AND m.member_kind IN ('external', 'guest')
-               WHERE g.workspace_id = ? AND g.collection = ? AND g.record_id = ?
-               LIMIT 1`,
-            )
-            .get(workspaceId, col, recId)
-          if (hit) {
-            result = true
-          } else {
-            const p = this.db
-              .prepare(
-                `SELECT access_mode, parent_collection, parent_record_id
-                 FROM resource_policies
-                 WHERE workspace_id = ? AND collection = ? AND record_id = ?`,
-              )
-              .get(workspaceId, col, recId) as
-              | { access_mode: string; parent_collection: string; parent_record_id: string }
-              | undefined
-            if (p?.access_mode === 'inherit' && p.parent_record_id) {
-              result = hasExternalOn(p.parent_collection || col, p.parent_record_id, visiting, depth + 1)
-            }
-          }
-          crossExtCache.set(key, result)
-        }
-      }
-      visiting.delete(key)
-      memo.set(key, result)
-      return result
+      if (crossExtCache.has(key)) return crossExtCache.get(key)!
+      const hit = Boolean(
+        this.db
+          .prepare(
+            `SELECT 1 FROM record_grants g
+             JOIN workspace_members m
+               ON g.subject_type = 'account'
+              AND m.workspace_id = g.workspace_id
+              AND m.account_id = g.subject_id
+              AND m.member_kind IN ('external', 'guest')
+             WHERE g.workspace_id = ? AND g.collection = ? AND g.record_id = ?
+             LIMIT 1`,
+          )
+          .get(workspaceId, col, recId),
+      )
+      crossExtCache.set(key, hit)
+      return hit
     }
+
+    const hasExternalOn = createResolver<boolean>(false, (col, recId, policy, resolveParent) => {
+      if (hasDirectExternal(col, recId)) return true
+      if (policy?.access_mode === 'inherit' && policy.parent_record_id) {
+        return resolveParent(policy.parent_collection || col, policy.parent_record_id)
+      }
+      return false
+    })
 
     const out = new Set<string>(directSet)
     for (const p of policies) {
@@ -2792,63 +2755,27 @@ export class CollabStore {
   ): Map<string, { collection: string; recordId: string }> {
     const out = new Map<string, { collection: string; recordId: string }>()
     if (!directKeys.size) return out
-    type ParentLink = {
-      record_id: string
-      access_mode: string
-      parent_collection: string
-      parent_record_id: string
-    }
-    const policies = this.db
-      .prepare(
-        `SELECT record_id, access_mode, parent_collection, parent_record_id
-         FROM resource_policies
-         WHERE workspace_id = ? AND collection = ?`,
-      )
-      .all(workspaceId, collection) as ParentLink[]
-    const policyById = new Map(policies.map((p) => [p.record_id, p]))
-    const crossPolicyCache = new Map<string, ParentLink | null>()
-    const getPolicy = (col: string, recId: string): ParentLink | null => {
-      if (col === collection) return policyById.get(recId) ?? null
-      const key = `${col}\t${recId}`
-      if (crossPolicyCache.has(key)) return crossPolicyCache.get(key) ?? null
-      const row = this.db
-        .prepare(
-          `SELECT record_id, access_mode, parent_collection, parent_record_id
-           FROM resource_policies
-           WHERE workspace_id = ? AND collection = ? AND record_id = ?`,
-        )
-        .get(workspaceId, col, recId) as ParentLink | undefined
-      const found = row ?? null
-      crossPolicyCache.set(key, found)
-      return found
-    }
+    const { policies, createResolver } = this.createCollectionPolicyGraph(workspaceId, collection)
 
-    const memo = new Map<string, { collection: string; recordId: string } | null>()
-    const findHitOrAncestor = (
-      col: string,
-      recId: string,
-      visiting = new Set<string>(),
-      depth = 0,
-    ): { collection: string; recordId: string } | null => {
-      const key = `${col}\t${recId}`
-      if (directKeys.has(key)) return { collection: col, recordId: recId }
-      if (memo.has(key)) return memo.get(key) ?? null
-      if (visiting.has(key) || depth > 64) return null
-      visiting.add(key)
-      const p = getPolicy(col, recId)
-      let hit: { collection: string; recordId: string } | null = null
-      if (p?.access_mode === 'inherit' && p.parent_record_id) {
-        hit = findHitOrAncestor(p.parent_collection || col, p.parent_record_id, visiting, depth + 1)
-      }
-      visiting.delete(key)
-      memo.set(key, hit)
-      return hit
-    }
+    const findHitOrAncestor = createResolver<{ collection: string; recordId: string } | null>(
+      null,
+      (col, recId, policy, resolveParent) => {
+        if (directKeys.has(`${col}\t${recId}`)) return { collection: col, recordId: recId }
+        if (policy?.access_mode === 'inherit' && policy.parent_record_id) {
+          return resolveParent(policy.parent_collection || col, policy.parent_record_id)
+        }
+        return null
+      },
+    )
 
     for (const p of policies) {
       if (p.access_mode !== 'inherit' || !p.parent_record_id) continue
-      const parentCol = p.parent_collection || collection
-      const source = findHitOrAncestor(parentCol, p.parent_record_id, new Set([`${collection}\t${p.record_id}`]), 1)
+      const source = findHitOrAncestor(
+        p.parent_collection || collection,
+        p.parent_record_id,
+        new Set([`${collection}\t${p.record_id}`]),
+        1,
+      )
       if (source) out.set(p.record_id, source)
     }
     return out

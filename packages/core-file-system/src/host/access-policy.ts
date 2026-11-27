@@ -11,6 +11,7 @@ import {
   TRASH_COLLECTION_PATH,
 } from '../paths.ts'
 import type { SharesStore } from './shares-store.ts'
+import { collectEffectivePublicRecordIds } from './share-payload.ts'
 import { parseStampRecordId } from './tags-collection.ts'
 import type { TagStore } from './tags-store.ts'
 
@@ -530,29 +531,16 @@ export class DatabaseAccessPolicy {
     const key = `${workspaceId || this.cacheWorkspaceId()}\t${collection}`
     const cached = this.recordShareCache.get(key)
     if (cached) return cached
-    const ids = new Set<string>()
-    const directKeys = new Set<string>()
+    let ids = new Set<string>()
     try {
-      const allShares = typeof this.host.shares.list === 'function'
-        ? this.host.shares.list().filter((share) => share.kind === 'record')
-        : this.host.shares.listRecords(collection)
-      for (const share of allShares) {
-        if (workspaceId && share.workspaceId && share.workspaceId !== workspaceId) continue
-        const recordId = String(share.recordId ?? '').trim()
-        if (!recordId) continue
-        const shareCol = share.collection || collection
-        directKeys.add(`${shareCol}\t${recordId}`)
-        if (shareCol === collection) ids.add(recordId)
-      }
+      ids = collectEffectivePublicRecordIds(
+        this.host.shares,
+        collection,
+        workspaceId,
+        this.host.collabStore() ?? undefined,
+      )
     } catch {
       /* 分享库还没打开时按无分享处理 */
-    }
-    const store = this.host.collabStore()
-    if (store?.collectionInheritedSources && workspaceId && directKeys.size > 0) {
-      const inherited = store.collectionInheritedSources(workspaceId, collection, directKeys)
-      for (const recordId of inherited.keys()) {
-        ids.add(recordId)
-      }
     }
     this.recordShareCache.set(key, ids)
     return ids
