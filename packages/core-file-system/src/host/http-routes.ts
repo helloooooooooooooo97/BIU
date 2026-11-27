@@ -18,6 +18,7 @@ import {
   TAGS_COLLECTION_PATH,
   VIEWS_COLLECTION_PATH,
   WORKSPACE_MEMBERS_COLLECTION_PATH,
+  isIndexCollection,
   isPersonalOnlyCollection,
   normalizeCollectionPath,
   savedViewRecordPath,
@@ -774,6 +775,10 @@ export function registerDatabaseHttpRoutes(
         route.send(400, { error: '该数据类型仅自己可见，不支持分享' })
         return
       }
+      if (isIndexCollection(collection)) {
+        route.send(400, { error: '该衍生数据类型权限跟随源记录，不支持独立分享' })
+        return
+      }
       await db.requirePath(`${collection}/${recordId}`, 'resource:share')
       const notifyViewShare = () => {
         if (normalizeCollectionPath(collection) !== VIEWS_COLLECTION_PATH) return
@@ -1427,6 +1432,10 @@ export function registerDatabaseHttpRoutes(
         route.send(400, { error: '该数据类型仅自己可见，不支持分享' })
         return
       }
+      if (isIndexCollection(collection)) {
+        route.send(400, { error: '该衍生数据类型权限跟随源记录，不支持独立分享' })
+        return
+      }
       const account = getAccountService(ctx)
       const { actorId } = resolveWorkspaceContext(account)
       if (!actorId || !account?.store?.previewBatchRecordPermissions) {
@@ -1469,6 +1478,10 @@ export function registerDatabaseHttpRoutes(
       const { collection, recordIds } = await resolveBatchTargetIds(body)
       if (isPersonalOnlyCollection(collection)) {
         route.send(400, { error: '该数据类型仅自己可见，不支持分享' })
+        return
+      }
+      if (isIndexCollection(collection)) {
+        route.send(400, { error: '该衍生数据类型权限跟随源记录，不支持独立分享' })
         return
       }
       const account = getAccountService(ctx)

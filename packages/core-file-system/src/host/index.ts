@@ -96,6 +96,7 @@ import {
 import { stripMentionLabels } from '../mention-markup.ts'
 import {
   AGENTS_COLLECTION_PATH,
+  COMMENTS_COLLECTION_PATH,
   DATA_COLLECTION_PATH,
   EDITOR_BLOCKS_COLLECTION_PATH,
   PAGES_COLLECTION_PATH,
@@ -920,7 +921,8 @@ export class DatabaseService extends Service implements Database {
     return (
       path === TRASH_COLLECTION_PATH ||
       path === TAGS_COLLECTION_PATH ||
-      path === EDITOR_BLOCKS_COLLECTION_PATH
+      path === EDITOR_BLOCKS_COLLECTION_PATH ||
+      path === COMMENTS_COLLECTION_PATH
     )
   }
 
@@ -2075,7 +2077,11 @@ export class DatabaseService extends Service implements Database {
     if (!spec.records?.create || !spec.create) throw new Error(`collection cannot create: ${spec.path}`)
     const authorization = this.authorization()
     const actor = authorization?.currentActor()
-    if (authorization && actor) {
+    if (spec.path === COMMENTS_COLLECTION_PATH) {
+      if (authorization && !actor && getRuntimePolicy().authzMode === 'rbac') {
+        throw new Error('permission denied: UNAUTHENTICATED')
+      }
+    } else if (authorization && actor) {
       authorization.requireCurrent('resource:create', {
         type: 'collection',
         workspaceId: actor.workspaceId,
@@ -2122,6 +2128,16 @@ export class DatabaseService extends Service implements Database {
       const requested = requestedIds[item.index] ?? ''
       payloads.push(await this.withCreateRecordId(spec, item.record, requested))
     }
+    if (spec.path === COMMENTS_COLLECTION_PATH && authorization && actor) {
+      for (const payload of payloads) {
+        const targetPath = String(payload.targetPath ?? '').trim()
+        const parsed = targetPath ? splitResourcePath(targetPath) : null
+        if (!parsed?.collection || !parsed.recordId || parsed.collection === COMMENTS_COLLECTION_PATH) {
+          throw new Error('permission denied: INVALID_COMMENT_TARGET')
+        }
+        await this.requirePath(`${parsed.collection}/${parsed.recordId}`, 'resource:comment')
+      }
+    }
     const created = await spec.create(payloads)
     for (const [index, record] of created.entries()) {
       await this.stampActor(spec.path, record.id)
@@ -2139,7 +2155,7 @@ export class DatabaseService extends Service implements Database {
       }
       const parentField = spec.schema.parentField
       const parentRecordId = parentField ? String(record[parentField] ?? '').trim() : ''
-      if (spec.path !== WORKSPACE_MEMBERS_COLLECTION_PATH) {
+      if (spec.path !== WORKSPACE_MEMBERS_COLLECTION_PATH && spec.path !== COMMENTS_COLLECTION_PATH) {
         const device = this.deviceWorkspace()
         const personalOnly = isPersonalOnlyCollection(spec.path)
         const workspaceOwned = !personalOnly && options.scope === 'workspace' && !device

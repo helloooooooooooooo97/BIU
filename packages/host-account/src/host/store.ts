@@ -1000,6 +1000,9 @@ export class CollabStore {
     if (targetResource.collection === '/notices' || targetResource.collection === '/tasks' || targetResource.collection === '/mcp') {
       throw new CollabError('该数据类型仅自己可见，不支持分享', 400)
     }
+    if (targetResource.collection === '/comments' || targetResource.collection === '/editor-blocks') {
+      throw new CollabError('该衍生数据类型权限跟随源记录，不支持独立分享', 400)
+    }
     const effectiveResourceRole: 'viewer' | 'editor' =
       targetResource.collection === '/agents' ? 'viewer' : resourceRole
     const decision = this.authorization.authorize(
@@ -1350,6 +1353,9 @@ export class CollabStore {
     const target = this.resolveRecordTarget(collection, recordId)
     if (target.collection === '/notices' || target.collection === '/tasks' || target.collection === '/mcp') {
       throw new CollabError('该数据类型仅自己可见，不支持分享', 400)
+    }
+    if (target.collection === '/comments' || target.collection === '/editor-blocks') {
+      throw new CollabError('该衍生数据类型权限跟随源记录，不支持独立分享', 400)
     }
     const effectiveRole: ResourceRole = target.collection === '/agents' ? 'viewer' : role
     const owned = this.db
@@ -2464,6 +2470,9 @@ export class CollabStore {
     if (target.collection === '/notices' || target.collection === '/tasks' || target.collection === '/mcp') {
       throw new CollabError('该数据类型仅自己可见，不支持分享', 400)
     }
+    if (target.collection === '/comments' || target.collection === '/editor-blocks') {
+      throw new CollabError('该衍生数据类型权限跟随源记录，不支持独立分享', 400)
+    }
     const effectiveDefaultRole: 'viewer' | 'editor' | undefined =
       target.collection === '/agents' && accessMode === 'members' ? 'viewer' : memberDefaultRole
     if (target.collection === '/views' && accessMode === 'private') {
@@ -2509,6 +2518,9 @@ export class CollabStore {
     const target = this.resolveRecordTarget(collection, recordId)
     if (target.collection === '/notices' || target.collection === '/tasks' || target.collection === '/mcp') {
       throw new CollabError('该数据类型仅自己可见，不支持分享', 400)
+    }
+    if (target.collection === '/comments' || target.collection === '/editor-blocks') {
+      throw new CollabError('该衍生数据类型权限跟随源记录，不支持独立分享', 400)
     }
     const effectiveRole: ResourceRole = target.collection === '/agents' ? 'viewer' : role
     const owned = this.db
@@ -2972,6 +2984,9 @@ export class CollabStore {
     if (!normalizedCol.startsWith('/')) throw new CollabError('集合路径不合法', 400)
     if (normalizedCol === '/notices' || normalizedCol === '/tasks' || normalizedCol === '/mcp') {
       throw new CollabError('该数据类型仅自己可见，不支持分享', 400)
+    }
+    if (normalizedCol === '/comments' || normalizedCol === '/editor-blocks') {
+      throw new CollabError('该衍生数据类型权限跟随源记录，不支持独立分享', 400)
     }
     if (normalizedCol === '/agents') {
       if (input.mode === 'grant') input = { ...input, role: 'viewer' }
