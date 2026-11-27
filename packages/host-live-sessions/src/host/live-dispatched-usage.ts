@@ -193,18 +193,3 @@ export function collectLiveDispatchedTasks(
 
   return { tasks: dispatched, byLiveTurn, total }
 }
-
-/** 兼容旧调用：只取 usage 合计。 */
-export function collectLiveDispatchedUsage(
-  liveId: string,
-  liveEvents: SessionEvent[],
-  workers: Array<{ id: string; events: SessionEvent[] }> = [],
-  tasks: TaskDispatchSource[] = [],
-): { byLiveTurn: Record<string, TokenUsageSum>; total: TokenUsageSum } {
-  const collected = collectLiveDispatchedTasks(liveId, liveEvents, workers, tasks)
-  const byLiveTurn: Record<string, TokenUsageSum> = {}
-  for (const [key, value] of Object.entries(collected.byLiveTurn)) {
-    byLiveTurn[key] = value.usage
-  }
-  return { byLiveTurn, total: collected.total }
-}
