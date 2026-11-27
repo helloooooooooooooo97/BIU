@@ -20,9 +20,9 @@ export function ScopeMark({ scope }: { scope: string }) {
   const icon = text === '外部'
     ? <GlobeAltIcon aria-hidden className="size-[14px]" />
     : text === '共享'
-      ? <UserGroupIcon aria-hidden className="size-[14px]" />
+      ? <UsersIcon aria-hidden className="size-[14px]" />
       : text === '空间'
-        ? <UsersIcon aria-hidden className="size-[14px]" />
+        ? <UserGroupIcon aria-hidden className="size-[14px]" />
         : <UserIcon aria-hidden className="size-[14px]" />
   return <>{icon}{text}</>
 }

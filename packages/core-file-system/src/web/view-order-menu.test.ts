@@ -2,6 +2,7 @@ import { test } from 'vitest'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
+import { UserGroupIcon, UsersIcon } from '@heroicons/react/16/solid'
 import { emptyFilterGroup } from '../query-logic.ts'
 import { rankListedViews, type SavedView } from './saved-view.ts'
 import { createBrowserViewCrud } from './use-browser-view-crud.ts'
@@ -116,10 +117,15 @@ test('persistViewOrder paints new rank order immediately, sends diff upsert, and
 })
 
 test('view switcher button and dropdown resolve and render unified shareScope + locked badges', () => {
-  assert.equal(viewScopeMeta({ shareScope: 'personal', locked: false }).scope, 'personal')
-  assert.equal(viewScopeMeta({ shareScope: 'shared', locked: false }).scope, 'shared')
-  assert.equal(viewScopeMeta({ shareScope: 'workspace', locked: true }).scope, 'workspace')
-  assert.match(viewScopeMeta({ shareScope: 'workspace', locked: true }).title, /已锁定配置/)
+  const personal = viewScopeMeta({ shareScope: 'personal', locked: false })
+  const shared = viewScopeMeta({ shareScope: 'shared', locked: false })
+  const workspace = viewScopeMeta({ shareScope: 'workspace', locked: true })
+  assert.equal(personal.scope, 'personal')
+  assert.equal(shared.scope, 'shared')
+  assert.equal(workspace.scope, 'workspace')
+  assert.equal(shared.ScopeIcon, UsersIcon)
+  assert.equal(workspace.ScopeIcon, UserGroupIcon)
+  assert.match(workspace.title, /已锁定配置/)
   assert.match(
     viewScopeMeta({ shareScope: 'workspace', locked: true }, { isMembersCollection: true }).title,
     /动态成员组/,

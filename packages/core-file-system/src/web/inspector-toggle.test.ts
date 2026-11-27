@@ -164,7 +164,7 @@ test('grouped views nest a foldable group layer in the sidebar', () => {
   assert.match(sidebar, /<RectangleStackIcon aria-hidden className="size-\[14px\] shrink-0" \/>/)
   assert.doesNotMatch(sidebar, /sidebar-view-group[\s\S]*Squares2X2Icon/)
   assert.match(browser, /className="tasks-group-fold"[\s\S]*<UiGlyph icon="stack" \/>/)
-  assert.match(browser, /groupBy === 'shareScope'[\s\S]*icon=\{label === '共享' \? 'globe' : label === '空间' \? 'users' : 'user'\}/)
+  assert.match(browser, /groupBy === 'shareScope'[\s\S]*icon=\{label === '共享' \? 'users' : label === '空间' \? 'user-group' : 'user'\}/)
   assert.doesNotMatch(browser, /tasks-group-fold[\s\S]{0,500}ShareIcon/)
   assert.doesNotMatch(browser, /tasks-group-fold[\s\S]{0,500}FieldGlyph/)
   assert.match(sidebar, /fsdb-view-preview-records/)
