@@ -73,13 +73,13 @@ test('defaultGroupByForCollection maps system and business collections accuratel
   assert.equal(defaultGroupByForCollection(TAGS_COLLECTION_PATH), '')
 })
 
-test('viewDomainOf and catalogLockFilters preserve optional $scope filters and strip legacy $ownerTable', () => {
+test('viewDomainOf and catalogLockFilters preserve optional $scope and view filters', () => {
   assert.equal(viewDomainOf({ id: 'v1', filters: { $scope: 'workspace' } }), 'workspace')
   assert.equal(viewDomainOf({ id: 'v2', filters: { $scope: 'personal' } }), 'personal')
   assert.equal(viewDomainOf({ id: 'v3', filters: { $scope: 'shared' } }), 'shared')
   assert.equal(viewDomainOf({ id: 'v4', filters: {} }), 'all')
 
-  const locks = catalogLockFilters('v1', [{ id: 'v1', filters: { $scope: 'workspace', $ownerTable: 'legacy', status: 'open' } }])
+  const locks = catalogLockFilters('v1', [{ id: 'v1', filters: { $scope: 'workspace', status: 'open' } }])
   assert.deepEqual(locks, { $scope: 'workspace', status: 'open' })
   assert.deepEqual(catalogLockFilters('missing', []), {})
 })

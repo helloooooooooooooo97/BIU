@@ -2091,6 +2091,43 @@ export const BIU_MIGRATIONS: Migration[] = [
       }
     }
   } },
+  { version: 63, module: 'authz', name: 'retire_record_owners_and_cleanup_legacy_policy_columns', up(db) {
+    if (hasTable(db, 'resource_policies')) {
+      const rpCols = tableColumnNames(db, 'resource_policies')
+      if (rpCols.includes('inherit_parent')) {
+        db.exec(
+          `UPDATE resource_policies
+           SET access_mode = 'inherit'
+           WHERE access_mode != 'inherit' AND inherit_parent = 1 AND parent_record_id != ''`,
+        )
+        dropColumn(db, 'resource_policies', 'inherit_parent')
+      }
+      if (rpCols.includes('owner_table')) {
+        dropColumn(db, 'resource_policies', 'owner_table')
+      }
+    }
+    if (hasTable(db, 'record_owners')) {
+      if (hasTable(db, 'resource_policies')) {
+        db.exec(
+          `INSERT OR IGNORE INTO resource_policies
+            (workspace_id, collection, record_id, owner_account_id, access_mode, member_default_role,
+             parent_collection, parent_record_id, created_by, created_at)
+           SELECT workspace_id, collection, record_id, owner_id, 'members', 'editor', '', '', owner_id, updated_at
+           FROM record_owners`,
+        )
+      }
+      if (hasTable(db, 'record_grants')) {
+        db.exec(
+          `INSERT OR IGNORE INTO record_grants
+            (workspace_id, collection, record_id, subject_type, subject_id, role, effect, granted_by, created_at)
+           SELECT workspace_id, collection, record_id, 'account', owner_id, 'owner', 'allow', owner_id, updated_at
+           FROM record_owners
+           WHERE owner_id != ''`,
+        )
+      }
+      db.exec('DROP TABLE IF EXISTS record_owners')
+    }
+  } },
 ]
 
 export function assertBiuMigrationLog(rows: Array<{ version: number }> = BIU_MIGRATIONS) {

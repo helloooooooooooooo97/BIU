@@ -40,10 +40,6 @@ describe('RBAC 100% SQL pushdown pre-filtering', () => {
       collabStore: () => store,
       authorization: () => authorization as unknown as ReturnType<AccessPolicyHost['authorization']>,
       deviceWorkspace: () => false,
-      markDeviceRecord: () => {},
-      collection: () => undefined,
-      schemaFor: () => ({ fields: {} }) as ReturnType<AccessPolicyHost['schemaFor']>,
-      applyTagOverlay: (_spec: unknown, row: Record<string, unknown>) => row,
     } as unknown as AccessPolicyHost
 
     const policy = new DatabaseAccessPolicy(host)
@@ -90,10 +86,6 @@ describe('RBAC 100% SQL pushdown pre-filtering', () => {
       collabStore: () => store,
       authorization: () => authorization as unknown as ReturnType<AccessPolicyHost['authorization']>,
       deviceWorkspace: () => false,
-      markDeviceRecord: () => {},
-      collection: () => undefined,
-      schemaFor: () => ({ fields: {} }) as ReturnType<AccessPolicyHost['schemaFor']>,
-      applyTagOverlay: (_spec: unknown, row: Record<string, unknown>) => row,
     } as unknown as AccessPolicyHost
 
     const policy = new DatabaseAccessPolicy(host)

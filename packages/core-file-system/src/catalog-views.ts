@@ -176,9 +176,7 @@ export function catalogLockFilters(
   if (!key) return {}
   const current = listed.find((view) => view.id === key)
   if (!current) return {}
-  const base = { ...(current.filters ?? {}) }
-  delete base.$ownerTable
-  return base
+  return { ...(current.filters ?? {}) }
 }
 
 export function stampRecordId(collection: string, recordId: string) {

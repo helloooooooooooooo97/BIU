@@ -30,10 +30,6 @@ describe('DatabaseAccessPolicy multi-tenant bounded LRU caches', () => {
       collabStore: () => store,
       authorization: () => undefined,
       deviceWorkspace: () => false,
-      markDeviceRecord: () => {},
-      collection: () => undefined,
-      schemaFor: () => ({ fields: {} }) as ReturnType<AccessPolicyHost['schemaFor']>,
-      applyTagOverlay: (_spec: unknown, row: Record<string, unknown>) => row,
     } as unknown as AccessPolicyHost
 
     const policy = new DatabaseAccessPolicy(host)
@@ -71,10 +67,6 @@ describe('DatabaseAccessPolicy multi-tenant bounded LRU caches', () => {
       collabStore: () => store,
       authorization: () => undefined,
       deviceWorkspace: () => false,
-      markDeviceRecord: () => {},
-      collection: () => undefined,
-      schemaFor: () => ({ fields: {} }) as ReturnType<AccessPolicyHost['schemaFor']>,
-      applyTagOverlay: (_spec: unknown, row: Record<string, unknown>) => row,
     } as unknown as AccessPolicyHost
 
     const policy = new DatabaseAccessPolicy(host)
@@ -111,10 +103,6 @@ describe('DatabaseAccessPolicy multi-tenant bounded LRU caches', () => {
       collabStore: () => store,
       authorization: () => undefined,
       deviceWorkspace: () => false,
-      markDeviceRecord: () => {},
-      collection: () => undefined,
-      schemaFor: () => ({ fields: {} }) as ReturnType<AccessPolicyHost['schemaFor']>,
-      applyTagOverlay: (_spec: unknown, row: Record<string, unknown>) => row,
     } as unknown as AccessPolicyHost
 
     const policy = new DatabaseAccessPolicy(host)

@@ -44,7 +44,7 @@ test('empty database fast path matches upgraded v1 fixture', () => {
 test('BIU_MIGRATIONS versions are unique and increasing', () => {
   assertBiuMigrationLog()
   assert.equal(BIU_MIGRATIONS.at(-1)?.version, LATEST_BIU_SCHEMA)
-  assert.equal(BIU_MIGRATIONS.at(-1)?.name, 'unify_views_record_permissions_and_remove_builtin')
+  assert.equal(BIU_MIGRATIONS.at(-1)?.name, 'retire_record_owners_and_cleanup_legacy_policy_columns')
   assert.throws(() => assertBiuMigrationLog([{ version: 2 }, { version: 2 }]), /重复/)
   assert.throws(() => assertBiuMigrationLog([{ version: 3 }, { version: 1 }]), /单调递增/)
 })
@@ -427,6 +427,46 @@ test('v62 unifies view permissions into resource_policies, replaces protection w
     .prepare(`SELECT subject_id FROM record_grants WHERE workspace_id = 'ws_1' AND collection = '/pages' AND record_id = 'p1'`)
     .get() as { subject_id: string }
   assert.equal(grant.subject_id, 'member')
+
+  db.close()
+})
+
+test('v63 backfills record_owners into resource_policies, normalizes inherit_parent, and drops legacy table/columns', () => {
+  const db = openSqlite(':memory:')
+  db.exec(CREATE_CORE_SQL)
+  setSchemaVersion(db, 1)
+  migrateBiu(db, {}, 62)
+  db.exec(`
+    INSERT INTO record_owners (workspace_id, collection, record_id, owner_id, version, updated_at)
+    VALUES ('ws_1', '/pages', 'legacy_only', 'acc_ada', 0, 100);
+    INSERT INTO resource_policies
+      (workspace_id, collection, record_id, owner_account_id, access_mode, member_default_role,
+       parent_collection, parent_record_id, created_by, created_at, inherit_parent)
+    VALUES
+      ('ws_1', '/pages', 'parent_p', 'acc_ada', 'members', 'editor', '', '', 'acc_ada', 100, 0),
+      ('ws_1', '/pages', 'child_p', 'acc_ada', 'private', 'viewer', '/pages', 'parent_p', 'acc_ada', 101, 1);
+  `)
+  migrateBiu(db, {}, 63)
+
+  assert.equal(tableNames(db).includes('record_owners'), false)
+  const rpCols = tableColumnNames(db, 'resource_policies')
+  assert.equal(rpCols.includes('inherit_parent'), false)
+  assert.equal(rpCols.includes('owner_table'), false)
+
+  const backfilled = db
+    .prepare(`SELECT owner_account_id, access_mode, member_default_role FROM resource_policies WHERE record_id = 'legacy_only'`)
+    .get() as { owner_account_id: string; access_mode: string; member_default_role: string } | undefined
+  assert.deepEqual({ ...backfilled }, { owner_account_id: 'acc_ada', access_mode: 'members', member_default_role: 'editor' })
+
+  const ownerGrant = db
+    .prepare(`SELECT role FROM record_grants WHERE record_id = 'legacy_only' AND subject_type = 'account' AND subject_id = 'acc_ada'`)
+    .get() as { role: string } | undefined
+  assert.equal(ownerGrant?.role, 'owner')
+
+  const childPolicy = db
+    .prepare(`SELECT access_mode FROM resource_policies WHERE record_id = 'child_p'`)
+    .get() as { access_mode: string } | undefined
+  assert.equal(childPolicy?.access_mode, 'inherit')
 
   db.close()
 })

@@ -366,7 +366,6 @@ export class SavedViewsStore {
       delete (cleaned as Record<string, unknown>).protection
       delete (cleaned as Record<string, unknown>).scope
       delete (cleaned as Record<string, unknown>).builtin
-      delete (cleaned as Record<string, unknown>).ownerTable
       const key = bucketKey(workspaceId, collection)
       const list = this.byPath.get(key) ?? []
       list.push(cleaned)
@@ -827,7 +826,6 @@ function stripTransientFields(view: StoredView): StoredView {
   delete copy.protection
   delete copy.scope
   delete copy.builtin
-  delete copy.ownerTable
   delete copy.accessMode
   delete copy.memberDefaultRole
   delete copy.baseRevision

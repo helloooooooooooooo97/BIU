@@ -3,7 +3,7 @@ import { currentAccountId, currentRequestWorkspaceId } from '@biu/host-plugin-lo
 import { getRuntimePolicy } from '@biu/host-plugin-loader/runtime'
 import { type Action as PermissionAction, type AuthorizationService } from '@biu/host-account/authorization'
 import { isRegisteredBuiltinPlugin } from '@biu/host-account/store'
-import type { CollectionSchema, CollectionSpec, DbRecord } from '@biu/type-file-system'
+import type { CollectionSpec, DbRecord } from '@biu/type-file-system'
 import {
   DATA_COLLECTION_PATH,
   EDITOR_BLOCKS_COLLECTION_PATH,
@@ -74,20 +74,12 @@ export const SHARE_SCOPE_LABEL = {
   shared: '共享',
 } as const
 
-export const ACCESS_RANK = { viewer: 1, commenter: 2, editor: 3, manager: 4, owner: 5 } as const
-
-export function accessLabel(role: keyof typeof ACCESS_RANK | null | undefined) {
+export function accessLabel(role: 'viewer' | 'commenter' | 'editor' | 'manager' | 'owner' | null | undefined) {
   if (role === 'editor') return '编辑'
   if (role === 'commenter') return '评论'
   if (role === 'viewer') return '查看'
   if (role === 'manager' || role === 'owner') return '管理'
   return '查看'
-}
-
-export function higherAccess(left: keyof typeof ACCESS_RANK | null, right: keyof typeof ACCESS_RANK | null) {
-  if (!left) return right
-  if (!right) return left
-  return ACCESS_RANK[left] >= ACCESS_RANK[right] ? left : right
 }
 
 export function resolveScopeTarget(
@@ -142,10 +134,6 @@ export type AccessPolicyHost = {
   collabStore(): WorkspaceFiles | undefined
   authorization(): AuthorizationService | undefined
   deviceWorkspace(): boolean
-  markDeviceRecord(collection: string, id: string): void
-  collection(pathOrId: string): CollectionSpec | undefined
-  schemaFor(spec: CollectionSpec): CollectionSchema
-  applyTagOverlay(spec: CollectionSpec, row: DbRecord): DbRecord
 }
 
 const DEFAULT_CACHE_CAPACITY = 256
