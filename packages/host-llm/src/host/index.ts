@@ -259,8 +259,6 @@ export function omitImageContent(messages: LlmMessage[]): LlmMessage[] {
   })
 }
 
-/** @deprecated 用 omitImageContent；保留别名以免旧测试/调用处断裂。 */
-
 export type LlmErrorKind = 'cancel' | 'images' | 'orphan-tools' | 'fatal'
 
 /** 区分可恢复拒图 / 缺 tool result / 取消 / 其它致命错误。 */
@@ -279,7 +277,7 @@ export function classifyLlmError(error: unknown): LlmErrorKind {
 }
 
 /** DeepSeek：`.messages[N].image[K]` 指向 flatten 之后那条请求，不是事件 seq。 */
-export function parseRejectedImageSlot(error: unknown): { messageIndex: number; imageIndex: number } | null {
+function parseRejectedImageSlot(error: unknown): { messageIndex: number; imageIndex: number } | null {
   const match = String(error).match(/messages\[(\d+)\](?:\.image\[(\d+)\])?/i)
   if (!match) return null
   const messageIndex = Number(match[1])
@@ -510,13 +508,6 @@ function num(value: unknown): number | undefined {
   return typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : undefined
 }
 
-export function formatUsage(usage: LlmUsage | undefined): string {
-  if (!usage) return ''
-  const parts = [`${usage.inputTokens}→${usage.outputTokens}`]
-  if (usage.cacheReadTokens) parts.push(`cache ${usage.cacheReadTokens}`)
-  return parts.join(' · ')
-}
-
 interface StreamToolAcc {
   id: string
   name: string
@@ -635,7 +626,7 @@ function sseDataLine(line: string): string | undefined {
   return line.slice(5).replace(/^ /, '')
 }
 
-export class OpenAiCompatLlm implements LlmClient {
+class OpenAiCompatLlm implements LlmClient {
   constructor(private config: LlmConfig) {}
 
   async chat(
@@ -695,7 +686,7 @@ export class OpenAiCompatLlm implements LlmClient {
  *  - 工具参数通过 `content_block_delta` 里的 `input_json_delta.partial_json` 增量累积；
  *  - 结束由 `message_stop` 标志，无 `[DONE]`。
  */
-export class AnthropicLlm implements LlmClient {
+class AnthropicLlm implements LlmClient {
   constructor(private config: LlmConfig) {}
 
   async chat(
