@@ -60,7 +60,7 @@ function parseConfig(raw: string | null): SessionConfig | undefined {
 }
 
 /** SQLite session store：事件分行增量写入，避免整包 JSON 反复落盘。 */
-export class SqliteSessionStore implements SessionStore {
+class SqliteSessionStore implements SessionStore {
   private sessions!: DatabaseSync
   private splitEvents = false
 
@@ -334,36 +334,7 @@ export class SqliteSessionStore implements SessionStore {
         'SELECT id, version, project_json, mascot_json, config_json, event_count, title, updated_at, last_message_at, first_event_at FROM agents ORDER BY updated_at DESC',
       )
       .all() as SessionRow[]
-    return rows.map((row) => {
-      const project = parseProject(row.project_json)
-      const mascot = parseMascot(row.mascot_json)
-      const config = parseConfig(row.config_json)
-      const createdAt = Number(config?.createdAt)
-      const firstEventAt = Number(row.first_event_at) || 0
-      const lastMessageAt = Number(row.last_message_at) || 0
-      const stamp =
-        Number.isFinite(createdAt) && createdAt > 0
-          ? createdAt
-          : firstEventAt > 0
-            ? firstEventAt
-            : row.updated_at
-      return {
-        id: row.id,
-        version: row.version,
-        eventCount: row.event_count,
-        title:
-          row.title && row.title !== row.id.slice(0, 8)
-            ? row.title
-            : mascot
-              ? nameFromSessionMascot(mascot)
-              : row.title || row.id.slice(0, 8),
-        updatedAt: row.updated_at,
-        ...(lastMessageAt > 0 ? { lastMessageAt } : {}),
-        ...(project ? { project } : {}),
-        ...(mascot ? { mascot } : {}),
-        ...(config || stamp ? { config: { ...(config ?? {}), createdAt: stamp } } : {}),
-      }
-    })
+    return rows.map(toSessionSummary)
   }
 
   /**
@@ -376,33 +347,7 @@ export class SqliteSessionStore implements SessionStore {
         'SELECT id, version, project_json, mascot_json, config_json, event_count, title, updated_at, first_event_at FROM agents WHERE id = ?',
       )
       .get(id) as SessionRow | undefined
-    if (!row) return undefined
-    const project = parseProject(row.project_json)
-    const mascot = parseMascot(row.mascot_json)
-    const config = parseConfig(row.config_json)
-    const createdAt = Number(config?.createdAt)
-    const firstEventAt = Number(row.first_event_at) || 0
-    const stamp =
-      Number.isFinite(createdAt) && createdAt > 0
-        ? createdAt
-        : firstEventAt > 0
-          ? firstEventAt
-          : row.updated_at
-    return {
-      id: row.id,
-      version: row.version,
-      eventCount: row.event_count,
-      title:
-        row.title && row.title !== row.id.slice(0, 8)
-          ? row.title
-          : mascot
-            ? nameFromSessionMascot(mascot)
-            : row.title || row.id.slice(0, 8),
-      updatedAt: row.updated_at,
-      ...(project ? { project } : {}),
-      ...(mascot ? { mascot } : {}),
-      ...(config || stamp ? { config: { ...(config ?? {}), createdAt: stamp } } : {}),
-    }
+    return row ? toSessionSummary(row) : undefined
   }
 
   async delete(id: string): Promise<boolean> {
@@ -431,6 +376,37 @@ export class SqliteSessionStore implements SessionStore {
       }
     }
     this.sessions.close()
+  }
+}
+
+function toSessionSummary(row: SessionRow): SessionSummary {
+  const project = parseProject(row.project_json)
+  const mascot = parseMascot(row.mascot_json)
+  const config = parseConfig(row.config_json)
+  const createdAt = Number(config?.createdAt)
+  const firstEventAt = Number(row.first_event_at) || 0
+  const lastMessageAt = Number(row.last_message_at) || 0
+  const stamp =
+    Number.isFinite(createdAt) && createdAt > 0
+      ? createdAt
+      : firstEventAt > 0
+        ? firstEventAt
+        : row.updated_at
+  return {
+    id: row.id,
+    version: row.version,
+    eventCount: row.event_count,
+    title:
+      row.title && row.title !== row.id.slice(0, 8)
+        ? row.title
+        : mascot
+          ? nameFromSessionMascot(mascot)
+          : row.title || row.id.slice(0, 8),
+    updatedAt: row.updated_at,
+    ...(lastMessageAt > 0 ? { lastMessageAt } : {}),
+    ...(project ? { project } : {}),
+    ...(mascot ? { mascot } : {}),
+    ...(config || stamp ? { config: { ...(config ?? {}), createdAt: stamp } } : {}),
   }
 }
 
