@@ -748,4 +748,14 @@ test('collectionOwnership and collectionExternalCollaborators propagate inherite
   assert.equal(afterMembers.get('child'), 'workspace')
   assert.equal(afterMembers.get('grandchild'), 'workspace')
   assert.equal(afterMembers.get('detached'), 'personal')
+
+  // Legacy/hybrid row with access_mode='private' + inherit_parent=1 also inherits parent scope and external badge
+  collab.attachAs(ws.id, '/pages', 'legacy-inherit', ada.id, {
+    accessMode: 'private',
+    parentCollection: '/pages',
+    parentRecordId: 'parent',
+    inheritParent: true,
+  })
+  assert.equal(collab.collectionOwnership(ws.id, '/pages').get('legacy-inherit'), 'workspace')
+  assert.equal(collab.collectionExternalCollaborators(ws.id, '/pages').has('legacy-inherit'), true)
 })

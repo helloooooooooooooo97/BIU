@@ -1213,6 +1213,12 @@ export function apply(ctx: Context, config: AccountConfig = {}) {
   })
 
   const broadcastAccessChange = (workspaceId: string, scope: 'views' | 'records', path?: string) => {
+    try {
+      const db = ctx.get('database') as { notifyShareChange?: () => void } | undefined
+      db?.notifyShareChange?.()
+    } catch {
+      /* database 服务未注册时忽略 */
+    }
     const cleanPath = String(path ?? '').trim()
     const payload =
       scope === 'views'
