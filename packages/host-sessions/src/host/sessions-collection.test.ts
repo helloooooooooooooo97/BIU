@@ -192,3 +192,36 @@ test('rename action fails without user messages', async () => {
   await assert.rejects(async () => rename?.run!('s1', { id: 's1' }, {}), /没有用户消息/)
 })
 
+test('rename action with onlyIfUnchanged skips overwriting a concurrent manual rename', async () => {
+  let currentTitle = '墨方'
+  const renamed: string[] = []
+  const spec = sessionsCollection({
+    listSummaries: async () => [],
+    rename: async (_id, title) => {
+      currentTitle = title
+      renamed.push(title)
+    },
+    patchConfig: async () => undefined,
+    delete: async () => true,
+    require: async (id) => ({
+      id,
+      config: { title: currentTitle },
+      events: [{ type: 'user/message', text: '帮我查登录报错', seq: 1, ts: 1000, kind: 'wake' }],
+    }),
+    suggestTitle: async () => {
+      currentTitle = '用户手改名'
+      return '登录排查'
+    },
+  })
+  const rename = spec.actions?.find((item) => item.id === 'rename')
+  const got = (await rename?.run!('s1', { id: 's1' }, { onlyIfUnchanged: true })) as {
+    ok: boolean
+    title: string
+    skipped?: boolean
+  }
+  assert.equal(got.ok, true)
+  assert.equal(got.skipped, true)
+  assert.equal(got.title, '用户手改名')
+  assert.deepEqual(renamed, [])
+})
+
