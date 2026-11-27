@@ -24,8 +24,6 @@ const AGENT: AppModule = {
   order: 0,
 }
 
-export const BUILTIN_MODULES: AppModule[] = [AGENT]
-
 export function matchRegisteredModule(pathname: string, plugins: AppModule[]) {
   const path = normalizePath(pathname)
   return plugins.find((item) => {
@@ -106,19 +104,11 @@ export function bindAppModulesNavReady(source: AppModulesService) {
   }
 }
 
-export function moduleById(id: string, modules: AppModule[] = BUILTIN_MODULES): AppModule {
-  return modules.find((item) => item.id === id) ?? AGENT
-}
-
 export function moduleIdFromPath(pathname: string, plugins: AppModule[] = []): string {
   const path = normalizePath(pathname)
   const hit = matchRegisteredModule(path, plugins)
   if (hit) return hit.id
   return 'agent'
-}
-
-export function isAgentPath(pathname: string, plugins: AppModule[] = []) {
-  return moduleIdFromPath(pathname, plugins) === 'agent'
 }
 
 export const name = 'appModules'

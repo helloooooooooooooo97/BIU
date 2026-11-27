@@ -2,17 +2,18 @@ import { test } from 'vitest'
 import assert from 'node:assert/strict'
 import { Context } from 'cordis'
 import * as appModules from './app-modules.ts'
-import { AppModulesService, isAgentPath, moduleById, moduleIdFromPath } from './app-modules.ts'
+import { AppModulesService, moduleIdFromPath } from './app-modules.ts'
 
-test('builtin list is only agent', () => {
+test('builtin list is only agent', async () => {
+  const ctx = new Context()
+  await ctx.plugin(appModules)
+  const svc = ctx.appModules as AppModulesService
   assert.deepEqual(
-    appModules.BUILTIN_MODULES.map((item) => item.id),
+    svc.list().map((item) => item.id),
     ['agent'],
   )
-  assert.equal(moduleById('agent').path, '/')
   assert.equal(moduleIdFromPath('/'), 'agent')
   assert.equal(moduleIdFromPath('/agents/abc'), 'agent')
-  assert.equal(isAgentPath('/agents/x'), true)
 })
 
 test('plugins register routes; shell does not hardcode them', async () => {
@@ -24,7 +25,6 @@ test('plugins register routes; shell does not hardcode them', async () => {
   const plugins = svc.plugins()
   assert.equal(moduleIdFromPath('/tasks', plugins), 'tasks')
   assert.equal(moduleIdFromPath('/extra', plugins), 'extra')
-  assert.equal(isAgentPath('/tasks', plugins), false)
   assert.equal(svc.list().map((item) => item.id).join(','), 'agent,tasks,extra')
   assert.equal(svc.isNavReady(), false)
   svc.markNavReady()
