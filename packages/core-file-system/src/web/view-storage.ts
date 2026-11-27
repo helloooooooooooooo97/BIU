@@ -55,6 +55,13 @@ export {
   toggleStarredRecord,
   starredRecordLabel,
   starredRecordEmoji,
+  loadViewOrderMap,
+  getViewOrder,
+  getAllViewOrders,
+  subscribeViewOrder,
+  getViewOrderVersion,
+  persistViewOrderForPath,
+  applyUserViewOrder,
 } from './starred-storage.ts'
 
 /** 按 collectionPath 串行化视图写入，防止连点改属性时并发 POST 乱序覆盖。 */

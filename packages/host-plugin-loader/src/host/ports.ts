@@ -23,6 +23,7 @@ export interface AccountStorePort {
     starredViews: unknown[]
     starredRecords: unknown[]
     pinnedAgents: string[]
+    viewOrder?: Record<string, string[]>
     theme?: string
     accent?: string
     pagePrefs?: Record<string, unknown>

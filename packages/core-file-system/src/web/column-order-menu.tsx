@@ -1,4 +1,5 @@
 import { useState, useSyncExternalStore, type CSSProperties, type ReactNode } from 'react'
+import { createPortal } from 'react-dom'
 import {
   DndContext,
   DragOverlay,
@@ -338,24 +339,29 @@ export function ColumnOrderMenu({
             />
           ))}
         </SortableContext>
-        <DragOverlay zIndex={280}>
-          {active ? (
-            <div className="fsdb-query-drag-overlay" data-fsdb-sort-overlay>
-              <div className="fsdb-col-drag-row">
-                <button type="button" className="fsdb-query-grip" tabIndex={-1}>
-                  <DndGrip />
-                </button>
-                <ColumnMenuCheck
-                  col={active}
-                  label={columnMenuLabel(active, tagCatalog)}
-                  on={visibleKeys.has(active.key) || locked.has(active.key)}
-                  locked={locked.has(active.key)}
-                  onToggle={() => {}}
-                />
-              </div>
-            </div>
-          ) : null}
-        </DragOverlay>
+        {typeof document !== 'undefined'
+          ? createPortal(
+              <DragOverlay zIndex={280}>
+                {active ? (
+                  <div className="fsdb-query-drag-overlay" data-fsdb-sort-overlay>
+                    <div className="fsdb-col-drag-row">
+                      <button type="button" className="fsdb-query-grip" tabIndex={-1}>
+                        <DndGrip />
+                      </button>
+                      <ColumnMenuCheck
+                        col={active}
+                        label={columnMenuLabel(active, tagCatalog)}
+                        on={visibleKeys.has(active.key) || locked.has(active.key)}
+                        locked={locked.has(active.key)}
+                        onToggle={() => {}}
+                      />
+                    </div>
+                  </div>
+                ) : null}
+              </DragOverlay>,
+              document.body,
+            )
+          : null}
       </DndContext>
       {packs.map((pack) => (
         <TagColumnPackRow

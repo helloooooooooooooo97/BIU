@@ -1,7 +1,7 @@
 import type { CollectionInfo } from '@biu/type-file-system'
 import { getDatabaseUi } from './database-ui.ts'
 import { normalizeSavedView, rankListedViews, type SavedView } from './saved-view.ts'
-import { loadViews } from './view-storage.ts'
+import { applyUserViewOrder, loadViews } from './view-storage.ts'
 
 export function viewsForRegisteredCollection(
   path: string,
@@ -18,5 +18,5 @@ export function paintCollectionViews(
   tables: CollectionInfo[],
   user: SavedView[] = loadViews(path),
 ) {
-  return rankListedViews(viewsForRegisteredCollection(path, tables, user), user)
+  return applyUserViewOrder(path, rankListedViews(viewsForRegisteredCollection(path, tables, user), user))
 }

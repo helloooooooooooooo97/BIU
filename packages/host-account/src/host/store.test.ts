@@ -632,6 +632,7 @@ test('workspacePrefs isolates starredViews, starredRecords, pinnedAgents, and th
       theme: 'dark',
       accent: 'purple',
       pagePrefs: { wide: true },
+      viewOrder: { '/pages': ['v2', 'v1', 'v2'] },
     },
     ws1.id,
   )
@@ -644,12 +645,14 @@ test('workspacePrefs isolates starredViews, starredRecords, pinnedAgents, and th
   assert.deepEqual(bobWs1.pinnedAgents, [])
   assert.equal(bobWs1.theme, undefined)
   assert.equal(bobWs1.accent, undefined)
+  assert.deepEqual(bobWs1.viewOrder, {})
 
   // Ada in a DIFFERENT workspace ws2 sees completely empty prefs (isolated per workspace)
   const adaWs2 = collab.workspacePrefs(ada.id, ws2.id)
   assert.deepEqual(adaWs2.starredViews, [])
   assert.deepEqual(adaWs2.pinnedAgents, [])
   assert.equal(adaWs2.theme, undefined)
+  assert.deepEqual(adaWs2.viewOrder, {})
 
   // Ada in ws1 still has all saved prefs and can unpin agent_1
   const adaWs1 = collab.workspacePrefs(ada.id, ws1.id)
@@ -659,6 +662,14 @@ test('workspacePrefs isolates starredViews, starredRecords, pinnedAgents, and th
   assert.equal(adaWs1.theme, 'dark')
   assert.equal(adaWs1.accent, 'purple')
   assert.equal(adaWs1.pagePrefs?.wide, true)
+  assert.deepEqual(adaWs1.viewOrder, { '/pages': ['v2', 'v1'] })
+
+  // Updating another collection path merges viewOrder without clobbering '/pages'
+  collab.saveWorkspacePrefs(ada.id, { viewOrder: { '/tasks': ['t2', 't1'] } }, ws1.id)
+  assert.deepEqual(collab.workspacePrefs(ada.id, ws1.id).viewOrder, {
+    '/pages': ['v2', 'v1'],
+    '/tasks': ['t2', 't1'],
+  })
 
   collab.setAgentPinned(ada.id, 'agent_1', false, ws1.id)
   assert.deepEqual(collab.workspacePrefs(ada.id, ws1.id).pinnedAgents, [])
