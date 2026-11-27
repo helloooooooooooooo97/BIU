@@ -51,7 +51,6 @@ export const PAGE_DB = `${DATA_DIR_NAME}/biu.sqlite`
 
 /** Runtime mode is read lazily so tests and embedded hosts can set it before boot. */
 export const isOnlineRuntime = () => process.env.BIU_ONLINE === '1'
-export const isDesktopRuntime = () => !isOnlineRuntime()
 export {
   DEFAULT_SUPER_ADMIN_EMAIL,
   DEFAULT_SUPER_ADMIN_PASSWORD,

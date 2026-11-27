@@ -1,5 +1,5 @@
 import type { Context } from 'cordis'
-import { currentAccountId, currentRequestWorkspaceId, isOnlineRuntime } from './data-dir.ts'
+import { currentRequestWorkspaceId, isOnlineRuntime } from './data-dir.ts'
 import { getAccountPort, type AccountServicePort } from './ports.ts'
 
 export type HostMode = 'cloud' | 'desktop'
@@ -30,16 +30,6 @@ export interface RuntimePolicy {
   enforceTenantQuotas: boolean
   /** Whether workspace member and guest invitations are supported on this host. */
   allowWorkspaceInvites: boolean
-}
-
-export type WorkspaceTarget =
-  | { kind: 'local'; workspaceId: string }
-  | { kind: 'remote'; workspaceId: string; origin: string; token: string }
-
-export interface RemoteCloudTarget {
-  origin: string
-  token: string
-  workspaceId: string
 }
 
 /**
@@ -94,57 +84,6 @@ export function resolveScopedWorkspaceId(ctx: Context, explicitWorkspaceId = '')
   if (fromRequest) return fromRequest
   if (!getRuntimePolicy().allowImplicitActiveWorkspace) return ''
   return String(accountServiceOf(ctx)?.store?.activeWorkspaceId?.() ?? '').trim()
-}
-
-/**
- * Resolve whether the target workspace is handled locally by this host or remotely on a linked cloud host.
- * Returns null if the workspace is remote but no cloud connection is available.
- */
-export function resolveWorkspaceTarget(
-  ctx: Context,
-  workspaceId = '',
-  localAccountId = currentAccountId(),
-): WorkspaceTarget | null {
-  const policy = getRuntimePolicy()
-  const resolvedId = resolveScopedWorkspaceId(ctx, workspaceId)
-  if (policy.hostMode === 'cloud') {
-    return { kind: 'local', workspaceId: resolvedId }
-  }
-  const account = accountServiceOf(ctx)
-  if (!resolvedId || account?.workspaceLocation?.(resolvedId) !== 'cloud') {
-    return { kind: 'local', workspaceId: resolvedId }
-  }
-  const remote = resolveRemoteCloudTarget(ctx, resolvedId, localAccountId)
-  if (!remote) return null
-  return { kind: 'remote', ...remote }
-}
-
-/**
- * Resolve the remote cloud host connection for a desktop cloud workspace.
- * Returns null on cloud servers, in device workspaces, or when not logged into a cloud account.
- */
-export function resolveRemoteCloudTarget(
-  ctx: Context,
-  workspaceId = '',
-  localAccountId = currentAccountId(),
-): RemoteCloudTarget | null {
-  if (getRuntimePolicy().hostMode === 'cloud') return null
-  const account = accountServiceOf(ctx)
-  if (!account) return null
-  if (typeof account.resolveCloudTarget === 'function') {
-    return account.resolveCloudTarget(workspaceId, localAccountId)
-  }
-  const targetWorkspace = workspaceId || resolveScopedWorkspaceId(ctx)
-  if (!targetWorkspace || account.workspaceLocation?.(targetWorkspace) !== 'cloud') return null
-  const connection =
-    (localAccountId ? account.cloudConnection?.(localAccountId) : null) ??
-    account.linkedCloud?.(localAccountId || undefined)
-  if (!connection?.origin || !connection.token) return null
-  return {
-    origin: connection.origin.replace(/\/+$/, ''),
-    token: connection.token,
-    workspaceId: targetWorkspace,
-  }
 }
 
 export type SandboxDriverKind = 'bwrap' | 'sandbox-exec' | 'env-only' | 'none'

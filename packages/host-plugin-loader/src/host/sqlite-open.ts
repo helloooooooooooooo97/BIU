@@ -107,7 +107,7 @@ export function setSchemaVersion(db: DatabaseSync, version: number, schema?: str
   db.exec(`PRAGMA ${prefix}user_version = ${Number(version) || 0}`)
 }
 
-export function sqliteVersion(db: DatabaseSync) {
+function sqliteVersion(db: DatabaseSync) {
   const row = db.prepare('SELECT sqlite_version() AS v').get() as { v?: string } | undefined
   return String(row?.v ?? '')
 }

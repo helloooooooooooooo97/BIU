@@ -8,7 +8,7 @@ export function contentAddressHash(bytes: Buffer) {
   return createHash('sha256').update(bytes).digest('hex')
 }
 
-export function assetExtension(hint: string) {
+function assetExtension(hint: string) {
   const file = basename(hint.replace(/\\/g, '/'))
   const dot = file.lastIndexOf('.')
   if (dot <= 0) return ''

@@ -5,9 +5,7 @@ import { runWithRequestWorkspace } from './data-dir.ts'
 import {
   assertSandboxDriverAllowed,
   getRuntimePolicy,
-  resolveRemoteCloudTarget,
   resolveScopedWorkspaceId,
-  resolveWorkspaceTarget,
 } from './runtime.ts'
 
 const savedEnv = {
@@ -72,38 +70,6 @@ test('resolveScopedWorkspaceId refuses implicit activeWorkspaceId fallback in cl
 
   process.env.BIU_ONLINE = '0'
   assert.equal(resolveScopedWorkspaceId(ctx), 'ws-implicit')
-})
-
-test('resolveWorkspaceTarget distinguishes local vs remote workspaces on desktop', async () => {
-  const ctx = new Context()
-  class FakeAccount extends Service {
-    store = { activeWorkspaceId: () => 'ws-cloud' }
-    workspaceLocation(id: string) {
-      return id === 'ws-cloud' ? ('cloud' as const) : ('device' as const)
-    }
-    cloudConnection(accountId: string) {
-      return accountId === 'local-1' ? { origin: 'https://cloud.example.com/', token: 'tok-1' } : null
-    }
-    constructor(inner: Context) {
-      super(inner, 'account')
-    }
-  }
-  await ctx.plugin(FakeAccount)
-
-  process.env.BIU_ONLINE = '0'
-  assert.deepEqual(resolveWorkspaceTarget(ctx, 'ws-local', 'local-1'), { kind: 'local', workspaceId: 'ws-local' })
-  assert.deepEqual(resolveWorkspaceTarget(ctx, 'ws-cloud', 'local-1'), {
-    kind: 'remote',
-    workspaceId: 'ws-cloud',
-    origin: 'https://cloud.example.com',
-    token: 'tok-1',
-  })
-  assert.equal(resolveWorkspaceTarget(ctx, 'ws-cloud', 'unlinked'), null)
-  assert.equal(resolveRemoteCloudTarget(ctx, 'ws-local', 'local-1'), null)
-
-  process.env.BIU_ONLINE = '1'
-  assert.deepEqual(resolveWorkspaceTarget(ctx, 'ws-cloud', 'local-1'), { kind: 'local', workspaceId: 'ws-cloud' })
-  assert.equal(resolveRemoteCloudTarget(ctx, 'ws-cloud', 'local-1'), null)
 })
 
 test('assertSandboxDriverAllowed fails closed in cloud mode unless explicitly overridden', () => {

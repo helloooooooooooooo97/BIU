@@ -5,6 +5,7 @@ import { openPooledSqlite, sharedSqlitePoolStats, closeAllSharedSqliteConnection
 import { assertSqliteVersion, getSchemaVersion, isEmptyDatabase, quoteSqlitePath, setSchemaVersion } from './sqlite-open.ts'
 import { CREATE_CORE_SQL, LATEST_BIU_SCHEMA, createLatestSchema, dropLegacyEditorColumns, ensurePagesPerfIndexes, rebuildPageBlockCollectionKeys, tableColumnNames, tableNames } from './biu-schema.ts'
 import { copyLegacyBodies, rebuildContentRefs } from './editor-content.ts'
+import { parseFrontmatterBody } from './gc-assets.ts'
 
 type DatabaseSync = import('node:sqlite').DatabaseSync
 
@@ -234,14 +235,6 @@ function baseline(db: DatabaseSync) {
     db.exec(`UPDATE attachments SET storage = 'name' WHERE storage = 'doc'`)
   }
   db.exec('DROP TABLE IF EXISTS task_views')
-}
-
-function parseFrontmatterBody(text: string) {
-  const normalized = text.replace(/^\uFEFF/, '').replace(/\r\n/g, '\n')
-  if (!normalized.startsWith('---\n')) return normalized
-  const end = normalized.indexOf('\n---', 3)
-  if (end < 0) return normalized
-  return normalized.slice(end + 4).replace(/^[^\n]*\n?/, '').trim()
 }
 
 function upsertBodies(db: DatabaseSync, collection: string, rows: Array<{ id: string; body: string }>) {

@@ -7,10 +7,10 @@ const DATA_DIR_NAME = '.biu'
 
 export const BIU_SQLITE = `${DATA_DIR_NAME}/biu.sqlite`
 export const EVENTS_SQLITE = `${DATA_DIR_NAME}/events.sqlite`
-export const LEGACY_PAGE_SQLITE = `${DATA_DIR_NAME}/pages.sqlite`
-export const LEGACY_TASKS_SQLITE = `${DATA_DIR_NAME}/tasks.sqlite`
-export const LEGACY_SESSIONS_SQLITE = `${DATA_DIR_NAME}/sessions.sqlite`
-export const LEGACY_FILE_SYSTEM_SQLITE = `${DATA_DIR_NAME}/file-system.sqlite`
+const LEGACY_PAGE_SQLITE = `${DATA_DIR_NAME}/pages.sqlite`
+const LEGACY_TASKS_SQLITE = `${DATA_DIR_NAME}/tasks.sqlite`
+const LEGACY_SESSIONS_SQLITE = `${DATA_DIR_NAME}/sessions.sqlite`
+const LEGACY_FILE_SYSTEM_SQLITE = `${DATA_DIR_NAME}/file-system.sqlite`
 
 type DatabaseSync = import('node:sqlite').DatabaseSync
 
