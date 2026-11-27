@@ -1,6 +1,5 @@
 import { apiFetch } from '@biu/biu-ui/api-client'
 import { emitAppEvent, onAppEvent } from '@biu/biu-ui/app-events'
-import { buildAppPath } from '@biu/web-session-view'
 import { clientLog, clientLogErrorText } from '@biu/biu-ui/event-log'
 import {
   installedPageBlocksFromRows,
@@ -16,16 +15,6 @@ import {
 } from '@biu/core-editor/page-block-meta'
 
 export { ENABLE_PAGE_BLOCK_PLUGIN, PAGE_BLOCK_PLUGIN_PHASE }
-
-export function pluginRecordHref(id: string) {
-  return buildAppPath({
-    kind: 'record',
-    moduleId: 'database',
-    path: '/database',
-    collection: '/plugins',
-    recordId: id,
-  })
-}
 
 type PluginFlags = { installed: boolean; running: boolean; sandbox: boolean }
 
@@ -83,7 +72,7 @@ async function enableStorePlugin(id: string) {
     if (listedPluginKnown(id) === false) throw missingPluginError(id)
     const row = await readPluginFlags(id)
     if (!row) throw missingPluginError(id)
-    window.dispatchEvent(new CustomEvent(PAGE_BLOCK_PLUGIN_PHASE, { detail: { plugin: id, phase: 'loading' } }))
+    reportPhase(id, 'loading')
     clientLog('info', 'page-block', `${id} installed=${row.installed} running=${row.running} sandbox=${row.sandbox}`)
     if (row.running) {
       clientLog('info', 'page-block', `${id} 已在运行，跳过 start。页面要等 web.js 登记块之后才离开源码`)

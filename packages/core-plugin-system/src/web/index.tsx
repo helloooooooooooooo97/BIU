@@ -9,7 +9,6 @@ import { pluginsChrome } from './chrome.tsx'
 import { listenEnablePageBlockPlugin, watchInstalledPageBlocks, watchRunningWindowPlugins } from './page-block-plugin.ts'
 import { PluginTrayPortal, type PluginTrayItem } from './plugin-tray.tsx'
 import {
-  WIN_CHROME_H,
   centeredGeom,
   clampGeom,
   listingIsHeadless,
@@ -125,7 +124,7 @@ function PluginAppWindow({
       if (resize.east) w = resize.w + dx
       if (resize.south) h = resize.h + dy
       const minW = shell.minWidth
-      const minH = shell.minHeight + WIN_CHROME_H
+      const minH = shell.minHeight
       if (resize.west) {
         w = resize.w - dx
         x = resize.x + dx
