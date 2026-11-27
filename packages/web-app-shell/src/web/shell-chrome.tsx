@@ -12,6 +12,13 @@ import {
   buildAiAvatarDataUrl,
   detectAiAvatarTheme,
 } from '@biu/biu-ui/ai-avatar'
+import {
+  DEFAULT_WORKSPACE_AVATAR_PRESET_ID,
+  WORKSPACE_AVATAR_PRESETS,
+  WorkspaceAvatar,
+  buildWorkspaceAvatarDataUrl,
+  detectWorkspaceAvatarPreset,
+} from '@biu/biu-ui/workspace-avatar'
 import { TagChip } from '@biu/biu-ui/tag-chip'
 import { ConfirmDialog } from '@biu/biu-ui/confirm-dialog'
 import { chromeIcon } from './chrome-icon.ts'
@@ -1937,6 +1944,9 @@ export function ShellSettingsCollab({ panel = 'members' }: { panel?: 'workspace'
   const workspaceRole = currentWorkspace?.role
   const savedWorkspaceName = currentWorkspace?.name ?? ''
   const currentWorkspaceAvatar = currentWorkspace?.avatar?.trim() ?? ''
+  const activeWorkspaceAvatarPreset = currentWorkspaceAvatar
+    ? detectWorkspaceAvatarPreset(currentWorkspaceAvatar)
+    : DEFAULT_WORKSPACE_AVATAR_PRESET_ID
   const workspaceAvatarFileRef = useRef<HTMLInputElement | null>(null)
   const [savingWorkspaceAvatar, setSavingWorkspaceAvatar] = useState(false)
   const saveWorkspaceAvatar = (avatar: string) => {
@@ -2005,7 +2015,10 @@ export function ShellSettingsCollab({ panel = 'members' }: { panel?: 'workspace'
             {currentWorkspaceAvatar ? (
               <img src={currentWorkspaceAvatar} alt="" />
             ) : (
-              <AiAvatar seed={workspaceId || 'workspace'} className="settings-account-ai-avatar" />
+              <WorkspaceAvatar
+                className="settings-account-ai-avatar"
+                data-testid="settings-workspace-default-avatar"
+              />
             )}
             {canManage ? (
               <span className="settings-account-avatar-veil" aria-hidden>
@@ -2039,6 +2052,38 @@ export function ShellSettingsCollab({ panel = 'members' }: { panel?: 'workspace'
                 .catch((err) => setError(err instanceof Error ? err.message : '无法读取头像图片'))
             }}
           />
+        </div>
+      </div>
+      <div className="settings-account-row is-stacked settings-avatar-studio" data-testid="settings-workspace-avatar-studio">
+        <div className="settings-avatar-group">
+          <div className="settings-avatar-group-head">
+            <span className="settings-account-label">预设头像</span>
+          </div>
+          <div className="settings-avatar-swatches" role="group" aria-label="空间预设头像">
+            {WORKSPACE_AVATAR_PRESETS.map((preset) => {
+              const previewUrl = buildWorkspaceAvatarDataUrl(preset.id)
+              const isSelected = activeWorkspaceAvatarPreset === preset.id
+              return (
+                <button
+                  key={preset.id}
+                  type="button"
+                  className={`settings-avatar-swatch${isSelected ? ' is-on' : ''}`}
+                  data-testid={`settings-workspace-avatar-preset-${preset.id}`}
+                  title={preset.label}
+                  aria-label={`选择${preset.label}空间头像`}
+                  aria-pressed={isSelected}
+                  disabled={!canManage || savingWorkspaceAvatar}
+                  onClick={() =>
+                    saveWorkspaceAvatar(
+                      preset.id === DEFAULT_WORKSPACE_AVATAR_PRESET_ID ? '' : previewUrl,
+                    )
+                  }
+                >
+                  <img src={previewUrl} alt="" />
+                </button>
+              )
+            })}
+          </div>
         </div>
       </div>
       <form

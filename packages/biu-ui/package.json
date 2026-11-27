@@ -8,6 +8,7 @@
   "exports": {
     ".": "./src/index.ts",
     "./ai-avatar": "./src/ai-avatar.tsx",
+    "./workspace-avatar": "./src/workspace-avatar.tsx",
     "./bool-box": "./src/bool-box.tsx",
     "./button": "./src/button.tsx",
     "./input": "./src/input.tsx",
