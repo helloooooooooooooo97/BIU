@@ -468,7 +468,7 @@ export function registerDatabaseTools(ctx: Context, db: DatabaseToolsTarget) {
   registerDbTool({
     name: 'db_action',
     description:
-      '对一条记录执行该表登记的动作。路径为 /<表>/<id>，action 为动作 id（见 db_stat 的 schema.actions）。成功返回 {ok, path}，有返回值时带 result，不回整行。需要参数时放在 args。任务派工/汇报、代理压缩/进度、插件创建/打包一律走这里。',
+      '对一条记录执行该表登记的动作。路径为 /<表>/<id>，action 为动作 id（见 db_stat 的 schema.actions）。成功返回 {ok, path}，有返回值时带 result，不回整行。需要参数时放在 args。代理发消息/压缩/进度、插件创建/打包一律走这里。',
     parameters: {
       type: 'object',
       properties: {

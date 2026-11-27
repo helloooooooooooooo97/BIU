@@ -4,6 +4,7 @@ import { recordBuiltinValues, normalizeSchemaValue } from '@biu/type-file-system
 import {
   isSessionCompactPoint,
   nameFromSessionMascot,
+  type MessageSender,
   type SessionConfig,
   type SessionEvent,
   type SessionSummary,
@@ -11,6 +12,7 @@ import {
 import { COMPACT_GUIDE, lastUsageBeforeCompact, retrieveHistory } from './session-compact.ts'
 import { projectTrajectoryRows } from './trajectory-index.ts'
 import { GROK_COLORS, GROK_SHAPES, ensureSessionMascot, isSessionMascot, mascotFromSessionId } from './session-mascot.ts'
+import { currentSessionId } from './session-scope.ts'
 
 type SessionRecordLike = {
   id: string
@@ -36,6 +38,12 @@ type SessionsLike = {
   peekSummary?: (id: string) => SessionSummary | null | undefined
   /** 根据用户消息起标题；不要把这次调用写进该 session 的时间线。 */
   suggestTitle?: (id: string, messages: UserTitleMessage[]) => Promise<string>
+  /** 向指定代理发送一条消息并驱动回合。 */
+  sendMessage?: (
+    id: string,
+    text: string,
+    opts?: { wait?: boolean; sender?: MessageSender },
+  ) => Promise<{ text: string; steps?: unknown[] }>
 }
 
 export type UserTitleMessage = { text: string; ts: number }
@@ -185,7 +193,7 @@ export function sessionsCollection(sessions: SessionsLike): CollectionSpec & { p
       route: '/db-agents',
       title: '代理',
       inspector: true,
-      blurb: '这张表的每一行是一个代理（agent）。一个代理 = 一个 session，id 就是代理 id。用户说「再开一个 agent / 叫另一个代理去做」= 在本表 db_create 新建一行（caps.create 为真时），不要去建插件、不要去建任务。你自己也是其中一个代理。列表 db_list /agents。改标题/emoji/标签/模型/服务商/系统提示/模式/额外工具/自动压缩输入 token/项目路径：db_update /agents/<id>。聊天记录不在这张表，不能用 db_update 写对话。删除 db_delete 进回收站（记录还在）；彻底删除用 purge=true 或 db_action /trash/agents::<id> action=delete。本表动作（db_action path=/agents/<代理id> action=…）：inspect=看这个代理的配置和最近几句对话（可选 args.limit）；query=在这一行代理的时间线里查事件（args.query 匹配类型或摘要，可再传 args.type；不传 query 返回最近若干条）；progress=看它当前回合忙不忙、在用什么工具、刚说了什么（轮询时把上次返回的 newestSeq 当作 afterSeq）；status=看它上下文 token 用了多少；compact=压缩它的旧上下文（第一次不传 text 会返回该怎么写摘要，第二次把摘要放进 args.text）；clear=丢掉摘要、硬切压缩点；retrieve=按关键词找回被压缩的旧内容（必填 args.query）；rename=根据用户发给这个代理的最近 100 条消息（带时间戳）给这个 agent 起准确名字。',
+      blurb: '这张表的每一行是一个代理（agent）。一个代理 = 一个 session，id 就是代理 id。用户说「再开一个 agent / 叫另一个代理去做」= 在本表 db_create 新建一行（caps.create 为真时），或直接给已有代理发消息（action=send），不要去建插件。你自己也是其中一个代理。列表 db_list /agents。改标题/emoji/标签/模型/服务商/系统提示/模式/额外工具/自动压缩输入 token/项目路径：db_update /agents/<id>。聊天记录不在这张表，不能用 db_update 写对话。删除 db_delete 进回收站（记录还在）；彻底删除用 purge=true 或 db_action /trash/agents::<id> action=delete。本表动作（db_action path=/agents/<代理id> action=…）：send=直接给另一个代理发消息并驱动它回复（必填 args.text；可选 args.wait 默认 true 等待它回复，false 异步入队后再用 progress 查进度）；inspect=看这个代理的配置和最近几句对话（可选 args.limit）；query=在这一行代理的时间线里查事件（args.query 匹配类型或摘要，可再传 args.type；不传 query 返回最近若干条）；progress=看它当前回合忙不忙、在用什么工具、刚说了什么（轮询时把上次返回的 newestSeq 当作 afterSeq）；status=看它上下文 token 用了多少；compact=压缩它的旧上下文（第一次不传 text 会返回该怎么写摘要，第二次把摘要放进 args.text）；clear=丢掉摘要、硬切压缩点；retrieve=按关键词找回被压缩的旧内容（必填 args.query）；rename=根据用户发给这个代理的最近 100 条消息（带时间戳）给这个 agent 起准确名字。',
       order: 18,
       icon: 'cursor',
     },
@@ -316,6 +324,52 @@ export function sessionsCollection(sessions: SessionsLike): CollectionSpec & { p
           }
           await sessions.rename(id, title)
           return { ok: true, sessionId: id, title }
+        },
+      },
+      {
+        id: 'send',
+        requiredAction: 'resource:update',
+        label: '发消息',
+        for: 'agent',
+        placement: [],
+        description:
+          '直接给这个代理发一条消息并驱动它执行/回复。必填 args.text；可选 args.wait 默认 true（等待这一轮回复并返回 text），传 false 则立即入队异步执行（之后可用 progress 轮询）。不能给自己发消息。',
+        parameters: {
+          type: 'object',
+          properties: {
+            text: { type: 'string', description: '要发给该代理的消息内容' },
+            wait: {
+              type: 'boolean',
+              description: '默认 true（等待对方回复并返回结果）；false 为异步入队立即返回',
+            },
+          },
+          required: ['text'],
+        },
+        run: async (id, _record, args) => {
+          if (!sessions.sendMessage) throw new Error('session send unavailable')
+          const text = String(args?.text ?? '').trim()
+          if (!text) throw new Error('args.text is required')
+          const callerId = currentSessionId()
+          if (callerId && callerId === id) {
+            throw new Error('cannot send message to self')
+          }
+          await sessions.require?.(id)
+          const wait = args?.wait !== false
+          const sender: MessageSender | undefined = callerId ? { type: 'session', sessionId: callerId } : undefined
+          const turn = await sessions.sendMessage(id, text, { wait, ...(sender ? { sender } : {}) })
+          if (!wait) {
+            return { ok: true, sessionId: id, queued: true, wait: false }
+          }
+          const rawText = String(turn?.text ?? '')
+          const replyText = rawText.length > 4000 ? `${rawText.slice(0, 4000)}…` : rawText
+          return {
+            ok: true,
+            sessionId: id,
+            queued: false,
+            wait: true,
+            text: replyText,
+            steps: Array.isArray(turn?.steps) ? turn.steps.length : 0,
+          }
         },
       },
       {

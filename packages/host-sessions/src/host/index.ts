@@ -400,6 +400,7 @@ export class SessionsService extends Service {
             }
           },
           suggestTitle: (id, messages) => this.suggestTitleFromUserMessages(id, messages),
+          sendMessage: (id, text, opts) => this.sendMessage(id, text, opts),
         }),
       )
     })
