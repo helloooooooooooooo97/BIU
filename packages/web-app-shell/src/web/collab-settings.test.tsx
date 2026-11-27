@@ -743,29 +743,47 @@ test('workspace settings defaults avatar to circular BIU icon and supports brand
     return json({})
   }) as typeof fetch
 
-  render(<ShellSettingsWorkspace />)
-  const defaultIcon = await screen.findByTestId('settings-workspace-default-avatar')
-  assert.equal(defaultIcon.getAttribute('data-workspace-avatar'), 'brand-circle')
-  assert.equal(defaultIcon.getAttribute('data-workspace-preset'), 'deep-sea')
+  const accountTokenEvents: Event[] = []
+  const workspaceMetaEvents: Array<{ workspaceId?: string; name?: string; avatar?: string } | undefined> = []
+  const onAccountToken = (event: Event) => accountTokenEvents.push(event)
+  const onWorkspaceMeta = (event: Event) =>
+    workspaceMetaEvents.push((event as CustomEvent<{ workspaceId?: string; name?: string; avatar?: string }>).detail)
+  window.addEventListener('biu:account-token', onAccountToken)
+  window.addEventListener('biu:workspace-meta', onWorkspaceMeta)
 
-  const studio = screen.getByTestId('settings-workspace-avatar-studio')
-  assert.ok(studio)
-  const deepSeaBtn = screen.getByTestId('settings-workspace-avatar-preset-deep-sea')
-  assert.equal(deepSeaBtn.getAttribute('aria-pressed'), 'true')
+  try {
+    render(<ShellSettingsWorkspace />)
+    const defaultIcon = await screen.findByTestId('settings-workspace-default-avatar')
+    assert.equal(defaultIcon.getAttribute('data-workspace-avatar'), 'brand-circle')
+    assert.equal(defaultIcon.getAttribute('data-workspace-preset'), 'deep-sea')
 
-  const vividBtn = screen.getByTestId('settings-workspace-avatar-preset-vivid')
-  assert.ok(vividBtn.querySelector('img[src^="data:image/svg+xml"]'))
-  fireEvent.click(vividBtn)
-  await waitFor(() => assert.equal(savedAvatars.length, 1))
-  assert.match(decodeURIComponent(savedAvatars[0]!), /data-biu-workspace-avatar="vivid"/)
-  await waitFor(() => assert.equal(vividBtn.getAttribute('aria-pressed'), 'true'))
-  assert.ok(screen.getByTestId('settings-workspace-reset-avatar'))
+    const studio = screen.getByTestId('settings-workspace-avatar-studio')
+    assert.ok(studio)
+    const deepSeaBtn = screen.getByTestId('settings-workspace-avatar-preset-deep-sea')
+    assert.equal(deepSeaBtn.getAttribute('aria-pressed'), 'true')
 
-  fireEvent.click(deepSeaBtn)
-  await waitFor(() => assert.equal(savedAvatars.length, 2))
-  assert.equal(savedAvatars[1], '')
-  await screen.findByTestId('settings-workspace-default-avatar')
-  assert.equal(deepSeaBtn.getAttribute('aria-pressed'), 'true')
+    const vividBtn = screen.getByTestId('settings-workspace-avatar-preset-vivid')
+    assert.ok(vividBtn.querySelector('img[src^="data:image/svg+xml"]'))
+    fireEvent.click(vividBtn)
+    await waitFor(() => assert.equal(savedAvatars.length, 1))
+    assert.match(decodeURIComponent(savedAvatars[0]!), /data-biu-workspace-avatar="vivid"/)
+    await waitFor(() => assert.equal(vividBtn.getAttribute('aria-pressed'), 'true'))
+    assert.ok(screen.getByTestId('settings-workspace-reset-avatar'))
+
+    fireEvent.click(deepSeaBtn)
+    await waitFor(() => assert.equal(savedAvatars.length, 2))
+    assert.equal(savedAvatars[1], '')
+    await screen.findByTestId('settings-workspace-default-avatar')
+    assert.equal(deepSeaBtn.getAttribute('aria-pressed'), 'true')
+
+    assert.equal(accountTokenEvents.length, 0, 'switching workspace avatar must not emit biu:account-token')
+    assert.equal(workspaceMetaEvents.length, 2)
+    assert.equal(workspaceMetaEvents[0]?.workspaceId, 'ws_1')
+    assert.equal(workspaceMetaEvents[1]?.avatar, '')
+  } finally {
+    window.removeEventListener('biu:account-token', onAccountToken)
+    window.removeEventListener('biu:workspace-meta', onWorkspaceMeta)
+  }
 
   cleanup()
   localStorage.clear()
