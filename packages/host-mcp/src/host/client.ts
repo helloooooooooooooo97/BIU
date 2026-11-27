@@ -17,7 +17,7 @@ export type McpToolInfo = {
   }
 }
 
-export const CLIENT_INFO = { name: 'biu', version: '0.1.0' } as const
+const CLIENT_INFO = { name: 'biu', version: '0.1.0' } as const
 
 const DEFAULT_TIMEOUT_MS = Number(process.env.BIU_MCP_TIMEOUT ?? 30000)
 

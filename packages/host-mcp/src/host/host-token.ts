@@ -3,7 +3,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname } from 'node:path'
 import { dataHome, dataPath } from '@biu/host-plugin-loader/data-dir'
 
-export type McpHostConfig = {
+type McpHostConfig = {
   token: string
 }
 
@@ -20,7 +20,7 @@ export function generateMcpToken() {
   return `biu_mcp_${randomBytes(24).toString('base64url')}`
 }
 
-export function readMcpHostConfig(path = mcpHostConfigPath()): McpHostConfig | null {
+function readMcpHostConfig(path = mcpHostConfigPath()): McpHostConfig | null {
   if (!existsSync(path)) return null
   try {
     const raw = asRecord(JSON.parse(readFileSync(path, 'utf8')))
@@ -32,7 +32,7 @@ export function readMcpHostConfig(path = mcpHostConfigPath()): McpHostConfig | n
   }
 }
 
-export function writeMcpHostConfig(config: McpHostConfig, path = mcpHostConfigPath()) {
+function writeMcpHostConfig(config: McpHostConfig, path = mcpHostConfigPath()) {
   mkdirSync(dirname(path), { recursive: true })
   writeFileSync(path, `${JSON.stringify({ token: config.token }, null, 2)}\n`)
 }

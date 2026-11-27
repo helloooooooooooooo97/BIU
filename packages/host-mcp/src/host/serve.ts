@@ -94,7 +94,7 @@ export function lanIPv4() {
   return preferred[0] || rest[0] || '127.0.0.1'
 }
 
-export function createBiuMcpServer(ctx: Context) {
+function createBiuMcpServer(ctx: Context) {
   const server = new Server(SERVER_INFO, {
     capabilities: { tools: {} },
     instructions:
