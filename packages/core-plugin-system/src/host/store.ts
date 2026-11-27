@@ -38,6 +38,9 @@ import {
 import { getRuntimePolicy } from '@biu/host-plugin-loader/runtime'
 
 const rbacEnforced = () => getRuntimePolicy().authzMode === 'rbac'
+const hostPluginCodeAllowed = () => getRuntimePolicy().allowHostPluginCode
+export const CLOUD_HOST_PLUGIN_ERROR =
+  '云端空间禁止创建、打包或运行非内置的服务端 host.js 插件；请改为纯前端插件（webJs / web/index.tsx），后端能力请使用远程 MCP'
 
 export type StoreListing = {
   id: string
@@ -406,6 +409,10 @@ export class PluginStoreService extends Service {
     const dest = this.sandboxPath(id)
     mkdirSync(dest, { recursive: true })
     const hostJs = String(input.hostJs ?? '').trim()
+    const isBuiltinTarget = input.builtin === true || this.isBuiltin(id)
+    if (hostJs && !hostPluginCodeAllowed() && !isBuiltinTarget) {
+      throw new Error(CLOUD_HOST_PLUGIN_ERROR)
+    }
     const webSrc = input.webJs != null ? String(input.webJs).trim() : ''
     const hasWeb = Boolean(webSrc) || Boolean(findEntry(dest, WEB_ENTRIES))
     const existing = existsSync(join(dest, 'manifest.json')) ? await readManifest(dest).catch(() => undefined) : undefined
@@ -443,6 +450,11 @@ export class PluginStoreService extends Service {
     const raw = JSON.parse(await readFile(join(sandbox, 'manifest.json'), 'utf8')) as unknown
     const hostEntry = findEntry(sandbox, HOST_ENTRIES)
     const webEntry = findEntry(sandbox, WEB_ENTRIES)
+    const isBuiltinTarget = manifest.builtin === true || this.isBuiltin(id)
+    if (!hostPluginCodeAllowed() && !isBuiltinTarget) {
+      if (hostEntry) throw new Error(CLOUD_HOST_PLUGIN_ERROR)
+      if (!webEntry) throw new Error('云端空间插件必须提供纯前端 web/index.tsx 入口')
+    }
     if (!hostEntry && !webEntry) throw new Error('sandbox needs host/index.ts or web/index.tsx')
     requireDeclaredShell(
       raw && typeof raw === 'object' ? (raw as { shell?: unknown }).shell : undefined,
@@ -459,7 +471,7 @@ export class PluginStoreService extends Service {
       await writeFile(join(staging, 'manifest.json'), `${JSON.stringify(manifest, null, 2)}\n`)
       if (hostEntry) await writeFile(join(staging, 'host.js'), await bundleStoreEntry(hostEntry, 'host'))
       if (webEntry) await writeFile(join(staging, 'web.js'), await bundleStoreEntry(webEntry, 'web'))
-      copyPluginRuntimeDependencies(sandbox, staging)
+      if (hostEntry) copyPluginRuntimeDependencies(sandbox, staging)
       let readme = await this.readDiskReadme(id)
       if (!readme.trim()) readme = `# ${manifest.name}\n\n${manifest.blurb.trim()}\n`
       const packed = copyReferencedEditorAssets({
@@ -619,7 +631,12 @@ export class PluginStoreService extends Service {
     const hit = await this.findPluginDir(id)
     if (this.hasBundle(hit)) return hit
     const sandbox = this.sandboxPath(id)
-    const canPack = existsSync(join(sandbox, 'manifest.json')) && (findEntry(sandbox, HOST_ENTRIES) || findEntry(sandbox, WEB_ENTRIES))
+    const hostEntry = findEntry(sandbox, HOST_ENTRIES)
+    const webEntry = findEntry(sandbox, WEB_ENTRIES)
+    const isBuiltinTarget = this.isBuiltin(id)
+    const canPack =
+      existsSync(join(sandbox, 'manifest.json')) &&
+      (hostPluginCodeAllowed() || isBuiltinTarget ? Boolean(hostEntry || webEntry) : Boolean(webEntry) && !hostEntry)
     if (!canPack) return hit
     if (rbacEnforced() && this.isBuiltin(id) && !this.viewerIsSuperAdmin()) return hit
     await this.pack(id)
@@ -849,6 +866,7 @@ export class PluginStoreService extends Service {
 
   async readInstalledFile(id: string, file: string) {
     if (!isSafeId(id) || !ALLOWED_FILES.has(file)) throw new Error('not found')
+    if (file === 'host.js' && !hostPluginCodeAllowed() && !this.isBuiltin(id)) throw new Error('not found')
     if (!this.canReadInstalled(id)) throw new Error('not found')
     const hit = await this.findPluginDir(id)
     if (!hit) throw new Error('not found')
@@ -878,6 +896,10 @@ export class PluginStoreService extends Service {
     const hasWeb = existsSync(webFile)
     const codeVersion = await hashInstalledPluginCode(dir)
     if (!hostCode && !hasWeb) throw new Error(`plugin ${manifest.id} is not packed`)
+    const isBuiltinTarget = manifest.builtin === true || this.isBuiltin(manifest.id)
+    if (hostCode && !hostPluginCodeAllowed() && !isBuiltinTarget) {
+      throw new Error(CLOUD_HOST_PLUGIN_ERROR)
+    }
     const mod = (hostCode
       ? await importHostFile(hostFile)
       : { name: manifest.id, apply() {} }) as Plugin & { inject?: string[]; setInstallDir?: (dir: string) => void }
