@@ -182,7 +182,7 @@ test('addEmptyView optimistically inserts, selects after 200 OK, and rolls back 
   }
 
   const okHarness = makeCrudHarness(path, [base])
-  const posted: Array<{ upsert?: SavedView[] }> = []
+  const posted: Array<{ upsert?: Array<SavedView & { accessMode?: string }> }> = []
   const restoreOk = mockFetch(async (input, init) => {
     const url = String(input)
     if (url.includes('/api/db/saved-views') && init?.method === 'POST') {
@@ -204,6 +204,8 @@ test('addEmptyView optimistically inserts, selects after 200 OK, and rolls back 
     okHarness.crud.addEmptyView()
     await new Promise((r) => setTimeout(r, 25))
     assert.equal(posted.length, 1)
+    assert.equal(posted[0]?.upsert?.[0]?.accessMode, 'private')
+    assert.equal(posted[0]?.upsert?.[0]?.shareScope, 'personal')
     assert.equal(okHarness.selected.length, 1)
     assert.equal(okHarness.selected[0]?.name, '新视图')
     assert.equal(okHarness.getSaveError(), '')

@@ -429,14 +429,16 @@ test('unified /views record ACL, lazy seed views, field-level patch with revisio
   assert.equal(blockedEdit.status, 403)
   assert.match(String(blockedEdit.body.error), /VIEW_LOCKED/)
 
-  // 4. Ada creates a private view filtered on status=done, then shares ONLY the view with Bob via /views record grant
+  // 4. Ada creates a view WITHOUT explicit accessMode -> defaults to personal (private), invisible to Bob until shared
   const createPriv = await asUser(ada.id, () =>
     http.call('POST', '/api/db/saved-views', {
       path: '/docs',
-      upsert: [{ id: 'v_done', name: '已完成视图', accessMode: 'private', filters: { status: 'done' } }],
+      upsert: [{ id: 'v_done', name: '已完成视图', filters: { status: 'done' } }],
     }),
   )
   assert.equal(createPriv.status, 200)
+  const adaCreated = (createPriv.body.views as Array<{ id: string; shareScope?: string }>).find((v) => v.id === 'v_done')
+  assert.equal(adaCreated?.shareScope, 'personal')
   const bobBeforeShare = await asUser(bob.id, () => http.call('GET', '/api/db/saved-views?path=/docs'))
   assert.equal((bobBeforeShare.body.views as Array<{ id: string }>).some((v) => v.id === 'v_done'), false)
 

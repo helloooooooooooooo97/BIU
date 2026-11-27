@@ -1,5 +1,5 @@
 import { useState, type ReactElement } from 'react'
-import { LockClosedIcon, LockOpenIcon, PlusIcon, ShareIcon } from '@heroicons/react/16/solid'
+import { LockOpenIcon, PlusIcon } from '@heroicons/react/16/solid'
 import { apiFetch } from '@biu/biu-ui/api-client'
 import type { CollectionRowViewType, CollectionViewType } from '@biu/type-file-system/ui'
 import { WORKSPACE_MEMBERS_COLLECTION_PATH, normalizeCollectionPath } from '../paths.ts'
@@ -18,7 +18,6 @@ import {
 import { canEditSavedView, canManageSavedView, PAGE_SIZES, type GroupConfig, type SavedView } from './saved-view.ts'
 import type { TableSandboxItem } from '../shared/table-sandbox-model.ts'
 import { SandboxKindIcon } from './sandbox-kind-icon.tsx'
-import { viewScopeMeta } from './view-order-menu.tsx'
 import { registerWorkspaceCache } from './workspace-client-store.ts'
 
 export type ViewSettingsTab = 'view' | 'columns' | 'filter' | 'sort' | 'group'
@@ -72,12 +71,10 @@ export function ViewSettingsMenu({
   onTabChange,
   sheet,
   collectionPath,
-  localData = false,
   activeView,
   commitViewName,
   onSaveAsPersonal,
   onToggleViewLock,
-  onOpenViewShare,
   mode,
   setMode,
   extraViews,
@@ -120,12 +117,10 @@ export function ViewSettingsMenu({
   sheet: boolean
   collectionPath: string
   title?: string
-  localData?: boolean
   activeView?: SavedView
   commitViewName: (viewId: string, raw: string) => void
   onSaveAsPersonal?: () => void
   onToggleViewLock?: (view: SavedView) => void
-  onOpenViewShare?: () => void
   mode: ViewMode
   setMode: (next: ViewMode) => void
   extraViews: CollectionViewType[]
@@ -169,7 +164,6 @@ export function ViewSettingsMenu({
   const canEdit = Boolean(!sheet && activeView && canEditSavedView(activeView))
   const canManage = Boolean(!sheet && activeView && canManageSavedView(activeView))
   const readOnlyOrLocked = Boolean(!sheet && activeView && !canEdit)
-  const scopeMeta = activeView ? viewScopeMeta(activeView, { isMembersCollection }) : null
 
   const modeOptions = [
     ...VIEW_MODES.map((opt) => ({
@@ -299,44 +293,6 @@ export function ViewSettingsMenu({
                 }}
                 onCommit={(raw) => commitViewName(activeView.id, raw)}
               />
-            ) : null}
-
-            {!sheet && activeView && !activeView.ephemeral && !localData && scopeMeta ? (
-              <div className="fsdb-group-panel-row" data-testid="fsdb-vset-share-row">
-                <span className="fsdb-group-panel-label">视图权限</span>
-                <button
-                  type="button"
-                  className="fsdb-vset-mode-add"
-                  data-testid="fsdb-vset-open-share"
-                  onClick={() => {
-                    onClose()
-                    onOpenViewShare?.()
-                  }}
-                >
-                  <ShareIcon aria-hidden className="size-[13px]" />
-                  <span>{scopeMeta.scopeLabel}</span>
-                </button>
-              </div>
-            ) : null}
-
-            {!sheet && activeView && !activeView.ephemeral && canManage && onToggleViewLock ? (
-              <div className="fsdb-group-panel-row" data-testid="fsdb-vset-lock-row">
-                <span className="fsdb-group-panel-label" style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                  <LockClosedIcon aria-hidden className="size-[13px]" />
-                  <span>{isMembersCollection ? '锁定（动态成员组）' : '锁定视图'}</span>
-                </span>
-                <button
-                  type="button"
-                  role="switch"
-                  aria-checked={isLocked}
-                  aria-label="锁定视图"
-                  data-testid="fsdb-vset-lock-switch"
-                  className={`fsdb-group-switch${isLocked ? ' is-on' : ''}`}
-                  onClick={() => onToggleViewLock(activeView)}
-                >
-                  <span className="fsdb-group-switch-thumb" />
-                </button>
-              </div>
             ) : null}
 
             {canEdit || sheet ? (

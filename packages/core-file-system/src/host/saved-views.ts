@@ -498,13 +498,10 @@ export class SavedViewsStore {
             : 'editor'
       return { accessMode: 'members', memberDefaultRole: defaultRole }
     }
-    // /data 聚合表默认个人视图；普通表默认空间可编辑（与历史行为一致）
-    if (path === DATA_COLLECTION_PATH) {
-      return { accessMode: 'private', memberDefaultRole: 'viewer' }
-    }
+    // 默认新建视图均为私人（仅创建者可见），需共享或公开给全员时通过分享弹窗主动调整
     return {
-      accessMode: 'members',
-      memberDefaultRole: incoming.locked ? 'viewer' : 'editor',
+      accessMode: 'private',
+      memberDefaultRole: 'viewer',
     }
   }
 

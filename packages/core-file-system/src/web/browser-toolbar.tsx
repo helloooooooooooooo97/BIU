@@ -9,8 +9,8 @@ import {
   ShieldCheckIcon,
   TagIcon,
   TrashIcon,
+  UserGroupIcon,
   UserIcon,
-  UsersIcon,
 } from '@heroicons/react/16/solid'
 import { AiAvatar } from '@biu/biu-ui/ai-avatar'
 import { HEADLESS_DISMISS_IGNORE, HeadlessDismiss } from '@biu/biu-ui/headless-dismiss'
@@ -783,12 +783,10 @@ export const BrowserListChrome = memo(function BrowserListChrome(props: BrowserL
                         sheet={sheet && !hasExternalViews}
                         collectionPath={collectionPath}
                         title={title}
-                        localData={localData}
                         activeView={activeView}
                         commitViewName={commitViewName}
                         onSaveAsPersonal={activeView ? () => copyView(activeView, { accessMode: 'private' }) : undefined}
                         onToggleViewLock={toggleViewLock}
-                        onOpenViewShare={isCloud ? () => openViewShare(activeView) : undefined}
                         mode={mode}
                         setMode={setMode}
                         extraViews={extraViews}
@@ -918,7 +916,7 @@ export const BrowserListChrome = memo(function BrowserListChrome(props: BrowserL
                       }}
                     >
                       {viewDomainOf(activeView) === 'workspace' ? (
-                        <UsersIcon aria-hidden className="size-[14px]" />
+                        <UserGroupIcon aria-hidden className="size-[14px]" />
                       ) : (
                         <UserIcon aria-hidden className="size-[14px]" />
                       )}
@@ -944,7 +942,7 @@ export const BrowserListChrome = memo(function BrowserListChrome(props: BrowserL
                           }
                           onClick={() => setCreateScopeOpen((open) => !open)}
                         >
-                          <UiGlyph icon={createScope === 'workspace' ? 'users' : createScope === 'shared' ? 'globe' : 'user'} />
+                          <UiGlyph icon={createScope === 'workspace' ? 'user-group' : createScope === 'shared' ? 'users' : 'user'} />
                         </button>
                         {createScopeOpen ? (
                           <div className="fsdb-create-scope-menu" role="menu">
@@ -970,7 +968,7 @@ export const BrowserListChrome = memo(function BrowserListChrome(props: BrowserL
                                   setCreateScopeOpen(false)
                                 }}
                               >
-                                <UsersIcon aria-hidden className="size-[14px]" />
+                                <UserGroupIcon aria-hidden className="size-[14px]" />
                                 空间
                               </button>
                             )}

@@ -40,7 +40,7 @@ export function viewScopeMeta(
   opts?: { isMembersCollection?: boolean },
 ) {
   const scope: ViewShareScope = view.shareScope ?? 'workspace'
-  const ScopeIcon = scope === 'personal' ? UserIcon : scope === 'shared' ? UserGroupIcon : UsersIcon
+  const ScopeIcon = scope === 'personal' ? UserIcon : scope === 'shared' ? UsersIcon : UserGroupIcon
   const scopeLabel =
     scope === 'personal'
       ? '私人视图'
@@ -171,7 +171,7 @@ function ViewRowShell({
                 if (canLock) onToggleLock?.(view)
               }}
             >
-              {view.locked ? <LockClosedIcon aria-hidden className="size-[13px]" /> : <LockOpenIcon aria-hidden className="size-[13px]" />}
+              {view.locked ? <LockClosedIcon aria-hidden className="size-[14px]" /> : <LockOpenIcon aria-hidden className="size-[14px]" />}
             </button>
           ) : null}
           {isCloud && !view.ephemeral ? (

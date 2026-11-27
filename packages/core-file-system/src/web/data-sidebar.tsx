@@ -880,18 +880,26 @@ export const DataSidebar = memo(function DataSidebar({
         : ' · 已锁定配置'
       : ''
     const fullTip = `${baseTip}${lockTip}`
-    const ScopeIcon = scope === 'personal' ? UserIcon : scope === 'shared' ? UserGroupIcon : UsersIcon
+    const ScopeIcon = scope === 'personal' ? UserIcon : scope === 'shared' ? UsersIcon : UserGroupIcon
     return (
       <span
-        className="sidebar-view-status inline-flex items-center gap-1.5 text-(--biu-color-text-muted)"
+        className="sidebar-view-status inline-flex shrink-0 items-center text-(--biu-color-text-muted)"
         data-testid="sidebar-view-status"
         data-scope={scope}
         data-locked={view.locked ? '1' : '0'}
         title={fullTip}
         aria-label={fullTip}
       >
-        {view.locked ? <LockClosedIcon aria-hidden className="size-4 shrink-0" /> : null}
-        {isCloudSpace ? <ScopeIcon aria-hidden className="size-4 shrink-0" /> : null}
+        {view.locked ? (
+          <span className="inline-grid size-6 shrink-0 place-items-center" aria-hidden>
+            <LockClosedIcon aria-hidden className="size-4 shrink-0" />
+          </span>
+        ) : null}
+        {isCloudSpace ? (
+          <span className="inline-grid size-6 shrink-0 place-items-center" aria-hidden>
+            <ScopeIcon aria-hidden className="size-4 shrink-0" />
+          </span>
+        ) : null}
       </span>
     )
   }
