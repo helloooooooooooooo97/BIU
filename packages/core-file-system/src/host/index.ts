@@ -773,6 +773,9 @@ export class DatabaseService extends Service implements Database {
         createdBy: { kind: 'user', accountId, name: accountId },
       })
     }
+    if (!this.access.recordOwner(TAGS_COLLECTION_PATH, id)) {
+      this.attachWorkspaceRecord(TAGS_COLLECTION_PATH, id, { accessMode: 'private' })
+    }
   }
 
   private recordsInScope<T extends { id?: unknown; pageId?: unknown; collection?: unknown; sessionId?: unknown; sourceId?: unknown; tablePath?: unknown }>(

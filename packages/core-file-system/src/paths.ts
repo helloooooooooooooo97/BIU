@@ -22,10 +22,9 @@ const SYSTEM_COLLECTION_ORDER = [
   TRASH_COLLECTION_PATH,
 ] as const
 
-/** 组件、标签和批注属于衍生索引数据（权限跟随源记录、无独立分享）。 */
+/** 组件和批注属于衍生索引数据（权限跟随源记录、无独立分享）。标签与插件、MCP、技能一样属于可直接分享的公共数据。 */
 const INDEX_COLLECTION_ORDER = [
   PAGE_BLOCKS_COLLECTION_PATH,
-  TAGS_COLLECTION_PATH,
   COMMENTS_COLLECTION_PATH,
 ] as const
 

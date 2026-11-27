@@ -327,7 +327,8 @@ export class DatabaseAccessPolicy {
           return this.canActOnComment(authorization, actor, rowId, action, resource)
         }
         if (collection === TAGS_COLLECTION_PATH && !String(row.sourceId ?? '') && !String(row.tablePath ?? '')) {
-          return this.indexTagVisible(rowId, actor.accountId)
+          if (authorization.authorize(actor, action, resource).allowed) return true
+          return (action === 'resource:read' || action === 'resource:list') && this.indexTagVisible(rowId, actor.accountId)
         }
         return authorization.authorize(actor, action, resource).allowed
       })

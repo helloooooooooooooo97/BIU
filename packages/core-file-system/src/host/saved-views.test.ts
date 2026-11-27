@@ -154,13 +154,13 @@ test('clientViewFromDbRow keeps flat filters, sorts, locked, revision, and Perso
 test('index collection views stay with the account that saved them', async () => {
   const store = new SavedViewsStore()
   store.open(':memory:')
-  store.replace('/tags', [{ id: 'ada-view', name: 'Ada 的标签' }], 'ada')
-  store.replace('/tags', [{ id: 'bob-view', name: 'Bob 的标签' }], 'bob')
-  store.replace('/tags', [{ id: 'ada-view', name: 'Ada 改过' }], 'ada')
+  store.replace('/editor-blocks', [{ id: 'ada-view', name: 'Ada 的组件' }], 'ada')
+  store.replace('/editor-blocks', [{ id: 'bob-view', name: 'Bob 的组件' }], 'bob')
+  store.replace('/editor-blocks', [{ id: 'ada-view', name: 'Ada 改过' }], 'ada')
   let who = 'ada'
   const spec = viewsCollection(
     store,
-    () => [{ path: '/tags', id: 'tags', kind: 'collection', label: '标签', view: { moduleId: 'tags', route: '/tags', title: '标签' } }],
+    () => [{ path: '/editor-blocks', id: 'editor-blocks', kind: 'collection', label: '组件', view: { moduleId: 'editor-blocks', route: '/editor-blocks', title: '组件' } }],
     () => who,
   )
   const adaRows = await spec.list()
@@ -169,7 +169,7 @@ test('index collection views stay with the account that saved them', async () =>
   who = 'bob'
   const bobRows = await spec.list()
   assert.deepEqual(bobRows.map((row) => row.viewId), ['bob-view'])
-  await assert.rejects(async () => spec.remove!({ ids: ['tags::ada-view'] }), /VIEW_OWNER_ONLY|unknown view/)
+  await assert.rejects(async () => spec.remove!({ ids: ['editor-blocks::ada-view'] }), /VIEW_OWNER_ONLY|unknown view/)
 })
 
 test('update and delete accept row ids (table::viewId) and keep the source table label', async () => {

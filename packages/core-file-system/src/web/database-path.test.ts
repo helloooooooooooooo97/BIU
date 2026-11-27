@@ -53,12 +53,13 @@ test('views catalog source is a query filter', () => {
   assert.equal(viewsCatalogSource(''), '')
 })
 
-test('members and views are system collections; blocks and tags are index data', () => {
+test('members and views are system collections; blocks and comments are index data while tags are shareable public data', () => {
   assert.equal(isSystemCollection('/workspace-members'), true)
   assert.equal(isSystemCollection('/views'), true)
   assert.equal(isSystemCollection('/tags'), false)
-  assert.equal(isIndexCollection('/tags'), true)
+  assert.equal(isIndexCollection('/tags'), false)
   assert.equal(isIndexCollection('/editor-blocks'), true)
+  assert.equal(isIndexCollection('/comments'), true)
   assert.equal(isIndexCollection('/pages'), false)
   assert.equal(isSystemCollection('/events'), false)
   assert.equal(isSystemCollection('/notices'), true)
@@ -96,7 +97,8 @@ test('data overview create menu excludes plugins, comments, system and index col
   assert.equal(isOverviewCreatableCollection('/plugins'), false)
   assert.equal(isOverviewCreatableCollection('/comments'), false)
   assert.equal(isOverviewCreatableCollection('/data'), false)
-  assert.equal(isOverviewCreatableCollection('/tags'), false)
+  assert.equal(isOverviewCreatableCollection('/tags'), true)
+  assert.equal(isOverviewCreatableCollection('/editor-blocks'), false)
   assert.equal(isOverviewCreatableCollection('/trash'), false)
   assert.equal(isOverviewCreatableCollection('/pages'), true)
   assert.equal(isOverviewCreatableCollection('/agents'), true)
