@@ -6,12 +6,12 @@ import type { AssistantReply, ChatOptions, LlmClient, LlmConfig, LlmMessage, Llm
 import { classifyLlmError, messagesHaveImages, omitImageContent, omitRejectedImages } from '@biu/host-llm'
 import { runWithSession } from '@biu/host-sessions/scope'
 import { applyContextBudget, liftToolImages } from '@biu/host-sessions'
-import { autoCompactPostStep, contextWindowTokens, mechanicalCompactText, shouldAutoCompact } from './auto-compact.ts'
+import { contextWindowTokens, mechanicalCompactText, shouldAutoCompact } from './auto-compact.ts'
 import { runWithToolPolicy, runWithToolProgress, type AgentToolMode } from '@biu/host-tools'
 
 /** 工具结果写入事件日志( tool/result )时统一上限字符数；超长裁剪，避免上下文被单次工具输出撑爆。 */
 export const MAX_TOOL_RESULT_CHARS = 16_000
-export const DEFAULT_TOOL_CONCURRENCY = 4
+const DEFAULT_TOOL_CONCURRENCY = 4
 
 type ReplyToolCall = AssistantReply['toolCalls'][number]
 type ToolOutcome = { name: string; ok: boolean; detail: string; cancelled: boolean }
@@ -503,7 +503,6 @@ export const inject = ['llm', 'tools', 'sessions', 'systemPrompt']
 
 export function apply(ctx: Context) {
   new AgentLoopService(ctx)
-  ctx.on('agent/post-step', (req, next) => autoCompactPostStep(next()))
 }
 
 declare module 'cordis' {
