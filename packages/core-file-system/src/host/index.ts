@@ -425,7 +425,7 @@ export function listNeedsMatchOverlay(
   if (!filter) return false
   if (filter.$tree && typeof filter.$tree === 'object') return true
   for (const [key, expected] of Object.entries(filter)) {
-    if (key === '$tree' || key === '$scope' || key === '$ownerTable' || key === '$ids' || key === 'shareScope' || expected == null || expected === '') continue
+    if (key === '$tree' || key === '$scope' || key === '$ids' || key === 'shareScope' || expected == null || expected === '') continue
     if (overlayListField(key)) return true
   }
   return false
@@ -543,10 +543,6 @@ export class DatabaseService extends Service implements Database {
       collabStore: () => this.collabStore(),
       authorization: () => this.authorization(),
       deviceWorkspace: () => this.deviceWorkspace(),
-      markDeviceRecord: (collection, id) => this.markDeviceRecord(collection, id),
-      collection: (pathOrId) => this.collection(pathOrId),
-      schemaFor: (spec) => schemaFor(spec),
-      applyTagOverlay: (spec, row) => this.applyTagOverlay(spec, row),
     })
   }
 
@@ -1334,7 +1330,6 @@ export class DatabaseService extends Service implements Database {
       delete liveFilter.deleted
       delete liveFilter.trash
       delete liveFilter.$scope
-      delete liveFilter.$ownerTable
     }
     const tableFilter = normalizeCollectionPath(String(liveFilter?.tablePath ?? ''))
     const tableNameFilter = String(liveFilter?.table ?? '').trim()
@@ -1397,7 +1392,6 @@ export class DatabaseService extends Service implements Database {
     const ids = asIds(liveFilter.$ids)
     const trash = liveFilter.deleted === true || liveFilter.trash === true
     delete liveFilter.$scope
-    delete liveFilter.$ownerTable
     delete liveFilter.$ids
     delete liveFilter.deleted
     delete liveFilter.trash
@@ -1464,7 +1458,6 @@ export class DatabaseService extends Service implements Database {
       delete liveFilter.deleted
       delete liveFilter.trash
       delete liveFilter.$scope
-      delete liveFilter.$ownerTable
       delete liveFilter.$ids
     }
     const query: CollectionListQuery = { q, filter: liveFilter, trash }

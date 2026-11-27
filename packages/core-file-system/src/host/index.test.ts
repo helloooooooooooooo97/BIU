@@ -3335,6 +3335,8 @@ test('collection list preloads authorization scans and releases them', () => {
     '\n' +
     readFileSync(resolve(import.meta.dirname, './access-policy.ts'), 'utf8') +
     '\n' +
+    readFileSync(resolve(import.meta.dirname, './share-payload.ts'), 'utf8') +
+    '\n' +
     readFileSync(resolve(import.meta.dirname, './doc-asset-edit.ts'), 'utf8')
   assert.match(host, /auth\.preloadCollection\(actor\.workspaceId, spec\.path, actor\.accountId\)/)
   assert.match(host, /private inflightMatches/)
@@ -3357,7 +3359,7 @@ test('collection list preloads authorization scans and releases them', () => {
   assert.match(host, /databaseChannelPayload\('asset'/)
   assert.match(host, /if \(viewOnly\) this\.notifyViewCatalog\(`\$\{spec\.path\}\/\$\{record\.id\}`\)/)
   assert.doesNotMatch(host, /db\.bump\(\)\s*\n\s*route\.send\(200, \{ ok: true, tags: tags\.list\(\), filled:/)
-  assert.match(host, /listRecords\(collection\)/)
+  assert.match(host, /listRecords\((?:collection|targetCollection)\)/)
   assert.match(host, /shareInflight/)
   assert.match(host, /setImmediate\(\(\) => \{\s*setImmediate/)
   assert.match(host, /inflightVisible\.clear\(\)/)

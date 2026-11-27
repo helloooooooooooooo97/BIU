@@ -225,16 +225,10 @@ test('GET /api/account/member-activity resolves grant record titles via $ids fil
     const ada = account.store.register('Ada', Date.now(), 'secret1', 'ada-grants@example.com')
     const workspace = account.store.createWorkspace(ada.id, 'Main')
     account.store.setActive(ada.id, workspace.id)
-    const db = openAndMigrateBiu(sqlitePath)
     const now = Date.now()
     for (const [idx, recId] of (['pg_named', 'pg_empty', 'pg_trash'] as const).entries()) {
-      account.store.attach(workspace.id, '/pages', recId, now)
-      db.prepare(
-        `INSERT INTO record_grants (workspace_id, collection, record_id, subject_type, subject_id, role, granted_by, created_at)
-         VALUES (?, '/pages', ?, 'account', ?, 'owner', ?, ?)`,
-      ).run(workspace.id, recId, ada.id, ada.id, now - idx)
+      account.store.attach(workspace.id, '/pages', recId, now - idx)
     }
-    db.close()
     const session = account.store.login('ada-grants@example.com', 'secret1')
 
     const handler = routes.get('GET /api/account/member-activity')

@@ -32,10 +32,6 @@ describe('DatabaseAccessPolicy Notion 3-state visibility & orthogonal external a
       collabStore: () => store,
       authorization: () => authorization as unknown as ReturnType<AccessPolicyHost['authorization']>,
       deviceWorkspace: () => false,
-      markDeviceRecord: () => {},
-      collection: () => undefined,
-      schemaFor: () => ({ fields: {} }) as ReturnType<AccessPolicyHost['schemaFor']>,
-      applyTagOverlay: (_spec: unknown, row: Record<string, unknown>) => row,
     } as unknown as AccessPolicyHost
     return new DatabaseAccessPolicy(host)
   }
@@ -140,10 +136,6 @@ describe('DatabaseAccessPolicy Notion 3-state visibility & orthogonal external a
       collabStore: () => store,
       authorization: () => authorization as unknown as ReturnType<AccessPolicyHost['authorization']>,
       deviceWorkspace: () => false,
-      markDeviceRecord: () => {},
-      collection: () => undefined,
-      schemaFor: () => ({ fields: {} }) as ReturnType<AccessPolicyHost['schemaFor']>,
-      applyTagOverlay: (_spec: unknown, row: Record<string, unknown>) => row,
     } as unknown as AccessPolicyHost
     const policy = new DatabaseAccessPolicy(host)
 

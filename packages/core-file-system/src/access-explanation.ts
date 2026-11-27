@@ -73,7 +73,7 @@ export type RoleChainInput = {
   title: string
   detail: string
   role: string
-  source?: 'ownership' | 'direct-grant' | 'member-view-grant' | 'workspace-default' | 'inherited' | 'legacy'
+  source?: 'ownership' | 'direct-grant' | 'member-view-grant' | 'workspace-default' | 'inherited'
 }
 
 export type AncestorAccessInput = {

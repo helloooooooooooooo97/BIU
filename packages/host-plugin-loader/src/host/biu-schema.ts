@@ -1,6 +1,6 @@
 type DatabaseSync = import('node:sqlite').DatabaseSync
 
-export const LATEST_BIU_SCHEMA = 62
+export const LATEST_BIU_SCHEMA = 63
 
 export const CREATE_CORE_SQL = `
 CREATE TABLE IF NOT EXISTS pages (
@@ -307,15 +307,6 @@ CREATE TABLE IF NOT EXISTS mcp_audit_log (
   created_at INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS mcp_audit_workspace ON mcp_audit_log(workspace_id, created_at);
-CREATE TABLE IF NOT EXISTS record_owners (
-  workspace_id TEXT NOT NULL,
-  collection TEXT NOT NULL,
-  record_id TEXT NOT NULL,
-  owner_id TEXT NOT NULL,
-  version INTEGER NOT NULL DEFAULT 0,
-  updated_at INTEGER NOT NULL,
-  PRIMARY KEY (workspace_id, collection, record_id)
-);
 CREATE TABLE IF NOT EXISTS sync_ops (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   workspace_id TEXT NOT NULL,
@@ -339,7 +330,6 @@ CREATE TABLE IF NOT EXISTS resource_policies (
   parent_record_id TEXT NOT NULL DEFAULT '',
   created_by TEXT NOT NULL,
   created_at INTEGER NOT NULL,
-  inherit_parent INTEGER NOT NULL DEFAULT 0,
   PRIMARY KEY (workspace_id, collection, record_id)
 );
 CREATE INDEX IF NOT EXISTS resource_policies_parent

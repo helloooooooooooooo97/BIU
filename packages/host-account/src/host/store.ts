@@ -75,14 +75,6 @@ export class CollabStore {
     if (wsCols.length > 0 && !wsCols.includes('avatar')) {
       this.db.exec(`ALTER TABLE workspaces ADD COLUMN avatar TEXT NOT NULL DEFAULT ''`)
     }
-    const rpCols = (this.db.prepare('PRAGMA table_info(resource_policies)').all() as Array<{ name: string }>).map((c) => c.name)
-    if (rpCols.includes('inherit_parent')) {
-      this.db.exec(
-        `UPDATE resource_policies
-         SET access_mode = 'inherit'
-         WHERE access_mode != 'inherit' AND inherit_parent = 1 AND parent_record_id != ''`,
-      )
-    }
   }
 
   private ensureActivityTable() {
@@ -697,11 +689,11 @@ export class CollabStore {
   tenantForRecord(collection: string, recordId: string) {
     const row = this.db
       .prepare(
-        `SELECT workspace_id, owner_id FROM record_owners
+        `SELECT workspace_id, owner_account_id FROM resource_policies
          WHERE collection = ? AND record_id = ? LIMIT 1`,
       )
-      .get(collection, recordId) as { workspace_id: string; owner_id: string } | undefined
-    return row ? { workspaceId: row.workspace_id, accountId: row.owner_id } : null
+      .get(collection, recordId) as { workspace_id: string; owner_account_id: string } | undefined
+    return row ? { workspaceId: row.workspace_id, accountId: row.owner_account_id } : null
   }
 
   revokeMcpForMember(accountId: string, workspaceId: string, now = Date.now()) {
@@ -832,7 +824,7 @@ export class CollabStore {
     if (!row) throw new CollabError('空间不存在', 404)
     if (confirmName !== row.name) throw new CollabError('请输入完整的空间名称以确认删除', 400)
     const records = this.db
-      .prepare('SELECT collection, record_id FROM record_owners WHERE workspace_id = ?')
+      .prepare('SELECT collection, record_id FROM resource_policies WHERE workspace_id = ?')
       .all(workspaceId) as Array<{ collection: string; record_id: string }>
     const tables = this.db
       .prepare(`SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%'`)
@@ -1258,12 +1250,6 @@ export class CollabStore {
              WHERE workspace_id = ? AND owner_account_id = ?`,
           )
           .run(transferTo, workspaceId, accountId)
-        this.db
-          .prepare(
-            `UPDATE record_owners SET owner_id = ?
-             WHERE workspace_id = ? AND owner_id = ?`,
-          )
-          .run(transferTo, workspaceId, accountId)
         for (const rec of ownedPolicies) {
           this.db
             .prepare(
@@ -1358,7 +1344,7 @@ export class CollabStore {
     if (!normalizedViewId) throw new CollabError('成员视图不能为空', 400)
     const target = this.resolveRecordTarget(collection, recordId)
     const owned = this.db
-      .prepare('SELECT 1 AS ok FROM record_owners WHERE workspace_id = ? AND collection = ? AND record_id = ?')
+      .prepare('SELECT 1 AS ok FROM resource_policies WHERE workspace_id = ? AND collection = ? AND record_id = ?')
       .get(workspaceId, target.collection, target.recordId) as { ok: number } | undefined
     if (!owned) throw new CollabError('记录不在这个工作区', 404)
     try {
@@ -2077,7 +2063,7 @@ export class CollabStore {
     const active = this.activeWorkspaceId()
     const home = this.homeWorkspaceId()
     const rows = this.db
-      .prepare('SELECT workspace_id, collection, record_id FROM record_owners')
+      .prepare('SELECT workspace_id, collection, record_id FROM resource_policies')
       .all() as Array<{ workspace_id: string; collection: string; record_id: string }>
     const mine = new Set<string>()
     const any = new Set<string>()
@@ -2115,7 +2101,7 @@ export class CollabStore {
 
   recordIds(workspaceId: string, collection: string) {
     const rows = this.db
-      .prepare('SELECT record_id FROM record_owners WHERE workspace_id = ? AND collection = ?')
+      .prepare('SELECT record_id FROM resource_policies WHERE workspace_id = ? AND collection = ?')
       .all(workspaceId, collection) as Array<{ record_id: string }>
     return new Set(rows.map((row) => row.record_id))
   }
@@ -2136,26 +2122,17 @@ export class CollabStore {
     const recordOwner = caller || owner.owner_id
     const elsewhere = this.db
       .prepare(
-        `SELECT workspace_id FROM record_owners
+        `SELECT workspace_id FROM resource_policies
          WHERE collection = ? AND record_id = ? AND workspace_id != ? LIMIT 1`,
       )
       .get(collection, recordId, workspaceId) as { workspace_id?: string } | undefined
     if (elsewhere) throw new CollabError('这条记录已经属于另一个空间', 409)
-    this.db
-      .prepare(
-        `INSERT INTO record_owners (workspace_id, collection, record_id, owner_id, version, updated_at)
-         VALUES (?, ?, ?, ?, 0, ?)
-         ON CONFLICT(workspace_id, collection, record_id) DO NOTHING`,
-      )
-      .run(workspaceId, collection, recordId, recordOwner, now)
-    if (caller) {
-      this.authorization.attach(
-        { type: 'account', accountId: caller, workspaceId },
-        { type: 'record', workspaceId, collection, recordId },
-        policy,
-        now,
-      )
-    }
+    this.authorization.attach(
+      { type: 'account', accountId: recordOwner, workspaceId },
+      { type: 'record', workspaceId, collection, recordId },
+      policy,
+      now,
+    )
   }
 
   /** 以显式 owner 挂载记录归属与策略（用于 /views 视图创建与默认种子视图懒初始化）。 */
@@ -2174,13 +2151,6 @@ export class CollabStore {
     if (!ownerRow) return
     const recordOwner = ownerAccountId.trim() || ownerRow.owner_id
     if (!recordOwner) return
-    this.db
-      .prepare(
-        `INSERT INTO record_owners (workspace_id, collection, record_id, owner_id, version, updated_at)
-         VALUES (?, ?, ?, ?, 0, ?)
-         ON CONFLICT(workspace_id, collection, record_id) DO NOTHING`,
-      )
-      .run(workspaceId, collection, recordId, recordOwner, now)
     this.authorization.attach(
       { type: 'account', accountId: recordOwner, workspaceId },
       { type: 'record', workspaceId, collection, recordId },
@@ -2197,9 +2167,6 @@ export class CollabStore {
       .run(workspaceId, collection, recordId)
     this.db
       .prepare('DELETE FROM resource_policies WHERE workspace_id = ? AND collection = ? AND record_id = ?')
-      .run(workspaceId, collection, recordId)
-    this.db
-      .prepare('DELETE FROM record_owners WHERE workspace_id = ? AND collection = ? AND record_id = ?')
       .run(workspaceId, collection, recordId)
     this.authorization.invalidate(workspaceId, collection)
   }
@@ -2426,7 +2393,7 @@ export class CollabStore {
     this.requireMember(actorId, workspaceId)
     const target = this.resolveRecordTarget(collection, recordId)
     const owned = this.db
-      .prepare('SELECT 1 AS ok FROM record_owners WHERE workspace_id = ? AND collection = ? AND record_id = ?')
+      .prepare('SELECT 1 AS ok FROM resource_policies WHERE workspace_id = ? AND collection = ? AND record_id = ?')
       .get(workspaceId, target.collection, target.recordId) as { ok: number } | undefined
     if (!owned) throw new CollabError('记录不在这个工作区', 404)
     const normalized = email.trim().toLowerCase()
@@ -2610,13 +2577,7 @@ export class CollabStore {
       directSharedIds.add(grant.record_id)
     }
 
-    const ownedRows = this.db
-      .prepare(`SELECT record_id FROM record_owners WHERE workspace_id = ? AND collection = ?`)
-      .all(workspaceId, collection) as Array<{ record_id: string }>
-    const legacyOwnedIds = new Set<string>(ownedRows.map((row) => row.record_id))
-
     const crossSharedCache = new Map<string, boolean>()
-    const crossLegacyCache = new Map<string, boolean>()
     const hasDirectGrant = (col: string, recId: string, ownerId: string): boolean => {
       if (col === collection) return directSharedIds.has(recId)
       const key = `${col}\t${recId}`
@@ -2631,24 +2592,12 @@ export class CollabStore {
       crossSharedCache.set(key, shared)
       return shared
     }
-    const hasLegacyOwner = (col: string, recId: string): boolean => {
-      if (col === collection) return legacyOwnedIds.has(recId)
-      const key = `${col}\t${recId}`
-      if (crossLegacyCache.has(key)) return crossLegacyCache.get(key)!
-      const hit = Boolean(
-        this.db
-          .prepare(`SELECT 1 FROM record_owners WHERE workspace_id = ? AND collection = ? AND record_id = ? LIMIT 1`)
-          .get(workspaceId, col, recId),
-      )
-      crossLegacyCache.set(key, hit)
-      return hit
-    }
 
     const resolveScope = createResolver<'personal' | 'workspace' | 'shared'>(
       'personal',
       (col, recId, policy, resolveParent) => {
         if (!policy) {
-          return hasLegacyOwner(col, recId) ? 'workspace' : hasDirectGrant(col, recId, '') ? 'shared' : 'personal'
+          return hasDirectGrant(col, recId, '') ? 'shared' : 'personal'
         }
         if (policy.access_mode === 'members') return 'workspace'
         if (policy.access_mode === 'inherit' && policy.parent_record_id) {
@@ -2664,9 +2613,6 @@ export class CollabStore {
     const map = new Map<string, 'personal' | 'workspace' | 'shared'>()
     for (const row of policies) {
       map.set(row.record_id, resolveScope(collection, row.record_id))
-    }
-    for (const row of ownedRows) {
-      if (!map.has(row.record_id)) map.set(row.record_id, 'workspace')
     }
     return map
   }
@@ -2821,14 +2767,6 @@ export class CollabStore {
       .all(workspaceId, collection) as Array<{ record_id: string; owner_account_id: string }>
     for (const row of policies) {
       if (row.owner_account_id) map.set(row.record_id, row.owner_account_id)
-    }
-    const owners = this.db
-      .prepare(
-        `SELECT record_id, owner_id FROM record_owners WHERE workspace_id = ? AND collection = ?`,
-      )
-      .all(workspaceId, collection) as Array<{ record_id: string; owner_id: string }>
-    for (const row of owners) {
-      if (!map.has(row.record_id) && row.owner_id) map.set(row.record_id, row.owner_id)
     }
     return map
   }
@@ -3124,14 +3062,7 @@ export class CollabStore {
       .get(workspaceId, collection, recordId) as
       | { access_mode: string; member_default_role: 'viewer' | 'editor'; owner_account_id: string }
       | undefined
-    const ownerRow = policy?.owner_account_id
-      ? { owner_id: policy.owner_account_id }
-      : this.db
-          .prepare(
-            `SELECT owner_id FROM record_owners WHERE workspace_id = ? AND collection = ? AND record_id = ?`,
-          )
-          .get(workspaceId, collection, recordId) as { owner_id?: string } | undefined
-    const ownerId = policy?.owner_account_id || ownerRow?.owner_id || ''
+    const ownerId = policy?.owner_account_id || ''
     const collaboratorCount = rows.filter((row) => row.id !== ownerId).length + memberViews.length
     const hasExternalCollaborator = rows.some(
       (row) => row.id !== ownerId && (row.member_kind === 'external' || row.member_kind === 'guest'),
@@ -3276,36 +3207,6 @@ export class CollabStore {
         createdAt: row.workspace_created,
       },
     }
-  }
-
-  private importLiveRecords(workspaceId: string, ownerId: string, now: number) {
-    const inserted = this.db
-      .prepare(
-        `INSERT INTO record_owners (workspace_id, collection, record_id, owner_id, version, updated_at)
-         SELECT ?, live.collection, live.record_id, ?, 0, ?
-         FROM (
-           SELECT '/pages' AS collection, id AS record_id FROM pages
-           UNION
-           SELECT '/tasks', id FROM tasks
-           UNION
-           SELECT '/agents', id FROM agents
-           UNION
-           SELECT collection, record_id FROM editor_content
-           WHERE collection IN ('/skills', '/plugins')
-           UNION
-           SELECT collection, record_id FROM record_meta
-           WHERE collection IN ('/pages', '/tasks', '/agents', '/skills', '/plugins')
-         ) AS live
-         WHERE NOT EXISTS (
-           SELECT 1 FROM record_meta AS meta
-           WHERE meta.collection = live.collection
-             AND meta.record_id = live.record_id
-             AND meta.deleted_at IS NOT NULL
-             AND meta.deleted_at > 0
-         )`,
-      )
-      .run(workspaceId, ownerId, now)
-    return Number(inserted.changes)
   }
 
   private ensureBuiltInRoot(now = Date.now()) {

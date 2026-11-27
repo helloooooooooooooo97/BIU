@@ -59,7 +59,7 @@ export type ResourceRole = 'viewer' | 'commenter' | 'editor' | 'manager' | 'owne
 export type Capability = 'read' | 'comment' | 'write' | 'delete' | 'move' | 'grant' | 'owner'
 export type AccessMode = 'inherit' | 'private' | 'members'
 export type WorkspaceRole = 'viewer' | 'member' | 'admin' | 'owner'
-export type GrantSubjectType = 'account' | 'member_view' | 'workspace_role'
+export type GrantSubjectType = 'account' | 'member_view'
 
 export type MemberViewMatcher = (
   workspaceId: string,
@@ -76,7 +76,7 @@ export type Decision =
   | {
       allowed: true
       effectiveRole: ResourceRole
-      source: 'ownership' | 'direct-grant' | 'member-view-grant' | 'workspace-default' | 'inherited' | 'legacy'
+      source: 'ownership' | 'direct-grant' | 'member-view-grant' | 'workspace-default' | 'inherited'
     }
   | {
       allowed: false
@@ -120,7 +120,6 @@ type CollectionScan = {
   collection: string
   accountId: string
   policies: Map<string, PolicyRow>
-  owners: Map<string, string>
   grants: Map<string, ScanGrant[]>
   matchedMemberViews: Set<string>
   membership: WorkspaceRole | null
@@ -396,14 +395,6 @@ export class AuthorizationService {
     for (const row of policyRows) {
       policies.set(row.record_id, row)
     }
-    const owners = new Map<string, string>()
-    for (const row of this.db
-      .prepare(
-        'SELECT record_id, owner_id FROM record_owners WHERE workspace_id = ? AND collection = ?',
-      )
-      .all(workspaceId, collection) as Array<{ record_id: string; owner_id: string }>) {
-      owners.set(row.record_id, row.owner_id)
-    }
     const grants = new Map<string, ScanGrant[]>()
     const referencedMemberViews = new Set<string>()
     for (const row of this.db
@@ -434,7 +425,6 @@ export class AuthorizationService {
       collection,
       accountId,
       policies,
-      owners,
       grants,
       matchedMemberViews,
       membership,
@@ -580,9 +570,7 @@ export class AuthorizationService {
     if (visited.has(key) || depth > 64) return 'private'
     visited.add(key)
     const policy = this.policy(resource)
-    if (!policy) {
-      return this.legacyOwnerId(resource) ? 'members' : 'private'
-    }
+    if (!policy) return 'private'
     const mode = normalizeStoredAccessMode(policy.access_mode)
     if (mode === 'members') return 'members'
     if (mode === 'inherit' && policy.parent_record_id) {
@@ -633,8 +621,10 @@ export class AuthorizationService {
         accountId,
         now,
       )
-    this.grant(accountId, resource, 'account', accountId, 'owner', now)
-    if (Number(inserted.changes) > 0) this.dropScans(resource.workspaceId, resource.collection)
+    if (Number(inserted.changes) > 0) {
+      this.grant(accountId, resource, 'account', accountId, 'owner', now)
+      this.dropScans(resource.workspaceId, resource.collection)
+    }
   }
 
   grant(
@@ -909,23 +899,10 @@ export class AuthorizationService {
     policy: PolicyRow | null | undefined,
   ): {
     role: ResourceRole
-    source: 'ownership' | 'direct-grant' | 'member-view-grant' | 'workspace-default' | 'legacy'
+    source: 'ownership' | 'direct-grant' | 'member-view-grant' | 'workspace-default'
     detail: string
   } | null {
-    if (!policy) {
-      const ownerId = this.legacyOwnerId(resource)
-      if (!ownerId) return null
-      if (ownerId === accountId) return { role: 'owner', source: 'legacy', detail: '你是创建者' }
-      if (this.membershipKind(accountId, resource.workspaceId) !== 'member') return null
-      const wsRole = this.membership(accountId, resource.workspaceId)
-      const role: ResourceRole =
-        wsRole === 'owner' || wsRole === 'admin'
-          ? 'manager'
-          : wsRole === 'viewer'
-            ? 'viewer'
-            : 'editor'
-      return { role, source: 'legacy', detail: '沿用空间里的旧记录' }
-    }
+    if (!policy) return null
     if (policy.owner_account_id === accountId) {
       return { role: 'owner', source: 'ownership', detail: '你是创建者' }
     }
@@ -968,7 +945,7 @@ export class AuthorizationService {
     title: string
     detail: string
     role: ResourceRole
-    source: 'ownership' | 'direct-grant' | 'member-view-grant' | 'workspace-default' | 'inherited' | 'legacy'
+    source: 'ownership' | 'direct-grant' | 'member-view-grant' | 'workspace-default' | 'inherited'
   }> {
     const key = `${resource.workspaceId}\t${resource.collection}\t${resource.recordId}`
     if (visited.has(key) || depth > 64) return []
@@ -993,7 +970,7 @@ export class AuthorizationService {
       : []
     const inheritedRole = parent.length ? parent[parent.length - 1]!.role : null
     if (local && (!inheritedRole || ROLE_RANK[local.role] >= ROLE_RANK[inheritedRole])) {
-      return [{ ...base, detail: local.detail, role: local.role, source: local.source === 'legacy' && local.role === 'owner' ? 'ownership' : local.source }]
+      return [{ ...base, detail: local.detail, role: local.role, source: local.source }]
     }
     if (inheritedRole) {
       return [{ ...base, detail: '继承上级权限', role: inheritedRole, source: 'inherited' }, ...parent]
@@ -1046,9 +1023,7 @@ export class AuthorizationService {
     if (!role) return null
     const source = matched.some((row) => row.subject_type === 'account' && row.role === role)
       ? 'direct-grant'
-      : matched.some((row) => row.subject_type === 'member_view' && row.role === role)
-        ? 'member-view-grant'
-        : 'workspace-default'
+      : 'member-view-grant'
     return { effectiveRole: role, source } as const
   }
 
@@ -1060,7 +1035,6 @@ export class AuthorizationService {
          WHERE g.workspace_id = ? AND g.collection = ? AND g.record_id = ?
            AND (
              (g.subject_type = 'account' AND g.subject_id = ?)
-             OR (g.subject_type = 'workspace_role' AND g.subject_id = ?)
              OR g.subject_type = 'member_view'
            )`,
       )
@@ -1069,7 +1043,6 @@ export class AuthorizationService {
         resource.collection,
         resource.recordId,
         accountId,
-        this.membership(accountId, resource.workspaceId) ?? '',
       ) as ScanGrant[]
     if (!rows.some((row) => row.subject_type === 'member_view')) return rows
     return rows.filter(
@@ -1080,7 +1053,6 @@ export class AuthorizationService {
   private scanGrantsFor(scan: CollectionScan, recordId: string) {
     return (scan.grants.get(recordId) ?? []).filter((row) => {
       if (row.subject_type === 'account') return row.subject_id === scan.accountId
-      if (row.subject_type === 'workspace_role') return row.subject_id === (scan.membership ?? '')
       if (row.subject_type === 'member_view') return scan.matchedMemberViews.has(row.subject_id)
       return false
     })
@@ -1113,18 +1085,6 @@ export class AuthorizationService {
          WHERE workspace_id = ? AND collection = ? AND record_id = ?`,
       )
       .get(resource.workspaceId, resource.collection, resource.recordId) as PolicyRow | undefined
-  }
-
-  private legacyOwnerId(resource: Extract<ResourceRef, { type: 'record' }>) {
-    const scan = this.collectionScan(resource.workspaceId, resource.collection)
-    if (scan) return scan.owners.get(resource.recordId)
-    const row = this.db
-      .prepare(
-        `SELECT owner_id FROM record_owners
-         WHERE workspace_id = ? AND collection = ? AND record_id = ?`,
-      )
-      .get(resource.workspaceId, resource.collection, resource.recordId) as { owner_id: string } | undefined
-    return row?.owner_id
   }
 
   private membership(accountId: string, workspaceId: string): WorkspaceRole | null {
