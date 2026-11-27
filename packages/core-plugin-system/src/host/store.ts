@@ -21,6 +21,7 @@ import {
   type StoreManifestFields,
 } from './plugin-create.ts'
 import { parseStoreShell, requireDeclaredShell, type StoreShell } from '../shell.ts'
+import { getAccountService } from '@biu/host-account'
 import { registerBuiltinPluginLookup } from '@biu/host-account/store'
 import {
   assetsRootPath,
@@ -317,24 +318,7 @@ export class PluginStoreService extends Service {
   }
 
   private accountStore() {
-    return (
-      this.ctx.get('account') as {
-        store?: {
-          canAccessPlugin?(accountId: string, workspaceId: string, pluginId: string): boolean
-          hasPluginLoad?(accountId: string, workspaceId: string, pluginId: string): boolean
-          pluginLoadsFor?(accountId: string, workspaceId: string): string[]
-          loadedPluginIds?(): string[]
-          setPluginLoad?(accountId: string, workspaceId: string, pluginId: string, loaded: boolean): void
-          isMember?(accountId: string, workspaceId: string): boolean
-          isSuperAdmin?(accountId?: string | null): boolean
-          ensurePluginOwnerAssignments?(pluginId: string): number
-          recordPluginPackage?(accountId: string, input: Record<string, unknown>): void
-          syncInstalledPluginPackage?(input: Record<string, unknown>): boolean
-          removePluginPackage?(accountId: string, pluginId: string): void
-          forgetPluginLoads?(pluginId: string): void
-        }
-      } | undefined
-    )?.store
+    return getAccountService(this.ctx)?.store
   }
 
   private readState(): StoreState {
@@ -952,14 +936,7 @@ export async function openStore(ctx: Context) {
   ctx.http.route('GET', '/api/plugins/catalog', async (route) => {
     const accountId = currentAccountId()
     const workspaceId = currentRequestWorkspaceId()
-    const account = (
-      ctx.get('account') as {
-        store?: {
-          canAccessPlugin?(accountId: string, workspaceId: string, pluginId: string): boolean
-          isMember?(accountId: string, workspaceId: string): boolean
-        }
-      } | undefined
-    )?.store
+    const account = getAccountService(ctx)?.store
     const canManagePackages =
       !rbacEnforced() || Boolean(accountId && workspaceId && account?.isMember?.(accountId, workspaceId))
     const plugins = (await store.list())

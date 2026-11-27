@@ -1,3 +1,4 @@
+import { normalizeAuthzScope, type AuthzRole, type AuthzShareScope } from './authz-labels.ts'
 import { isViewModeId, type ViewMode } from './fields.ts'
 import { normalizeColumnSummaries, type ColumnSummaryOp } from './column-summary.ts'
 import { normalizeColumnViews, type ColumnViewConfig } from './column-sandbox-model.ts'
@@ -7,16 +8,12 @@ import { countFilterRules, filterTreeStateKey, normalizeSorts, resolveViewFilter
 export type GroupSortMode = 'manual' | 'asc' | 'desc'
 
 /** 视图在 /views 表中的站内共享范围（与所有普通 Record 100% 统一）。 */
-export type ViewShareScope = 'personal' | 'shared' | 'workspace'
+export type ViewShareScope = AuthzShareScope
 
-export type ViewRole = 'owner' | 'manager' | 'editor' | 'commenter' | 'viewer'
+export type ViewRole = AuthzRole
 
 export function normalizeViewShareScope(value: unknown): ViewShareScope | undefined {
-  if (value === 'personal' || value === 'shared' || value === 'workspace') return value
-  if (value === '私人') return 'personal'
-  if (value === '共享') return 'shared'
-  if (value === '空间') return 'workspace'
-  return undefined
+  return normalizeAuthzScope(value)
 }
 
 export function normalizeViewRole(value: unknown): ViewRole | undefined {

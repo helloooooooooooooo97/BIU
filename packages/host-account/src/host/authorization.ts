@@ -129,7 +129,7 @@ type CollectionScan = {
 const POLICY_SELECT = `workspace_id, collection, record_id, owner_account_id, access_mode,
                 member_default_role, parent_collection, parent_record_id`
 
-const ROLE_RANK: Record<ResourceRole, number> = { viewer: 1, commenter: 2, editor: 3, manager: 4, owner: 5 }
+export const ROLE_RANK: Record<ResourceRole, number> = { viewer: 1, commenter: 2, editor: 3, manager: 4, owner: 5 }
 
 export const ROLE_CAPABILITIES: Record<ResourceRole, ReadonlySet<Capability>> = {
   viewer: new Set<Capability>(['read']),

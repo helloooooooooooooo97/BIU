@@ -12,6 +12,7 @@
     "cordis": "4.0.0-rc.8"
   },
   "dependencies": {
+    "@biu/host-account": "0.1.0",
     "@biu/host-agent-loop": "0.1.0",
     "@biu/host-agents": "0.1.0",
     "@biu/host-approvals": "0.1.0",

@@ -141,12 +141,7 @@ export function createBiuMcpServer(ctx: Context) {
     const tenant = currentMcpTenant()
     const audit = (success: boolean) => {
       if (!tenant) return
-      const store = (
-        ctx.get('account') as {
-          store?: { auditMcp?(tenant: McpTenant, toolName: string, success: boolean): void }
-        } | undefined
-      )?.store
-      store?.auditMcp?.(tenant, name, success)
+      getAccountPort(ctx)?.store?.auditMcp?.(tenant, name, success)
     }
     try {
       if (tenant && !tenant.allowedTools.includes(name)) {
@@ -245,19 +240,7 @@ export function applyHostServer(ctx: Context) {
 
   function mcpTenant(route: RouteContext) {
     const got = bearerToken(route.req.headers.authorization)
-    const store = (
-      ctx.get('account') as {
-        store?: {
-          resolveMcpCredential?(token: string): {
-            credentialId: string
-            accountId: string
-            workspaceId: string
-            role: string
-            allowedTools: string[]
-          } | null
-        }
-      } | undefined
-    )?.store
+    const store = getAccountPort(ctx)?.store
     const credential = got ? store?.resolveMcpCredential?.(got) : null
     if (credential) return credential
     if (tokensMatch(got, token) && getRuntimePolicy().authzMode !== 'rbac') return null
@@ -316,16 +299,7 @@ export function applyHostServer(ctx: Context) {
 
   function localActor(route: RouteContext) {
     const headerWorkspace = String(route.req.headers['x-biu-workspace-id'] ?? '').trim()
-    const store = (
-      ctx.get('account') as {
-        store?: {
-          activeLocalActor?(requestedWorkspaceId?: string): { accountId: string; workspaceId: string } | null
-          isMember?(accountId: string, workspaceId: string): boolean
-          accountActiveWorkspace?(accountId: string): string | null
-          activeWorkspaceId?(): string | null
-        }
-      } | undefined
-    )?.store
+    const store = getAccountPort(ctx)?.store
     const existingAccount = currentAccountId()
     if (existingAccount) {
       const workspaceId =

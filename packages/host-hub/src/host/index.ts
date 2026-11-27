@@ -120,14 +120,7 @@ export class HubService extends Service {
 
   snapshotFor(accountId: string, workspaceId: string) {
     const snapshot = this.snapshot()
-    const store = (
-      this.ctx.get('account') as {
-        store?: {
-          canAccessPlugin?(accountId: string, workspaceId: string, pluginId: string): boolean
-          isSuperAdmin?(accountId: string): boolean
-        }
-      } | undefined
-    )?.store
+    const store = getAccountPort(this.ctx)?.store
     const allowed = new Set(
       snapshot.plugins
         .filter(

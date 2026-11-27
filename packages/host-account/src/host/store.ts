@@ -2,7 +2,7 @@ import { createHash, randomBytes } from 'node:crypto'
 import type { DatabaseSync } from 'node:sqlite'
 import { currentAccountId, currentRequestWorkspaceId, superAdminEmail, superAdminPassword, wrapPreparedStmtCache } from '@biu/host-plugin-loader/data-dir'
 import { getRuntimePolicy } from '@biu/host-plugin-loader/runtime'
-import { AuthorizationService, type ResourcePolicyInput, type ResourceRole, type WorkspaceRole } from './authorization.ts'
+import { AuthorizationService, ROLE_RANK, type ResourcePolicyInput, type ResourceRole, type WorkspaceRole } from './authorization.ts'
 import {
   CollabError,
   DEFAULT_LOCK_MS,
@@ -1403,7 +1403,6 @@ export class CollabStore {
     this.requireManager(actorId, workspaceId)
     const normalizedViewId = viewId.trim()
     if (!normalizedViewId) return { frozenRecords: 0, expandedGrants: 0 }
-    const roleRank: Record<string, number> = { viewer: 1, commenter: 2, editor: 3, manager: 4, owner: 5 }
     const refs = this.db
       .prepare(
         `SELECT collection, record_id, role, granted_by
@@ -1445,7 +1444,7 @@ export class CollabStore {
               )
               .run(workspaceId, ref.collection, ref.record_id, memberId, ref.role, actorId, now)
             expandedGrants += 1
-          } else if ((roleRank[ref.role] ?? 0) > (roleRank[existing.role] ?? 0)) {
+          } else if ((ROLE_RANK[ref.role] ?? 0) > (ROLE_RANK[existing.role as ResourceRole] ?? 0)) {
             this.db
               .prepare(
                 `UPDATE record_grants SET role = ?, granted_by = ?, created_at = ?
@@ -2113,7 +2112,7 @@ export class CollabStore {
     return workspaceId
   }
 
-  private accountActiveWorkspace(accountId: string) {
+  accountActiveWorkspace(accountId: string) {
     const row = this.db.prepare('SELECT active_workspace_id FROM accounts WHERE id = ?').get(accountId) as
       | { active_workspace_id?: string }
       | undefined

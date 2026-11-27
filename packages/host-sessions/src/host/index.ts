@@ -1,4 +1,5 @@
 import { Service, type Context } from 'cordis'
+import { getAccountService } from '@biu/host-account'
 import { getRuntimePolicy } from '@biu/host-plugin-loader/runtime'
 import { basename, isAbsolute, resolve } from 'node:path'
 import { realpath, stat } from 'node:fs/promises'
@@ -864,30 +865,11 @@ export class SessionsService extends Service {
   }
 
   private collabStore() {
-    try {
-      return (
-        this.ctx.get('account') as
-          | {
-              store?: {
-                activeWorkspaceId(): string | null
-                membership(): { active: string | null; home: string | null; mine: Set<string>; any: Set<string>; strict?: boolean }
-                attach(workspaceId: string, collection: string, recordId: string): void
-                canReadRecord?(collection: string, recordId: string): boolean
-              }
-            }
-          | undefined
-      )?.store
-    } catch {
-      return undefined
-    }
+    return getAccountService(this.ctx)?.store
   }
 
   private authorization() {
-    try {
-      return (this.ctx.get('account') as { authorization?: AuthorizationService } | undefined)?.authorization
-    } catch {
-      return undefined
-    }
+    return getAccountService(this.ctx)?.authorization
   }
 
   private attachSession(id: string) {

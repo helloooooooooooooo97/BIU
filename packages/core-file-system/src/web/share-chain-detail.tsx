@@ -4,15 +4,12 @@ import { useFloatingPosition } from '@biu/biu-ui/floating-position'
 import { HeadlessDismiss } from '@biu/biu-ui/headless-dismiss'
 import { OVERLAY_Z, overlayPortalRoot, overlayZ } from '@biu/biu-ui/overlay-portal'
 import { buildAccessExplanation, type AccessExplanation } from '../access-explanation.ts'
+import { roleActionLabel } from '../shared/authz-labels.ts'
 import { readJson } from './db-client.ts'
 import { AccessMark, accessText, accessTone, ScopeMark, scopeText, scopeTone } from './share-scope-label.tsx'
 
 export function roleLabel(role: string) {
-  if (role === 'owner') return '创建者'
-  if (role === 'manager' || role === '管理') return '可管理'
-  if (role === 'commenter' || role === '评论') return '可评论'
-  if (role === 'viewer' || role === '查看' || role === '阅读') return '可查看'
-  return '可编辑'
+  return roleActionLabel(role)
 }
 
 function subjectNote(subjectType: 'account' | 'member_view' | 'workspace_members', audienceKind: 'internal' | 'external') {

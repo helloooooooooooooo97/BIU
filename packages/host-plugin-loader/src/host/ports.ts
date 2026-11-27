@@ -14,8 +14,20 @@ export interface AccountStorePort {
   canAccessPlugin?(accountId: string, workspaceId: string, pluginId: string): boolean
   canReadRecord?(collection: string, recordId: string): boolean
   activeWorkspaceId?(): string | null
+  accountActiveWorkspace?(accountId: string): string | null
+  activeLocalActor?(requestedWorkspaceId?: string): { accountId: string; workspaceId: string } | null
   tenantForRecord?(collection: string, recordId: string): { workspaceId: string; accountId: string } | null
   resolveMcpCredential?(token: string): McpTenant | null
+  auditMcp?(tenant: McpTenant, toolName: string, success: boolean): void
+  workspacePrefs?(actorId: string, workspaceId?: string): {
+    starredViews: unknown[]
+    starredRecords: unknown[]
+    pinnedAgents: string[]
+    theme?: string
+    accent?: string
+    pagePrefs?: Record<string, unknown>
+  }
+  collectionRecordOwners?(workspaceId: string, collection: string): Map<string, string>
 }
 
 export interface AccountServicePort {

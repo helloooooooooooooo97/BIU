@@ -1,3 +1,4 @@
+import type { AccountService } from '@biu/host-account'
 import type { HttpService } from '@biu/host-http'
 import type { HubService } from '@biu/host-hub'
 import type { ToolsService, ToolRequest } from '@biu/host-tools'
@@ -41,6 +42,7 @@ declare module 'cordis' {
     blob: BlobStorePort
     storage: StoragePort
     taskDispatch: TaskDispatchPort
+    account: AccountService
     http: HttpService
     hub: HubService
     tools: ToolsService

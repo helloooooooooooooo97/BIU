@@ -2659,7 +2659,7 @@ test('granting a locked member view to a private record shares it dynamically an
   assert.equal(adaList.items.find((row) => row.title === 'A私人')?.shareScope, '共享')
   assert.equal(adaList.items.find((row) => row.title === 'A私人')?.shareRole, '管理')
   assert.equal(adaList.schema.fields.shareRole?.label, '权限')
-  assert.equal(adaList.schema.fields.shareRole?.enum?.join(','), '管理,编辑,查看')
+  assert.equal(adaList.schema.fields.shareRole?.enum?.join(','), '管理,编辑,评论,查看')
   const privateId = String(bobList.items.find((row) => row.title === 'A私人')?.id ?? '')
   const privateChain = runWithAccount(bob.id, () => collab.recordAccess(bob.id, '/tasks', privateId)).roleChain
   assert.equal(privateChain[0]?.source, 'member-view-grant')
