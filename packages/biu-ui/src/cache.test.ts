@@ -9,6 +9,7 @@ import {
   resetWorkspaceClientCaches,
   setActiveWorkspaceScope,
 } from './cache.ts'
+import { resetWorkspaceEndpoint, setWorkspaceEndpoint } from './workspace-transport.ts'
 
 describe('@biu/biu-ui/cache primitives', () => {
   it('BoundedMap evicts least-recently-used entries and refreshes recency on get/set', () => {
@@ -105,6 +106,39 @@ describe('@biu/biu-ui/cache primitives', () => {
       assert.equal(count, 2)
     } finally {
       off()
+    }
+  })
+
+  it('auto-resets registered caches when workspace transport endpoint changes', () => {
+    resetWorkspaceEndpoint()
+    let cleared = 0
+    const off = registerWorkspaceCache('transport-switch-test', () => {
+      cleared += 1
+    })
+    try {
+      setWorkspaceEndpoint({
+        mode: 'cloud',
+        origin: 'https://cloud.example.com',
+        workspaceId: 'ws-1',
+        token: 'tok-1',
+      })
+      assert.equal(cleared, 1)
+
+      // Same mode/origin/workspaceId (e.g. token refresh only) does not needlessly wipe caches
+      setWorkspaceEndpoint({
+        mode: 'cloud',
+        origin: 'https://cloud.example.com',
+        workspaceId: 'ws-1',
+        token: 'tok-2',
+      })
+      assert.equal(cleared, 1)
+
+      // Switching workspaceId or returning to local wipes caches
+      resetWorkspaceEndpoint()
+      assert.equal(cleared, 2)
+    } finally {
+      off()
+      resetWorkspaceEndpoint()
     }
   })
 })

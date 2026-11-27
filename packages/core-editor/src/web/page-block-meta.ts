@@ -1,4 +1,5 @@
 import { useSyncExternalStore } from 'react'
+import { registerWorkspaceCache } from '@biu/biu-ui/cache'
 import { clientLog } from '@biu/biu-ui/event-log'
 
 /** 文档里的块只认自己写下的插件 id，编辑器不猜、不查插件表。 */
@@ -28,6 +29,18 @@ export type PageBlockPluginPhase = 'idle' | 'loading' | 'failed' | 'missing' | '
 const phases = new Map<string, PageBlockPluginPhase>()
 const phaseListeners = new Set<() => void>()
 const phaseListenersByPlugin = new Map<string, Set<() => void>>()
+
+registerWorkspaceCache('editor-page-block-meta', () => {
+  pendingEnables.clear()
+  if (phases.size === 0) return
+  const touched = [...phases.keys()]
+  phases.clear()
+  for (const fn of phaseListeners) fn()
+  for (const plugin of touched) {
+    const scoped = phaseListenersByPlugin.get(plugin)
+    if (scoped) for (const fn of scoped) fn()
+  }
+})
 
 function emitPhase(plugin?: string) {
   for (const fn of phaseListeners) fn()

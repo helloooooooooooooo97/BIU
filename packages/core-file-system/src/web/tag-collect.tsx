@@ -4,24 +4,10 @@ import type { CollectionChrome } from '@biu/type-file-system/ui'
 import { CollectionBrowser } from './browser.tsx'
 import { stampRowOpenTarget } from '../catalog-views.ts'
 import { DATA_COLLECTION_PATH } from './database-path.ts'
-import { readJson } from './db-client.ts'
-
-let cachedTables: CollectionInfo[] | null = null
-let tablesInflight: Promise<CollectionInfo[]> | null = null
+import { loadRootCollections, peekRootCollections } from './db-client.ts'
 
 function loadCollectTables(): Promise<CollectionInfo[]> {
-  if (cachedTables) return Promise.resolve(cachedTables)
-  if (tablesInflight) return tablesInflight
-  tablesInflight = readJson<{ collections?: CollectionInfo[] }>('/api/db/stat?path=/')
-    .then((body) => {
-      cachedTables = body.collections ?? []
-      return cachedTables
-    })
-    .catch(() => [])
-    .finally(() => {
-      tablesInflight = null
-    })
-  return tablesInflight
+  return loadRootCollections()
 }
 
 function collectOpenRow(row: { id?: unknown; tablePath?: unknown; sourceId?: unknown }) {
@@ -43,10 +29,11 @@ export function TagCollectBoard({
 }) {
   const tagId = String(record.id ?? '').trim()
   const lockedFilters = useMemo(() => ({ tag: tagId }), [tagId])
-  const [tables, setTables] = useState<CollectionInfo[]>(() => cachedTables ?? [])
+  const [tables, setTables] = useState<CollectionInfo[]>(() => peekRootCollections() ?? [])
   useEffect(() => {
-    if (cachedTables) {
-      setTables(cachedTables)
+    const cached = peekRootCollections()
+    if (cached) {
+      setTables(cached)
       return
     }
     let alive = true

@@ -1,44 +1,39 @@
 import { apiFetch } from '@biu/biu-ui/api-client'
+import { KeyedSingleflight, registerWorkspaceCache } from '@biu/biu-ui/cache'
+
 const CHAT_CONFIG_GET_HOLD_MS = 400
-let chatConfigInflight: Promise<Record<string, unknown> | null> | null = null
+const chatConfigSingleflight = new KeyedSingleflight<string, Record<string, unknown> | null>()
 
 export function resetChatConfigGet() {
-  chatConfigInflight = null
+  chatConfigSingleflight.clear()
 }
+
+registerWorkspaceCache('chat-config', resetChatConfigGet)
 
 /** Keep the payload from a GET or POST so Composer / banner / approvals can reuse it. */
 export function seedChatConfig(data: Record<string, unknown>) {
-  const request = Promise.resolve(data)
-  chatConfigInflight = request
-  setTimeout(() => {
-    if (chatConfigInflight === request) chatConfigInflight = null
-  }, CHAT_CONFIG_GET_HOLD_MS)
+  chatConfigSingleflight.clear()
+  void chatConfigSingleflight.run('config', () => Promise.resolve(data), {
+    holdMs: CHAT_CONFIG_GET_HOLD_MS,
+  })
 }
 
 /** One in-flight GET /api/chat/config for composer, banner, and approvals. */
 export async function getChatConfig<T = Record<string, unknown>>(opts?: {
   refresh?: boolean
 }): Promise<T | null> {
-  if (opts?.refresh) chatConfigInflight = null
-  if (chatConfigInflight) return chatConfigInflight as Promise<T | null>
-  let request: Promise<Record<string, unknown> | null>
-  request = (async () => {
-    const res = await apiFetch('/api/chat/config')
-    if (!res.ok) return null
-    const data = (await res.json()) as unknown
-    return data && typeof data === 'object' && !Array.isArray(data) ? (data as Record<string, unknown>) : null
-  })().then(
-    (body) => {
-      setTimeout(() => {
-        if (chatConfigInflight === request) chatConfigInflight = null
-      }, CHAT_CONFIG_GET_HOLD_MS)
-      return body
+  if (opts?.refresh) chatConfigSingleflight.delete('config')
+  return chatConfigSingleflight.run(
+    'config',
+    async () => {
+      const res = await apiFetch('/api/chat/config')
+      if (!res.ok) return null
+      const data = (await res.json()) as unknown
+      return data && typeof data === 'object' && !Array.isArray(data) ? (data as Record<string, unknown>) : null
     },
-    (error) => {
-      if (chatConfigInflight === request) chatConfigInflight = null
-      throw error
+    {
+      holdMs: CHAT_CONFIG_GET_HOLD_MS,
+      shouldHold: (body) => body !== null,
     },
-  )
-  chatConfigInflight = request
-  return request as Promise<T | null>
+  ) as Promise<T | null>
 }

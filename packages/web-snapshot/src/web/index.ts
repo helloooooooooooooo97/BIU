@@ -82,6 +82,7 @@ export class SnapshotService extends Service {
   /** boot() 刚拉过就不必在第一条 WS 上再 pull 一次。 */
   private bootGotSnapshot = false
   private lastEndpointKey = ''
+  private endpointGen = 0
 
   constructor(ctx: Context) {
     super(ctx, 'snapshot')
@@ -91,8 +92,12 @@ export class SnapshotService extends Service {
       const key = `${next.mode}|${next.origin}|${next.workspaceId}`
       if (key === this.lastEndpointKey) return
       this.lastEndpointKey = key
+      this.endpointGen += 1
+      this.value = empty
+      for (const fn of this.listeners) fn()
       if (!this.booted) return
       this.authStopped = false
+      this.bootGotSnapshot = false
       const prev = this.socket
       this.socket = null
       try {
@@ -177,13 +182,19 @@ export class SnapshotService extends Service {
 
   private async pull() {
     if (this.authStopped) return
+    const gen = this.endpointGen
     try {
       const res = await apiFetch('/api/snapshot', { headers: snapshotRequestHeaders() })
+      if (gen !== this.endpointGen) return
       if (res.status === 401 || res.status === 403) {
         this.stopForAuth()
         return
       }
-      if (res.ok) this.replace(await res.json())
+      if (res.ok) {
+        const body = (await res.json()) as Partial<Snapshot>
+        if (gen !== this.endpointGen) return
+        this.replace(body)
+      }
     } catch {
       /* 无 host 时控制台为空 */
     }
@@ -196,12 +207,17 @@ export class SnapshotService extends Service {
   }
 
   private async boot() {
+    const gen = this.endpointGen
     for (let i = 0; i < 30; i++) {
+      if (gen !== this.endpointGen) return
       try {
         const res = await apiFetch('/api/snapshot', { headers: snapshotRequestHeaders() })
+        if (gen !== this.endpointGen) return
         if (res.status === 401 || res.status === 403) return
         if (res.ok) {
-          this.replace(await res.json())
+          const body = (await res.json()) as Partial<Snapshot>
+          if (gen !== this.endpointGen) return
+          this.replace(body)
           this.bootGotSnapshot = true
           break
         }
@@ -210,7 +226,7 @@ export class SnapshotService extends Service {
       }
       await new Promise((resolve) => setTimeout(resolve, 100))
     }
-    if (!this.authStopped) this.connect()
+    if (gen === this.endpointGen && !this.authStopped) this.connect()
   }
 
   private connectSeq = 0
@@ -246,6 +262,7 @@ export class SnapshotService extends Service {
         view?.onSocketReconnect?.()
       }
       ws.onmessage = (message) => {
+        if (this.socket !== ws) return
         const parsed = JSON.parse(message.data) as { type: string; payload: unknown }
         if (parsed.type === 'snapshot') this.replace(parsed.payload as Snapshot)
         if (parsed.type === 'plugins/changed') void this.pull()
