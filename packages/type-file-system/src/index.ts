@@ -147,7 +147,7 @@ export function appendPerson(existing: unknown, actor: PersonValue | null | unde
   return next
 }
 
-export function commitPersons(list: PersonValue[]): unknown {
+function commitPersons(list: PersonValue[]): unknown {
   if (!list.length) return null
   if (list.length === 1) return list[0]
   return list
@@ -404,8 +404,8 @@ export function isRefFieldType(type: unknown): type is 'ref' | 'multi-ref' {
 
 export type AtomicFieldType = (typeof ATOMIC_FIELD_TYPES)[number]
 
-export function isAtomicFieldType(type: unknown): type is AtomicFieldType {
-  return typeof type === 'string' && ((ATOMIC_FIELD_TYPES as readonly string[]).includes(type) || type === 'tag')
+function isAtomicFieldType(type: unknown): type is AtomicFieldType {
+  return typeof type === 'string' && (ATOMIC_FIELD_TYPES as readonly string[]).includes(type)
 }
 
 function generateStableSchemaFieldKey(used: Set<string>): string {
@@ -530,7 +530,7 @@ export type SchemaPackField = FieldSpec & {
   views?: SchemaFieldView[]
 }
 
-export function liveSchemaPackFields(fields: SchemaPackField[] | undefined) {
+function liveSchemaPackFields(fields: SchemaPackField[] | undefined) {
   return (fields ?? []).filter((field) => field.deleted !== true)
 }
 
@@ -1078,7 +1078,7 @@ export function resolveSchemaFieldKey(
   return matchSchemaField(list, name)?.key ?? String(name ?? '').trim()
 }
 
-export function coerceSandboxValue(field: FieldSpec, value: unknown): unknown {
+function coerceSandboxValue(field: FieldSpec, value: unknown): unknown {
   const kind = sandboxFieldKind(field)
   if (kind === 'boolean') return value === true || value === 'true'
   if (kind === 'multi-select') {
