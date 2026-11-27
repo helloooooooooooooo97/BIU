@@ -10,7 +10,7 @@ import type {
   SchemaFieldValue,
 } from '@biu/type-file-system'
 import { allocateRecordId, emptySchemaValue, isAssetFileName, isAssignableRecordId, normalizeSchemaValue } from '@biu/type-file-system'
-import { queryPagesGroupPage, queryPagesListPage } from './sql-query.ts'
+import { queryPagesGroupPage, queryPagesListPage, rowFromSql, type SqlPageRow } from './sql-query.ts'
 import {
   DATA_DIR_NAME,
   adoptCasAssets,
@@ -227,7 +227,7 @@ export class PagesStore {
         SELECT id, title, parent_id,
           depends_on_json, emoji, created_at, updated_at
         FROM pages WHERE id IN (${placeholders})
-      `).all(...validIds) as SqlPage[]
+      `).all(...validIds) as SqlPageRow[]
       const byId = new Map(fetched.map((row) => [row.id, rowFromSql(row)]))
       const rows: PageRow[] = []
       for (const id of validIds) {
@@ -240,7 +240,7 @@ export class PagesStore {
       SELECT id, title, parent_id,
         depends_on_json, emoji, created_at, updated_at
       FROM pages ORDER BY id
-    `).all() as SqlPage[]
+    `).all() as SqlPageRow[]
     return listed.map(rowFromSql)
   }
 
@@ -261,7 +261,7 @@ export class PagesStore {
       SELECT id, title, parent_id,
         depends_on_json, emoji, created_at, updated_at
       FROM pages WHERE id = ?
-    `).get(id) as SqlPage | undefined
+    `).get(id) as SqlPageRow | undefined
     if (!hit) return null
     const row = rowFromSql(hit)
     row.notes = readEditorContent(db, '/pages', id)
@@ -357,39 +357,6 @@ export class PagesStore {
   private async write(row: PageRow) {
     await this.openDb()
     this.upsert(row)
-  }
-}
-
-type SqlPage = {
-  id: string
-  title: string
-  parent_id: string | null
-  depends_on_json: string
-  emoji: string
-  created_at: number
-  updated_at: number
-}
-
-function parseJson<T>(raw: string, fallback: T): T {
-  try {
-    return JSON.parse(raw) as T
-  } catch {
-    return fallback
-  }
-}
-
-function rowFromSql(row: SqlPage): PageRow {
-  return {
-    id: row.id,
-    title: row.title,
-    tags: [],
-    notes: '',
-    parentId: row.parent_id == null || row.parent_id === '' ? null : String(row.parent_id),
-    dependsOn: asStringList(parseJson(row.depends_on_json ?? '[]', [])),
-    tag: emptySchemaValue(),
-    emoji: row.emoji ?? '',
-    createdAt: Number(row.created_at) || 0,
-    updatedAt: Number(row.updated_at) || 0,
   }
 }
 

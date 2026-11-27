@@ -12,7 +12,13 @@ import { isAllocatedRecordId } from '@biu/type-file-system'
 import * as tools from '@biu/host-tools'
 import * as fsPlugin from '@biu/host-fs'
 import * as page from './index.ts'
-import { dumpMarkdown, splitMarkdown } from './markdown.ts'
+import { stringify as stringifyYaml } from 'yaml'
+import { splitMarkdown } from './markdown.ts'
+
+function dumpMarkdown(matter: Record<string, unknown>, body: string): string {
+  const yaml = stringifyYaml(matter, { lineWidth: 0 }).trimEnd()
+  return `---\n${yaml}\n---\n${body}`
+}
 import { hashedAssetName, hashedAssetRel, writeEditorContent } from '@biu/host-plugin-loader/data-dir'
 import { assetNamesFromBlock, collectAssetNames } from '@biu/type-file-system'
 import { ASSET_GC_GRACE_MS, PAGE_DB, PAGE_ROOT, PageAssetConflictError, PagesStore } from './store.ts'

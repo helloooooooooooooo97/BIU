@@ -12,7 +12,7 @@ const ID_RE = /^[A-Za-z0-9._-]+$/
 const TAG_FLAT_PREFIX = 'tag::'
 const MAX_SQL_IN_IDS = 5000
 
-type SqlPageRow = {
+export type SqlPageRow = {
   id: string
   title: string
   parent_id: string | null
@@ -41,7 +41,7 @@ function parseJsonList(raw: string): string[] {
   }
 }
 
-function toPageRow(row: SqlPageRow): PageRow {
+export function rowFromSql(row: SqlPageRow): PageRow {
   return {
     id: row.id,
     title: row.title,
@@ -337,7 +337,7 @@ export function queryPagesListPage(
     .all(...listParams) as SqlPageRow[]
 
   return {
-    rows: sqlRows.map(toPageRow),
+    rows: sqlRows.map(rowFromSql),
     total,
   }
 }
