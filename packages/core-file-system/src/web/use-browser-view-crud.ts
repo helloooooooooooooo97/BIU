@@ -38,6 +38,7 @@ export type BrowserViewCrudOptions = {
   title: string
   routeScope: DataScope | null
   catalogLocks: Record<string, string>
+  lockedFilters?: Record<string, string>
   schemaDefaultKeys: string[]
   views: SavedView[]
   viewsRef: MutableRefObject<SavedView[]>
@@ -84,6 +85,7 @@ export function createBrowserViewCrud(opts: BrowserViewCrudOptions) {
     collectionPath,
     title,
     catalogLocks,
+    lockedFilters = {},
     schemaDefaultKeys,
     viewsRef,
     setViews,
@@ -239,7 +241,12 @@ export function createBrowserViewCrud(opts: BrowserViewCrudOptions) {
     return `${base} ${n}`
   }
 
-  function makeEmptyView(listed: SavedView[], columns: string[], extraFilters: Record<string, string> = {}): SavedView {
+  function makeEmptyView(
+    listed: SavedView[],
+    columns: string[],
+    baseFilters: Record<string, string> = {},
+    extraFilters: Record<string, string> = {},
+  ): SavedView {
     return {
       id: newSavedViewId(),
       name: uniqueViewName('新视图', listed),
@@ -247,7 +254,7 @@ export function createBrowserViewCrud(opts: BrowserViewCrudOptions) {
       locked: false,
       sortField: 'title',
       sortDir: 'asc',
-      filters: { ...catalogLocks, ...extraFilters },
+      filters: { ...baseFilters, ...extraFilters },
       columns,
       groupBy: '',
       tree: false,
@@ -262,7 +269,7 @@ export function createBrowserViewCrud(opts: BrowserViewCrudOptions) {
   function addEmptyView(path?: string, scope?: DataScope) {
     if (externalViews) {
       const current = viewsRef.current
-      const view = makeEmptyView(current, [...schemaDefaultKeys])
+      const view = makeEmptyView(current, [...schemaDefaultKeys], catalogLocks)
       const next = [...current, view]
       viewsRef.current = next
       setViews(next)
@@ -277,11 +284,13 @@ export function createBrowserViewCrud(opts: BrowserViewCrudOptions) {
     const listed = target === collectionPath ? paintListedViews(target) : allListed
     const extraFilters: Record<string, string> =
       !isDataAgg && scope ? { $scope: scope } : {}
+    const baseFilters = target === collectionPath ? lockedFilters : {}
     const accessMode: 'private' | 'members' = !isDataAgg && scope === 'workspace' ? 'members' : 'private'
     const view: SavedViewFieldPatch = {
       ...makeEmptyView(
         listed,
         target === collectionPath ? [...schemaDefaultKeys] : [],
+        baseFilters,
         extraFilters,
       ),
       shareScope: accessMode === 'members' ? 'workspace' : 'personal',

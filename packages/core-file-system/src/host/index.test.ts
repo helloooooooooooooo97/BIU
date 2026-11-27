@@ -2527,6 +2527,13 @@ test('device workspace share column is only personal or shared', async () => {
     assert.equal(listed.items.some((row) => row.shareScope === '空间'), false)
     const shared = await runWithAccount(ada.id, () => db.create('/docs', [{ title: '局域网' }], { scope: 'shared' }))
     assert.equal(shared.kind === 'created' && shared.items[0]?.value.shareScope, '共享')
+    // Local (device) workspace has no multi-member workspace split: $scope: 'workspace' must still return all local records.
+    const workspaceScoped = asCollection(await runWithAccount(ada.id, () => db.list('/docs', { $scope: 'workspace' })))
+    assert.equal(workspaceScoped.total, 4)
+    const personalScoped = asCollection(await runWithAccount(ada.id, () => db.list('/docs', { $scope: 'personal' })))
+    assert.equal(personalScoped.total, 3)
+    const sharedScoped = asCollection(await runWithAccount(ada.id, () => db.list('/docs', { $scope: 'shared' })))
+    assert.equal(sharedScoped.total, 1)
     if (shared.kind === 'created') {
       const id = String(shared.items[0]?.value.id)
       assert.equal(localIds.has(id), true)
