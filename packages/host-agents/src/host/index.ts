@@ -439,14 +439,6 @@ export class AgentsService extends Service {
     this.emitInbox(sessionId)
     return true
   }
-
-  /** 兼容旧入口：把最后一条用户消息送进 session。 */
-  async prompt(history: Array<{ role: string; content: string }>, llm: LlmConfig): Promise<AgentTurn> {
-    this.configure(llm)
-    const last = history.filter((item) => item.role === 'user').at(-1)?.content?.trim() ?? ''
-    const agent = await this.create()
-    return agent.send(last)
-  }
 }
 
 function sanitizeImages(raw: AgentSendOptions['images']): ClaimedInput['images'] {
