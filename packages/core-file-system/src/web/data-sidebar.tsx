@@ -1303,13 +1303,6 @@ export const DataSidebar = memo(function DataSidebar({
           </section>
 
           <section className="min-w-0">
-            <SectionHead label="系统数据" count={systemTables.length} title="系统运行时记下的数据" />
-            <div className="flex min-w-0 flex-col gap-px" data-testid="sidebar-system-collections">
-              {renderTableRows(systemTables)}
-            </div>
-          </section>
-
-          <section className="min-w-0">
             <SectionHead
               label="公共数据"
               count={publicTables.length}
@@ -1325,6 +1318,13 @@ export const DataSidebar = memo(function DataSidebar({
                 )}
               </div>
             </SidebarFold>
+          </section>
+
+          <section className="min-w-0">
+            <SectionHead label="系统数据" count={systemTables.length} title="系统运行时记下的数据" />
+            <div className="flex min-w-0 flex-col gap-px" data-testid="sidebar-system-collections">
+              {renderTableRows(systemTables)}
+            </div>
           </section>
         </div>
       </div>
