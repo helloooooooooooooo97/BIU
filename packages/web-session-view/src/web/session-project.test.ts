@@ -2,14 +2,9 @@ import { test } from 'vitest'
 import assert from 'node:assert/strict'
 import {
   compactSessionEvents,
-  extractUsagePoints,
   formatTrajectoryUsage,
   mergeDispatchedUsageIntoNodes,
   projectNodes,
-  projectRequestMessages,
-  projectTrajectory,
-  sumTrajectoryUsage,
-  deriveMessages,
   type SessionEvent,
 } from './session-project.ts'
 
@@ -208,14 +203,6 @@ test('partial tool/result marks the tool part as streaming', () => {
   if (reply?.kind !== 'reply') return
   const tool = reply.parts.find((part) => part.kind === 'tool')
   assert.equal(tool?.kind === 'tool' && tool.result?.streaming, true)
-  const events: SessionEvent[] = [
-    { type: 'assistant/message', text: '', tool_calls: [{ id: 'c1', name: 'web_search', arguments: '{}' }], seq: 0, ts: 1 },
-    { type: 'tool/result', id: 'c1', name: 'web_search', ok: true, detail: '{}', partial: true, seq: 1, ts: 2 },
-  ]
-  assert.equal(
-    deriveMessages(events).some((item) => item.role === 'tool'),
-    false,
-  )
 })
 
 test('tool/call after tool/result keeps a single completed tool part', () => {
@@ -337,20 +324,6 @@ test('reply projects per-step token/tool/message stats', () => {
   assert.equal(reply.parts.at(-1)?.step, 1)
 })
 
-test('projectTrajectory skips assistant/chunk (dsh-style; message is authoritative)', () => {
-  const rows = projectTrajectory([
-    { type: 'turn/start', turn: 1, seq: 1, ts: 1 },
-    { type: 'user/message', text: 'hi', seq: 2, ts: 2 },
-    { type: 'assistant/chunk', text: 'hel', seq: 3, ts: 3 },
-    { type: 'assistant/chunk', text: 'lo', seq: 4, ts: 4 },
-    { type: 'assistant/message', text: 'hello', seq: 5, ts: 5 },
-    { type: 'turn/end', turn: 1, reason: 'complete', seq: 6, ts: 6 },
-  ])
-  assert.equal(rows.some((row) => row.type === 'assistant/chunk'), false)
-  assert.equal(rows.filter((row) => row.type === 'assistant/message').length, 1)
-  assert.equal(rows.find((row) => row.type === 'assistant/message')?.summary, 'hello')
-})
-
 test('compactSessionEvents coalesces chunks and drops ones superseded by message', () => {
   const compacted = compactSessionEvents([
     { type: 'user/message', text: 'hi', seq: 1, ts: 1 },
@@ -381,73 +354,8 @@ test('compactSessionEvents keeps reasoning chunks when the answer message arrive
   assert.equal(compacted[0]?.type === 'assistant/chunk' && compacted[0].text, '想一下')
 })
 
-test('projectTrajectory keeps seq ledger and tool callIds for inspect', () => {
-  const events: SessionEvent[] = [
-    { type: 'session/open', version: 1, seq: 0, ts: 1 },
-    { type: 'turn/start', turn: 1, seq: 1, ts: 2 },
-    { type: 'user/message', text: 'run bash', seq: 2, ts: 3 },
-    { type: 'tool/call', id: 'c1', name: 'bash', arguments: '{"command":"ls"}', seq: 3, ts: 4 },
-    { type: 'tool/result', id: 'c1', name: 'bash', ok: true, detail: 'ok', seq: 4, ts: 5 },
-    { type: 'turn/end', turn: 1, reason: 'complete', seq: 5, ts: 6 },
-  ]
-  const rows = projectTrajectory(events)
-  assert.equal(rows.some((row) => row.type === 'session/open'), false)
-  const call = rows.find((row) => row.type === 'tool/call')
-  assert.equal(call?.callId, 'c1')
-  assert.equal(call?.turn, 1)
-  assert.match(call?.summary ?? '', /bash/)
-})
-
-test('projectTrajectory indents step boundaries and in-step events', () => {
-  const rows = projectTrajectory([
-    { type: 'turn/start', turn: 1, seq: 1, ts: 1 },
-    { type: 'user/message', text: 'hi', seq: 2, ts: 2 },
-    { type: 'step/start', turn: 1, step: 0, seq: 3, ts: 3 },
-    { type: 'assistant/message', text: 'ok', seq: 4, ts: 4 },
-    { type: 'tool/call', id: 't1', name: 'bash', arguments: '{}', seq: 5, ts: 5 },
-    { type: 'step/end', turn: 1, step: 0, seq: 6, ts: 6 },
-    { type: 'turn/end', turn: 1, reason: 'complete', seq: 7, ts: 7 },
-  ])
-  const byType = Object.fromEntries(rows.map((row) => [row.type, row]))
-  assert.equal(byType['turn/start']?.depth, 0)
-  assert.equal(byType['user/message']?.depth, 0)
-  assert.equal(byType['step/start']?.depth, 1)
-  assert.equal(byType['assistant/message']?.depth, 2)
-  assert.equal(byType['tool/call']?.depth, 2)
-  assert.equal(byType['step/end']?.depth, 1)
-  assert.equal(byType['turn/end']?.depth, 0)
-})
-
-test('assistant/message with empty text still has a visible tool_calls summary and usage', () => {
-  const events: SessionEvent[] = [
-    {
-      type: 'assistant/message',
-      text: '',
-      tool_calls: [{ id: '1', name: 'clock_now', arguments: '{}' }],
-      usage: { inputTokens: 11, outputTokens: 3 },
-      seq: 1,
-      ts: 1,
-    },
-    {
-      type: 'assistant/message',
-      text: '现在是下午',
-      usage: { inputTokens: 20, outputTokens: 8, cacheReadTokens: 4 },
-      seq: 2,
-      ts: 2,
-    },
-  ]
-  const rows = projectTrajectory(events)
-  assert.match(rows[0]?.summary ?? '', /tool call/)
-  assert.match(rows[0]?.summary ?? '', /clock_now/)
-  assert.deepEqual(rows[0]?.usage, { inputTokens: 11, outputTokens: 3 })
-  assert.equal(rows[1]?.summary, '现在是下午')
-  assert.equal(formatTrajectoryUsage(rows[1]?.usage), '20→8 c4')
-  assert.deepEqual(sumTrajectoryUsage(events), {
-    inputTokens: 31,
-    outputTokens: 11,
-    totalTokens: 42,
-    cacheReadTokens: 4,
-  })
+test('formatTrajectoryUsage formats input/output and cache tokens', () => {
+  assert.equal(formatTrajectoryUsage({ inputTokens: 20, outputTokens: 8, cacheReadTokens: 4 }), '20→8 c4')
 })
 
 test('mergeDispatchedUsageIntoNodes adds live-dispatched worker usage onto reply turn', () => {
@@ -475,62 +383,6 @@ test('mergeDispatchedUsageIntoNodes adds live-dispatched worker usage onto reply
     outputTokens: 11,
     totalTokens: 54,
   })
-})
-
-test('projectRequestMessages derives llm.chat input from event prefix', () => {
-  const events: SessionEvent[] = [
-    { type: 'session/open', version: 1, seq: 0, ts: 1 },
-    { type: 'turn/start', turn: 1, seq: 1, ts: 2 },
-    { type: 'user/message', text: 'hi', kind: 'wake', seq: 2, ts: 3 },
-    { type: 'system/prompt', text: 'you are helpful', seq: 3, ts: 4 },
-    { type: 'step/start', turn: 1, step: 0, seq: 4, ts: 5 },
-    { type: 'assistant/message', text: 'hello', seq: 5, ts: 6 },
-  ]
-  const request = projectRequestMessages(events, 5)
-  assert.deepEqual(
-    request.map((item) => item.role),
-    ['system', 'user'],
-  )
-  assert.equal(request[0]?.content, 'you are helpful')
-  assert.equal(request[1]?.content, 'hi')
-})
-
-test('extractUsagePoints keeps only assistant/message rows with usage, mapped to input/output', () => {
-  const events: SessionEvent[] = [
-    {
-      type: 'assistant/message',
-      text: 'a',
-      usage: { inputTokens: 100, outputTokens: 20 },
-      seq: 1,
-      ts: 1,
-    },
-    { type: 'tool/call', name: 'clock_now', arguments: '{}', id: 'x', seq: 2, ts: 2 },
-    { type: 'tool/result', name: 'clock_now', ok: true, detail: '', id: 'x', seq: 3, ts: 3 },
-    {
-      type: 'assistant/message',
-      text: 'b',
-      usage: { inputTokens: 250, outputTokens: 60, cacheReadTokens: 40 },
-      seq: 4,
-      ts: 4,
-    },
-    // 无 usage 的 assistant/message 应被过滤
-    { type: 'assistant/message', text: 'c', seq: 5, ts: 5 },
-    { type: 'step/start', turn: 1, step: 1, seq: 6, ts: 6 },
-  ]
-  const rows = projectTrajectory(events)
-  const points = extractUsagePoints(rows)
-  assert.deepEqual(points, [
-    { input: 100, output: 20 },
-    { input: 250, output: 60 },
-  ])
-})
-
-test('extractUsagePoints returns empty when no usage-bearing rows', () => {
-  const rows = projectTrajectory([
-    { type: 'assistant/message', text: 'x', seq: 1, ts: 1 },
-    { type: 'user/message', text: 'hi', seq: 2, ts: 2 },
-  ])
-  assert.deepEqual(extractUsagePoints(rows), [])
 })
 
 test('reply & step histPct is token-weighted average over all llm.chat usage', () => {

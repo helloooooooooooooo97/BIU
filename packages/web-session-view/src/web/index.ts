@@ -19,7 +19,7 @@ import {
 import type { AppRoute } from './session-route.ts'
 import { mostRecentSessionId } from './session-groups.ts'
 import { markSidebarMascotFresh } from './session-mascot-fresh.ts'
-import { getSessionTurns, getSessionsList } from './sessions-list.ts'
+import { getSessionTurns, getSessionsList, hasAccountToken } from './sessions-list.ts'
 
 export type { AppRoute, RouteView, InspectorCenterKind } from './session-route.ts'
 export {
@@ -56,7 +56,6 @@ export {
 } from './session-project.ts'
 export {
   UNGROUPED_PROJECT_KEY,
-  PINNED_GROUP_KEY,
   mostRecentSessionId,
   buildSidebarSections,
   type SessionSidebarGroup,
@@ -285,16 +284,6 @@ function sessionsEqual(a: SessionListItem[], b: SessionListItem[]): boolean {
 
 /** send 乐观 busy 后，列表短暂仍可能 busy:false；超过此时长以列表为准。 */
 export const BUSY_HOLD_MS = 1500
-
-/** 官网未登录时本地没有账号 token。无 localStorage 的测试环境仍视为可拉列表。 */
-function hasAccountToken() {
-  if (typeof localStorage === 'undefined') return true
-  try {
-    return Boolean(readStorageString('biu.account.token'))
-  } catch {
-    return true
-  }
-}
 
 export function turnInProgress(events: { type: string }[]) {
   for (let i = events.length - 1; i >= 0; i--) {
