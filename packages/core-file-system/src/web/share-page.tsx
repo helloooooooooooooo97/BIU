@@ -283,14 +283,14 @@ function SharePage({
 
   const [queryState, setQueryState] = useState<ShareQueryState | null>(null)
   useEffect(() => {
-    if (!snapshot || (snapshot.kind !== 'rule' && snapshot.kind !== 'view')) {
+    if (!snapshot || snapshot.kind !== 'view') {
       setQueryState(null)
       return
     }
     setQueryState(loadShareQuery(token, shareQueryFromView(snapshot.view)))
   }, [snapshot, token])
   useEffect(() => {
-    if (!queryState || (snapshot?.kind !== 'rule' && snapshot?.kind !== 'view')) return
+    if (!queryState || snapshot?.kind !== 'view') return
     saveShareQuery(token, queryState)
   }, [queryState, snapshot, token])
   const [page, setPage] = useState(0)
@@ -363,7 +363,7 @@ function SharePage({
 
   const schema = snapshot.schema
   const live = snapshot
-  const isCollectionShare = snapshot.kind === 'rule' || snapshot.kind === 'view'
+  const isCollectionShare = snapshot.kind === 'view'
   const listed = isCollectionShare && queryState
     ? applyShareQuery(snapshot.records, schema, queryState, snapshot.contents, snapshot.tags)
     : snapshot.records
@@ -481,7 +481,7 @@ function SharePage({
         collection: snapshot.collection,
         collectionLabel: tableLabel,
         tables: [{ path: snapshot.collection, label: tableLabel }],
-        viewId: snapshot.viewId || snapshot.ruleId || '',
+        viewId: snapshot.viewId || '',
         viewName: snapshot.title,
         views: [{ id: snapshot.viewId, name: snapshot.title }],
         recordId: shown?.id,

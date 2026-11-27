@@ -748,16 +748,6 @@ test('collectionOwnership and collectionExternalCollaborators propagate inherite
   assert.equal(afterMembers.get('child'), 'workspace')
   assert.equal(afterMembers.get('grandchild'), 'workspace')
   assert.equal(afterMembers.get('detached'), 'personal')
-
-  // Legacy/hybrid row with access_mode='private' + inherit_parent=1 also inherits parent scope and external badge
-  collab.attachAs(ws.id, '/pages', 'legacy-inherit', ada.id, {
-    accessMode: 'private',
-    parentCollection: '/pages',
-    parentRecordId: 'parent',
-    inheritParent: true,
-  })
-  assert.equal(collab.collectionOwnership(ws.id, '/pages').get('legacy-inherit'), 'workspace')
-  assert.equal(collab.collectionExternalCollaborators(ws.id, '/pages').has('legacy-inherit'), true)
 })
 
 test('recordAccess, collectionInheritedSources, and collectInheritingDescendants follow Notion additive inheritance and strict detach isolation', () => {
@@ -822,5 +812,14 @@ test('recordAccess, collectionInheritedSources, and collectInheritingDescendants
   assert.deepEqual(
     collab.collectInheritingDescendants(ws.id, '/pages', 'root').map((d) => d.recordId),
     [],
+  )
+
+  // 6. /data composite recordId ('pages::child-inh') resolves cleanly in shareWithEmail and setRecordInheritance
+  collab.setRecordInheritance(ada.id, '/data', 'pages::child-inh', 'inherit')
+  assert.equal(collab.recordAccess(ada.id, '/pages', 'child-inh').inheritance.mode, 'inherit')
+  collab.shareWithEmail(ada.id, '/data', 'pages::child-inh', bob.email, 'commenter', 'internal')
+  assert.equal(
+    collab.recordAccess(ada.id, '/pages', 'child-inh').people.find((p) => p.id === bob.id)?.role,
+    'commenter',
   )
 })

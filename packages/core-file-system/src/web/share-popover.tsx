@@ -246,9 +246,9 @@ export function ShareButton({
           collection: target.collection,
           recordId: target.recordId,
         })
-        const shareData = await readJson<SharePayload>(`/api/db/shares?${params}`).catch(() => ({ share: null }))
+        const shareData = await readJson<SharePayload>(`/api/db/shares?${params}`).catch(() => ({ share: null, inheritedShare: null }))
         if (gone) return
-        if (shareData.share) {
+        if (shareData.share || shareData.inheritedShare) {
           setHasActiveShare(true)
           return
         }
@@ -258,7 +258,7 @@ export function ShareButton({
             scope?: string
             ownerId?: string
             people?: Array<{ id?: string; role?: string }>
-            groups?: unknown[]
+            memberViews?: unknown[]
           }>(`/api/account/access?${accessParams}`).catch(() => null)
           if (gone) return
           const nonOwnerPeople = (accessData?.people ?? []).filter(
@@ -266,7 +266,7 @@ export function ShareButton({
           )
           if (
             nonOwnerPeople.length > 0 ||
-            (accessData?.groups?.length ?? 0) > 0 ||
+            (accessData?.memberViews?.length ?? 0) > 0 ||
             (accessData?.scope && accessData.scope !== 'personal')
           ) {
             setHasActiveShare(true)
@@ -347,8 +347,6 @@ function WorkspaceAccess({
     email: string
     role: string
     memberKind: 'member' | 'external' | 'guest'
-    grantedBy?: string
-    grantedByName?: string
     canEdit?: boolean
     canRevoke?: boolean
   }>>([])
@@ -427,8 +425,6 @@ function WorkspaceAccess({
         email: string
         role: string
         memberKind: 'member' | 'external' | 'guest'
-        grantedBy?: string
-        grantedByName?: string
         canEdit?: boolean
         canRevoke?: boolean
       }>
@@ -593,7 +589,7 @@ function WorkspaceAccess({
     }
   }
 
-  async function revoke(subjectType: 'account' | 'member_view', subjectId: string, grantedBy?: string) {
+  async function revoke(subjectType: 'account' | 'member_view', subjectId: string) {
     setError('')
     setStatusNotice('')
     try {
@@ -605,7 +601,6 @@ function WorkspaceAccess({
           recordId,
           subjectType,
           subjectId,
-          ...(grantedBy ? { grantedBy } : {}),
         }),
       })
       emitFsdbEvent(FSDB_SHARES_CHANGE_EVENT)
@@ -730,17 +725,6 @@ function WorkspaceAccess({
         {isImageAvatar(trimmed) ? <img src={trimmed} alt="" /> : trimmed || <AiAvatar seed={seed || 'biu-ai'} size={size} />}
       </span>
     )
-  }
-  const grantorText = (grantedBy?: string, grantedByName?: string) => {
-    if (!grantedBy) return ''
-    if (currentAccountId && grantedBy === currentAccountId) return '由我授权'
-    return grantedByName ? `由 ${grantedByName} 授权` : ''
-  }
-  const revokeTitle = (base: string, grantedBy?: string, grantedByName?: string) => {
-    if (grantedBy && currentAccountId && grantedBy !== currentAccountId && grantedByName) {
-      return `移除 ${grantedByName} 的授权`
-    }
-    return base
   }
 
   const isMembersOpen = accessMode === 'members' || (accessMode === 'inherit' && shownScope === 'workspace')
@@ -935,14 +919,13 @@ function WorkspaceAccess({
         </div>
         <ul className="fsdb-share-collaborators">
           {internalPeople.map((row) => {
-            const sub = [row.email, grantorText(row.grantedBy, row.grantedByName)].filter(Boolean).join(' · ')
             const isSelf = Boolean(currentAccountId && row.id === currentAccountId)
             const canEdit = Boolean(row.email && row.role !== 'owner' && !isSelf && row.canEdit !== false)
             const canRevoke = Boolean(row.role !== 'owner' && !isSelf && row.canRevoke !== false)
             return (
-              <li key={`${row.id}:${row.grantedBy ?? ''}`}>
+              <li key={row.id}>
                 {renderPersonAvatar(row.id || row.name, row.avatar)}
-                <span className="fsdb-share-collaborator-copy"><strong>{row.name}</strong>{sub ? <em>{sub}</em> : null}</span>
+                <span className="fsdb-share-collaborator-copy"><strong>{row.name}</strong>{row.email ? <em>{row.email}</em> : null}</span>
                 {canEdit ? (
                   <ShareSelect
                     inline
@@ -962,9 +945,9 @@ function WorkspaceAccess({
                   <button
                     type="button"
                     className="fsdb-share-remove"
-                    title={revokeTitle('移除协作者', row.grantedBy, row.grantedByName)}
+                    title="移除协作者"
                     aria-label={`移除 ${row.name}`}
-                    onClick={() => void revoke('account', row.id, row.grantedBy)}
+                    onClick={() => void revoke('account', row.id)}
                   >
                     <XMarkIcon aria-hidden className="size-3.5" />
                   </button>
@@ -1096,13 +1079,12 @@ function WorkspaceAccess({
         </div>
         <ul className="fsdb-share-collaborators">
           {externalPeople.map((row) => {
-            const sub = [row.email, grantorText(row.grantedBy, row.grantedByName)].filter(Boolean).join(' · ')
             const canEdit = Boolean(row.email && row.canEdit !== false)
             const canRevoke = row.canRevoke !== false
             return (
-              <li key={`${row.id}:${row.grantedBy ?? ''}`}>
+              <li key={row.id}>
                 {renderPersonAvatar(row.id || row.name, row.avatar, 'is-external')}
-                <span className="fsdb-share-collaborator-copy"><strong>{row.name}</strong>{sub ? <em>{sub}</em> : null}</span>
+                <span className="fsdb-share-collaborator-copy"><strong>{row.name}</strong>{row.email ? <em>{row.email}</em> : null}</span>
                 {canEdit ? (
                   <ShareSelect
                     inline
@@ -1122,9 +1104,9 @@ function WorkspaceAccess({
                   <button
                     type="button"
                     className="fsdb-share-remove"
-                    title={revokeTitle('移除协作者', row.grantedBy, row.grantedByName)}
+                    title="移除协作者"
                     aria-label={`移除 ${row.name}`}
-                    onClick={() => void revoke('account', row.id, row.grantedBy)}
+                    onClick={() => void revoke('account', row.id)}
                   >
                     <XMarkIcon aria-hidden className="size-3.5" />
                   </button>

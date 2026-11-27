@@ -10,6 +10,7 @@ import { AccessMark, accessText, accessTone, ScopeMark, scopeText, scopeTone } f
 export function roleLabel(role: string) {
   if (role === 'owner') return '创建者'
   if (role === 'manager' || role === '管理') return '可管理'
+  if (role === 'commenter' || role === '评论') return '可评论'
   if (role === 'viewer' || role === '查看' || role === '阅读') return '可查看'
   return '可编辑'
 }

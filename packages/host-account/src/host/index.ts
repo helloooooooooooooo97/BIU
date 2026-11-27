@@ -1289,10 +1289,20 @@ export function apply(ctx: Context, config: AccountConfig = {}) {
     }
     const collection = String(body.collection ?? '')
     const recordId = String(body.recordId ?? '')
-    const role: ResourceRole =
-      body.role === 'viewer' || body.role === 'commenter' || body.role === 'manager' || body.role === 'owner'
-        ? body.role
-        : 'editor'
+    let role: ResourceRole
+    if (body.role === undefined) {
+      role = 'editor'
+    } else if (
+      body.role === 'viewer' ||
+      body.role === 'commenter' ||
+      body.role === 'editor' ||
+      body.role === 'manager'
+    ) {
+      role = body.role
+    } else {
+      route.send(400, { error: '无效的权限角色' })
+      return
+    }
     const kind = body.collaboratorKind === 'internal' ? 'internal' : 'external'
     const result = body.memberViewId
       ? account.store.grantMemberView(me.id, collection, recordId, String(body.memberViewId), role)
@@ -1308,7 +1318,7 @@ export function apply(ctx: Context, config: AccountConfig = {}) {
       collection?: string
       recordId?: string
       inheritanceMode?: 'inherit' | 'custom'
-      accessMode?: 'private' | 'members' | 'restricted'
+      accessMode?: 'private' | 'members'
       memberDefaultRole?: 'viewer' | 'editor'
     }
     const collection = String(body.collection ?? '').trim()
@@ -1318,7 +1328,7 @@ export function apply(ctx: Context, config: AccountConfig = {}) {
     const accessMode =
       body.accessMode === 'members'
         ? 'members'
-        : body.accessMode === 'private' || body.accessMode === 'restricted'
+        : body.accessMode === 'private'
           ? 'private'
           : null
     const memberDefaultRole =

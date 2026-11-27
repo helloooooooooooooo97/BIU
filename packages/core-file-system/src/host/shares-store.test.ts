@@ -31,30 +31,15 @@ test('shares persist workspaceId and createdBy and support creator revocation', 
   store.revokeByCreator('ws-1', 'alice')
   assert.equal(store.get(recShare.token), null)
 
-  // Legacy view shares are rejected
+  // Legacy view and rule shares are rejected
   assert.throws(
     () => store.upsert({ kind: 'view' as never, collection: '/pages', viewId: 'v-team' }),
     /invalid share kind/,
   )
-})
-
-test('shares support kind=rule public links decoupled from views', () => {
-  const store = new SharesStore().open(':memory:')
-  const rec = store.upsert({
-    kind: 'rule',
-    collection: '/pages',
-    ruleId: 'rule_abc',
-    workspaceId: 'ws-1',
-    createdBy: 'alice',
-  })
-  assert.equal(rec.kind, 'rule')
-  assert.equal(rec.ruleId, 'rule_abc')
-  assert.equal(rec.viewId, '')
-  assert.equal(store.findRule('/pages', 'rule_abc')?.token, rec.token)
-  assert.equal(store.listRules('/pages').length, 1)
-
-  store.revokeRule('/pages', 'rule_abc')
-  assert.equal(store.findRule('/pages', 'rule_abc'), null)
+  assert.throws(
+    () => store.upsert({ kind: 'rule' as never, collection: '/pages', recordId: 'rule_abc' }),
+    /invalid share kind/,
+  )
 })
 
 test('buildShareSnapshot includes active inheriting descendants for record shares and excludes detached subpages', async () => {

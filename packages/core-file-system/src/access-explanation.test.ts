@@ -238,3 +238,60 @@ test('buildAccessExplanation propagates ancestor public links when inheriting an
   assert.equal(detached.visibility.hasExternal, false)
   assert.equal(detached.audience.publicLinks.length, 0)
 })
+
+test('buildAccessExplanation honors memberDefaultRole and keeps workspace_members even when ancestor also has direct grants', () => {
+  const result = buildAccessExplanation({
+    collection: '/pages',
+    recordId: 'child-ws',
+    recordTitle: '子页',
+    localOnly: false,
+    access: {
+      scope: 'workspace',
+      memberDefaultRole: 'viewer',
+      ownerId: 'u-ada',
+      people: [],
+      memberViews: [],
+      roleChain: [{ id: 'own', title: '这条内容', detail: '你是创建者', role: 'owner', source: 'ownership' }],
+      inheritance: {
+        mode: 'inherit',
+        ancestors: [
+          {
+            collection: '/pages',
+            recordId: 'parent-ws',
+            title: '空间父页',
+            scope: 'workspace',
+            memberDefaultRole: 'viewer',
+            ownerId: 'u-ada',
+            people: [
+              { id: 'u-ada', name: 'Ada', role: 'owner', memberKind: 'member' },
+              { id: 'u-bob', name: 'Bob', role: 'editor', memberKind: 'member' },
+            ],
+            memberViews: [],
+          },
+        ],
+      },
+    },
+  })
+
+  const wsEntry = result.audience.inherited.find((item) => item.subjectType === 'workspace_members')
+  assert.ok(wsEntry, 'workspace_members must not be dropped when ancestor also has direct grants')
+  assert.equal(wsEntry?.role, 'viewer')
+
+  const directWs = buildAccessExplanation({
+    collection: '/pages',
+    recordId: 'direct-ws',
+    recordTitle: '只读空间页',
+    localOnly: false,
+    access: {
+      scope: 'workspace',
+      memberDefaultRole: 'viewer',
+      ownerId: 'u-ada',
+      people: [],
+      memberViews: [],
+      roleChain: [{ id: 'own', title: '这条内容', detail: '你是创建者', role: 'owner', source: 'ownership' }],
+      inheritance: { mode: 'custom', ancestors: [] },
+    },
+  })
+  const directWsEntry = directWs.audience.direct.find((item) => item.subjectType === 'workspace_members')
+  assert.equal(directWsEntry?.role, 'viewer')
+})
