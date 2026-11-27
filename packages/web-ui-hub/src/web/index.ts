@@ -33,11 +33,6 @@ export function isStoreWebPlugin(plugin: { packageName?: string; web?: string })
   return Boolean(plugin.packageName?.startsWith('store:') && plugin.web && isRuntimeWebModule(plugin.web))
 }
 
-/** 页面记录才需要商店页块的 web.js。任务表、会话、MCP 刷新不必先拉 excalidraw。 */
-export function pageRouteNeedsStoreWeb(pathname: string) {
-  return /\/pages\/record\//.test(pathname)
-}
-
 /** 只挂当前页面请求启用的商店包，不把 snapshot 里其余 web.js 一起拉下来。 */
 export function storeWebPluginRequested(
   row: { id: string; packageName?: string },

@@ -13,7 +13,6 @@ import {
   isRuntimeWebModule,
   isStoreWebPlugin,
   orderUiPlugins,
-  pageRouteNeedsStoreWeb,
   runtimeWebModuleHref,
   runtimeWebPlugin,
   storeWebPluginRequested,
@@ -60,9 +59,6 @@ test('store web plugins are the packed store packages, not core ui', () => {
     true,
   )
   assert.equal(isStoreWebPlugin({ packageName: '@biu/core-chat', web: '@biu/core-chat/web' }), false)
-  assert.equal(pageRouteNeedsStoreWeb('/database/pages/record/p000'), true)
-  assert.equal(pageRouteNeedsStoreWeb('/database/tasks'), false)
-  assert.equal(pageRouteNeedsStoreWeb('/'), false)
   assert.equal(storeWebPluginRequested({ id: 'page-toc', packageName: 'store:page-toc' }, ['page-toc']), true)
   assert.equal(storeWebPluginRequested({ id: 'page-excalidraw', packageName: 'store:page-excalidraw' }, ['page-toc']), false)
 })
