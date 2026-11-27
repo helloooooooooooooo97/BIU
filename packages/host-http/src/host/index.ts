@@ -969,6 +969,12 @@ export class HttpService extends Service {
         res.end(JSON.stringify({ error: 'not found' }))
         return
       }
+      // 未匹配的 /api/* 绝不能走 proxyShareUi（dev 模式下会反打回 Vite，再被 Vite 代理回 host 形成死循环直到连接池耗尽）
+      if (url.pathname.startsWith('/api/')) {
+        res.writeHead(404, { 'content-type': 'application/json; charset=utf-8', ...corsHeaders })
+        res.end(JSON.stringify({ error: 'not found — 对应插件可能已卸载' }))
+        return
+      }
       const proxied = await this.proxyShareUi(url.pathname, res)
       if (proxied) return
       await this.serveStatic(url.pathname, res, shareOnly)
@@ -979,6 +985,7 @@ export class HttpService extends Service {
   }
 
   private async proxyShareUi(pathname: string, res: ServerResponse) {
+    if (pathname.startsWith('/api/')) return false
     const base = hostShareProxyUi()
     if (!base) return false
     try {

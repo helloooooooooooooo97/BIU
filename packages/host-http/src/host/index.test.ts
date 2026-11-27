@@ -561,3 +561,37 @@ test('shared cloud agent broadcasts session events to authorized collaborators b
     else process.env.BIU_ONLINE = previous
   }
 })
+
+test('unmatched GET /api/* returns 404 directly without proxying to SHARE_PROXY_UI', async () => {
+  const previousProxy = process.env.SHARE_PROXY_UI
+  let upstreamHits = 0
+  const upstream = createServer((_req, res) => {
+    upstreamHits += 1
+    res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' })
+    res.end('<html>vite</html>')
+  })
+  await new Promise<void>((resolve) => upstream.listen(0, '127.0.0.1', () => resolve()))
+  const upstreamAddr = upstream.address()
+  const upstreamPort = typeof upstreamAddr === 'object' && upstreamAddr ? upstreamAddr.port : 0
+  process.env.SHARE_PROXY_UI = `http://127.0.0.1:${upstreamPort}`
+
+  const base = await mkdtemp(join(tmpdir(), 'cordis-http-api-404-'))
+  const publicDir = join(base, 'public')
+  await mkdir(publicDir, { recursive: true })
+  const ctx = new Context()
+  const ready = new Promise<number>((resolve) => ctx.on('http/ready', ({ port }) => resolve(port)))
+  const fiber = await ctx.plugin(http, { port: 0, host: '127.0.0.1', publicDir, sharePort: 0 })
+  try {
+    const port = await ready
+    const missingApi = await fetch(`http://127.0.0.1:${port}/api/account/members`)
+    assert.equal(missingApi.status, 404)
+    assert.equal(upstreamHits, 0)
+    const body = (await missingApi.json()) as { error?: string }
+    assert.match(body.error ?? '', /not found/)
+  } finally {
+    await fiber.dispose()
+    await new Promise<void>((resolve) => upstream.close(() => resolve()))
+    if (previousProxy === undefined) delete process.env.SHARE_PROXY_UI
+    else process.env.SHARE_PROXY_UI = previousProxy
+  }
+})
