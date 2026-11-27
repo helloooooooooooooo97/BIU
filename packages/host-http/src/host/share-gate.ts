@@ -1,5 +1,5 @@
 /** Paths the LAN share listener may serve. Everything else stays on localhost. */
-export function isMcpApiPath(pathname: string) {
+function isMcpApiPath(pathname: string) {
   return pathname === '/api/mcp' || pathname.startsWith('/api/mcp/')
 }
 
