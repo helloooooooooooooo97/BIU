@@ -1,9 +1,6 @@
 import { readStorageString, removeStorageKey, writeStorageString } from '@biu/biu-ui/client-storage'
-import { TAG_TONES, tagTextColor, tagWashColor } from '@biu/biu-ui'
 
 /** 与标签相同的色相；文字/涂亮直接用饱和色，不叠黑白墨。 */
-
-export { tagTextColor, tagWashColor }
 
 export type EditorColorKind = 'text' | 'mark'
 

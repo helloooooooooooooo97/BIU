@@ -25,7 +25,7 @@ import { markdownLocusFromElement, markdownLocusFromRange, markdownLocusFromSele
 import { isFindHotkey } from './find-bar.tsx'
 import { applyEditorFind } from './find-plugin.ts'
 import { applyStoredBlockIds, encodeBlankParagraphsForParse, markdownWithBlockIds, restoreBlankParagraphs, stripBlockIdStamps } from './block-id.ts'
-import { getLivePageEditor, setLivePageEditor, setLivePagePersist } from './editor-live-instance.ts'
+import { getLivePageEditor, setLivePageEditor } from './editor-live-instance.ts'
 import { PAGE_FIND_OPEN_EVENT, getPageFind, patchEditorCommentsUi, patchPageFind, useEditorCommentsUi, usePageFind } from './editor-view-state.ts'
 import { captureCommentAnchor, resolveCommentAnchor } from './comment-anchor.ts'
 import { collectDriftedCommentAnchors, getCommentIdsAtPos, getCommentRange, setActiveEditorComment, setEditorComments, setEditorPendingSelection } from './comment-plugin.ts'
@@ -588,18 +588,10 @@ function PageDocEditor({ record, value, writable, onChange, path, status = 'read
   useEffect(() => {
     if (!editor || editor.isDestroyed) return
     setLivePageEditor(editor)
-    setLivePagePersist((current) => {
-      if (current.isDestroyed || writableRef.current === false) return
-      const next = persistEditorMarkdown(current)
-      if (next === saved.current) return
-      saved.current = next
-      onChange?.(next)
-    })
     return () => {
       if (getLivePageEditor() === editor) setLivePageEditor(null)
-      setLivePagePersist(null)
     }
-  }, [editor, onChange])
+  }, [editor])
 
   useEffect(() => {
     const onFind = (event: Event) => {

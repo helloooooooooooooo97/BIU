@@ -205,14 +205,17 @@ export function applyContentJump(
   applyAgentEditMark(editor, range)
 }
 
-function scrollCaret(editor: Editor, pos: number) {
+export function resolveOutlineBlock(editor: Editor, pos: number): HTMLElement | null {
   const mapped = editor.view.domAtPos(pos)
   const node = mapped.node
   const el = node instanceof Element ? node : node.parentElement
-  if (!(el instanceof HTMLElement)) return
-  const block =
-    el.closest<HTMLElement>('h1, h2, h3, p, li, blockquote, pre, table, .page-block') ?? el
-  scrollOutlineTarget(block)
+  if (!(el instanceof HTMLElement)) return null
+  return el.closest<HTMLElement>('h1, h2, h3, p, li, blockquote, pre, table, .page-block') ?? el
+}
+
+function scrollCaret(editor: Editor, pos: number) {
+  const block = resolveOutlineBlock(editor, pos)
+  if (block) scrollOutlineTarget(block)
 }
 
 function safeTextPos(doc: PmNode, pos: number) {

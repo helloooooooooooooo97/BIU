@@ -3,7 +3,6 @@ import type { RecordLayoutSort } from '@biu/type-file-system/record-views'
 import type { CommentAnchor } from './comment-anchor.ts'
 
 export type PageSort = RecordLayoutSort
-export type PageGroup = '' | 'kind' | 'heading'
 
 export const PAGE_FIND_OPEN_EVENT = 'biu:page-find-open'
 export const PAGE_OUTLINE_EVENT = 'biu:page-outline'
