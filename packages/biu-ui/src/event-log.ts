@@ -9,7 +9,6 @@ export type ClientLogEntry = {
 
 const MAX = 200
 let entries: ClientLogEntry[] = []
-const listeners = new Set<() => void>()
 
 export function clientLogSnapshot() {
   return entries
@@ -17,7 +16,6 @@ export function clientLogSnapshot() {
 
 export function resetClientLogs() {
   entries = []
-  for (const listener of listeners) listener()
 }
 
 export function clientLogErrorText(error: unknown) {
@@ -29,7 +27,6 @@ export function clientLogErrorText(error: unknown) {
 export function clientLog(level: ClientLogLevel, scope: string, message: string, detail?: unknown) {
   const entry: ClientLogEntry = { ts: Date.now(), level, scope, message }
   entries = [entry, ...entries].slice(0, MAX)
-  for (const listener of listeners) listener()
   const line = `[biu:${scope}] ${message}`
   const sink = level === 'error' ? console.error : level === 'warn' ? console.warn : console.info
   if (detail !== undefined) sink(line, detail)
