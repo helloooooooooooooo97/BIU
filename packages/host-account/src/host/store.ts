@@ -997,6 +997,11 @@ export class CollabStore {
     if (!workspaceId) throw new CollabError('没有工作区', 400)
     if (viewId.trim()) throw new CollabError('视图不支持独立访客邀请，请使用访问规则分享', 400)
     const targetResource = { type: 'record' as const, workspaceId, ...this.recordKey(collection, recordId) }
+    if (targetResource.collection === '/notices' || targetResource.collection === '/tasks' || targetResource.collection === '/mcp') {
+      throw new CollabError('该数据类型仅自己可见，不支持分享', 400)
+    }
+    const effectiveResourceRole: 'viewer' | 'editor' =
+      targetResource.collection === '/agents' ? 'viewer' : resourceRole
     const decision = this.authorization.authorize(
       { type: 'account', accountId: actorId, workspaceId },
       'resource:manage-permissions',
@@ -1012,7 +1017,7 @@ export class CollabStore {
       collection,
       recordId,
       viewId: '',
-      role: resourceRole,
+      role: effectiveResourceRole,
       expiresAt: now + Math.max(1, Math.min(24 * 30, expiresInHours)) * 60 * 60 * 1000,
     }
     this.db
@@ -1343,6 +1348,10 @@ export class CollabStore {
     const normalizedViewId = viewId.trim()
     if (!normalizedViewId) throw new CollabError('成员视图不能为空', 400)
     const target = this.resolveRecordTarget(collection, recordId)
+    if (target.collection === '/notices' || target.collection === '/tasks' || target.collection === '/mcp') {
+      throw new CollabError('该数据类型仅自己可见，不支持分享', 400)
+    }
+    const effectiveRole: ResourceRole = target.collection === '/agents' ? 'viewer' : role
     const owned = this.db
       .prepare('SELECT 1 AS ok FROM resource_policies WHERE workspace_id = ? AND collection = ? AND record_id = ?')
       .get(workspaceId, target.collection, target.recordId) as { ok: number } | undefined
@@ -1353,7 +1362,7 @@ export class CollabStore {
         { type: 'record', workspaceId, collection: target.collection, recordId: target.recordId },
         'member_view',
         normalizedViewId,
-        role,
+        effectiveRole,
         now,
       )
     } catch (error) {
@@ -2452,6 +2461,11 @@ export class CollabStore {
     if (!workspaceId) throw new CollabError('没有工作区', 400)
     this.requireMember(actorId, workspaceId)
     const target = this.resolveRecordTarget(collection, recordId)
+    if (target.collection === '/notices' || target.collection === '/tasks' || target.collection === '/mcp') {
+      throw new CollabError('该数据类型仅自己可见，不支持分享', 400)
+    }
+    const effectiveDefaultRole: 'viewer' | 'editor' | undefined =
+      target.collection === '/agents' && accessMode === 'members' ? 'viewer' : memberDefaultRole
     if (target.collection === '/views' && accessMode === 'private') {
       this.assertWorkspaceViewRemainsForPrivatize(workspaceId, target.recordId)
     }
@@ -2461,7 +2475,7 @@ export class CollabStore {
         { type: 'account', accountId: actorId, workspaceId },
         resource,
         accessMode,
-        memberDefaultRole,
+        effectiveDefaultRole,
       )
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
@@ -2493,6 +2507,10 @@ export class CollabStore {
     if (!workspaceId) throw new CollabError('没有工作区', 400)
     this.requireMember(actorId, workspaceId)
     const target = this.resolveRecordTarget(collection, recordId)
+    if (target.collection === '/notices' || target.collection === '/tasks' || target.collection === '/mcp') {
+      throw new CollabError('该数据类型仅自己可见，不支持分享', 400)
+    }
+    const effectiveRole: ResourceRole = target.collection === '/agents' ? 'viewer' : role
     const owned = this.db
       .prepare('SELECT 1 AS ok FROM resource_policies WHERE workspace_id = ? AND collection = ? AND record_id = ?')
       .get(workspaceId, target.collection, target.recordId) as { ok: number } | undefined
@@ -2530,7 +2548,7 @@ export class CollabStore {
         )
         .run(workspaceId, account.id, now)
     }
-    this.authorization.grant(actorId, resource, 'account', account.id, role, now)
+    this.authorization.grant(actorId, resource, 'account', account.id, effectiveRole, now)
     this.recordActivity({
       workspaceId,
       actorId,
@@ -2538,7 +2556,7 @@ export class CollabStore {
       action: 'access.grant',
       collection: target.collection,
       recordId: target.recordId,
-      detail: `授权给 ${normalized}（${role}）`,
+      detail: `授权给 ${normalized}（${effectiveRole}）`,
       now,
     })
     return this.accessRows(workspaceId, target.collection, target.recordId)
@@ -2952,6 +2970,15 @@ export class CollabStore {
     this.requireMember(actorId, workspaceId)
     const normalizedCol = input.collection.trim()
     if (!normalizedCol.startsWith('/')) throw new CollabError('集合路径不合法', 400)
+    if (normalizedCol === '/notices' || normalizedCol === '/tasks' || normalizedCol === '/mcp') {
+      throw new CollabError('该数据类型仅自己可见，不支持分享', 400)
+    }
+    if (normalizedCol === '/agents') {
+      if (input.mode === 'grant') input = { ...input, role: 'viewer' }
+      if (input.mode === 'access_mode' && input.accessMode === 'members') {
+        input = { ...input, memberDefaultRole: 'viewer' }
+      }
+    }
     const uniqueIds = [...new Set((input.recordIds ?? []).map((item) => String(item ?? '').trim()).filter(Boolean))]
     if (!uniqueIds.length) {
       return { collection: normalizedCol, totalCount: 0, updatedCount: 0, skippedCount: 0, updatedIds: [] }

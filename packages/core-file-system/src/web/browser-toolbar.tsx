@@ -23,7 +23,7 @@ import { countFilterRules, type FilterGroup, type SortRule } from '../query-logi
 import type { BrowserDialogState } from './browser-dialogs.tsx'
 import { askNewPlugin } from './browser-row-title.tsx'
 import { LocalText } from './controls.tsx'
-import { PAGES_COLLECTION_PATH, PLUGINS_COLLECTION_PATH, WORKSPACE_MEMBERS_COLLECTION_PATH, isIndexCollection, isSystemCollection } from './database-path.ts'
+import { PAGES_COLLECTION_PATH, PLUGINS_COLLECTION_PATH, WORKSPACE_MEMBERS_COLLECTION_PATH, isIndexCollection, isPersonalOnlyCollection, isSystemCollection } from './database-path.ts'
 import { readJson } from './db-client.ts'
 import type { GroupBucket, ViewMode } from './fields.ts'
 import { ModeGlyph, VIEW_MODES } from './fsdb-cells.tsx'
@@ -338,7 +338,8 @@ export const BrowserListChrome = memo(function BrowserListChrome(props: BrowserL
     !inTrash &&
     !isDataOverview &&
     collectionPath !== WORKSPACE_MEMBERS_COLLECTION_PATH &&
-    !isIndexCollection(collectionPath)
+    !isIndexCollection(collectionPath) &&
+    !isPersonalOnlyCollection(collectionPath)
 
   const openSettingsTab = (tab: ViewSettingsTab) => {
     if (configOpen && settingsTab === tab) {

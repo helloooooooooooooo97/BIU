@@ -141,6 +141,7 @@ import {
   VIEWS_COLLECTION_PATH,
   isIndexCollection,
   isOverviewCreatableCollection,
+  isPersonalOnlyCollection,
   isSystemCollection,
 } from './database-path.ts'
 import {
@@ -2514,7 +2515,11 @@ export function CollectionBrowser({
   const pagePrefs = getPagePrefs()
   useLayoutEffect(() => {
     if (!inspectorPaneId || !embed || detailId) return
-    const canShare = Boolean(activeViewId) && !isSystemCollection(collectionPath) && !isIndexCollection(collectionPath)
+    const canShare =
+      Boolean(activeViewId) &&
+      !isSystemCollection(collectionPath) &&
+      !isIndexCollection(collectionPath) &&
+      !isPersonalOnlyCollection(collectionPath)
     reportInspectorPaneMenu(
       inspectorPaneId,
       <ViewPaneMenu

@@ -93,7 +93,14 @@ export function WorkspaceAccess({
     | null
   >(null)
   const [memberPickerOpen, setMemberPickerOpen] = useState(false)
-  const [role, setRole] = useState<ShareRole>('editor')
+  const isAgentReadOnly = collection === '/agents'
+  const effectiveRoleOptions = isAgentReadOnly
+    ? [{ value: 'viewer' as ShareRole, label: '可查看', hint: '仅查看聊天记录，不可操作或修改代理配置' }]
+    : ROLE_OPTIONS
+  const effectiveMemberDefaultRoleOptions = isAgentReadOnly
+    ? [{ value: 'viewer' as const, label: '可查看', hint: '仅查看聊天记录，不可操作或修改代理配置' }]
+    : MEMBER_DEFAULT_ROLE_OPTIONS
+  const [role, setRole] = useState<ShareRole>(isAgentReadOnly ? 'viewer' : 'editor')
   const [guestUrl, setGuestUrl] = useState('')
   const [guestCopied, setGuestCopied] = useState(false)
   const [inheritance, setInheritance] = useState<{
@@ -339,12 +346,12 @@ export function WorkspaceAccess({
 
   const roleSelect = (
     <ShareSelect
-      value={role}
-      options={ROLE_OPTIONS}
+      value={isAgentReadOnly ? 'viewer' : role}
+      options={effectiveRoleOptions}
       ariaLabel="权限"
       placement="bottom-end"
       minMenuWidth={168}
-      onChange={setRole}
+      onChange={(next) => setRole(isAgentReadOnly ? 'viewer' : next)}
     />
   )
 
@@ -434,6 +441,14 @@ export function WorkspaceAccess({
           ) : null}
         </div>
       </div>
+      {isAgentReadOnly ? (
+        <div
+          style={{ fontSize: 12, color: 'var(--biu-color-text-muted)', marginTop: 4 }}
+          data-testid="fsdb-share-agent-readonly-hint"
+        >
+          代理分享仅开放聊天记录（只读），他人无法操作代理或修改配置
+        </div>
+      ) : null}
       {statusNotice ? (
         <div style={{ fontSize: 12, color: 'var(--biu-color-emphasis)', marginTop: 4 }} data-testid="fsdb-share-status-notice">
           {statusNotice}
@@ -465,14 +480,14 @@ export function WorkspaceAccess({
             {isMembersOpen ? (
               <ShareSelect
                 inline
-                value={memberDefaultRole}
-                options={MEMBER_DEFAULT_ROLE_OPTIONS}
+                value={isAgentReadOnly ? 'viewer' : memberDefaultRole}
+                options={effectiveMemberDefaultRoleOptions}
                 ariaLabel="空间全员默认权限"
                 placement="bottom-end"
                 minMenuWidth={160}
                 onChange={(next) => {
                   if (next === 'viewer' || next === 'editor') {
-                    void updateGeneralAccess('members', next)
+                    void updateGeneralAccess('members', isAgentReadOnly ? 'viewer' : next)
                   }
                 }}
               />
@@ -552,13 +567,14 @@ export function WorkspaceAccess({
                 {canEdit ? (
                   <ShareSelect
                     inline
-                    value={row.role as ShareRole}
-                    options={ROLE_OPTIONS}
+                    value={isAgentReadOnly ? 'viewer' : (row.role as ShareRole)}
+                    options={effectiveRoleOptions}
                     ariaLabel={`调整 ${row.name} 的权限`}
                     placement="bottom-end"
                     minMenuWidth={168}
                     onChange={(next) => {
-                      if (next !== row.role) void grant({ email: row.email }, 'internal', next)
+                      const targetRole = isAgentReadOnly ? 'viewer' : next
+                      if (targetRole !== row.role) void grant({ email: row.email }, 'internal', targetRole)
                     }}
                   />
                 ) : (
@@ -588,13 +604,14 @@ export function WorkspaceAccess({
                 {canEdit ? (
                   <ShareSelect
                     inline
-                    value={(row.role || 'editor') as ShareRole}
-                    options={ROLE_OPTIONS}
+                    value={isAgentReadOnly ? 'viewer' : ((row.role || 'editor') as ShareRole)}
+                    options={effectiveRoleOptions}
                     ariaLabel={`调整 ${row.name} 的权限`}
                     placement="bottom-end"
                     minMenuWidth={168}
                     onChange={(next) => {
-                      if (next !== row.role) void grant({ memberViewId: row.id }, 'internal', next)
+                      const targetRole = isAgentReadOnly ? 'viewer' : next
+                      if (targetRole !== row.role) void grant({ memberViewId: row.id }, 'internal', targetRole)
                     }}
                   />
                 ) : (
@@ -711,13 +728,14 @@ export function WorkspaceAccess({
                 {canEdit ? (
                   <ShareSelect
                     inline
-                    value={row.role as ShareRole}
-                    options={ROLE_OPTIONS}
+                    value={isAgentReadOnly ? 'viewer' : (row.role as ShareRole)}
+                    options={effectiveRoleOptions}
                     ariaLabel={`调整 ${row.name} 的权限`}
                     placement="bottom-end"
                     minMenuWidth={168}
                     onChange={(next) => {
-                      if (next !== row.role) void grant({ email: row.email }, 'external', next)
+                      const targetRole = isAgentReadOnly ? 'viewer' : next
+                      if (targetRole !== row.role) void grant({ email: row.email }, 'external', targetRole)
                     }}
                   />
                 ) : (

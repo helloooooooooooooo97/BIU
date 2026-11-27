@@ -1291,8 +1291,43 @@ export function apply(ctx: Context) {
     const record = await ctx.sessions.get(id)
     return record && ctx.sessions.inWorkspace(id) ? record : null
   }
+  const canWriteSession = (id: string) => {
+    const account = getAccountPort(ctx) as
+      | (ReturnType<typeof getAccountPort> & {
+          authorization?: {
+            currentActor?: () => { accountId: string; workspaceId: string } | null
+            authorize?: (
+              actor: { accountId: string; workspaceId: string },
+              action: string,
+              resource: { type: 'record'; workspaceId: string; collection: string; recordId: string },
+            ) => { allowed: boolean }
+          }
+        })
+      | undefined
+    const auth = account?.authorization
+    const actor = auth?.currentActor?.()
+    if (!auth?.authorize || !actor) return true
+    return auth.authorize(actor, 'resource:update', {
+      type: 'record',
+      workspaceId: actor.workspaceId,
+      collection: '/agents',
+      recordId: id,
+    }).allowed
+  }
+  const requireWritableSession = async (id: string, route: { send: (status: number, body: unknown) => void }) => {
+    const record = await visibleSession(id)
+    if (!record) {
+      route.send(404, { error: 'unknown session' })
+      return null
+    }
+    if (!canWriteSession(id)) {
+      route.send(403, { error: '只读会话仅可查看聊天记录，无法操作或修改配置' })
+      return null
+    }
+    return record
+  }
   ctx.http.route('PATCH', '/api/agents/:id/config', async (route) => {
-    if (!(await visibleSession(route.params.id))) return route.send(404, { error: 'unknown session' })
+    if (!(await requireWritableSession(route.params.id, route))) return
     try {
       const payload = ((await route.json().catch(() => null)) ?? {}) as Record<string, unknown>
       const patch: {
@@ -1349,14 +1384,11 @@ export function apply(ctx: Context) {
   ctx.http.route('GET', '/api/agents', async (route) => {
     await ctx.sessions.ensureDefaultSession()
     let items = liveSessionItems(ctx, await ctx.sessions.listSummaries())
-    if (!items.length) {
-      await ctx.sessions.create()
-      items = liveSessionItems(ctx, await ctx.sessions.listSummaries())
-    }
     let pinnedSet: Set<string> | null = null
     let ownerMap: Map<string, string> | null = null
+    let accountId = ''
     try {
-      const accountId = currentAccountId()
+      accountId = currentAccountId()
       const store = getAccountPort(ctx)?.store
       if (accountId && store?.workspacePrefs) {
         pinnedSet = new Set(store.workspacePrefs(accountId).pinnedAgents)
@@ -1367,6 +1399,32 @@ export function apply(ctx: Context) {
       }
     } catch {
       pinnedSet = null
+    }
+    // 会话页仅展示当前账号自己的会话；他人分享给我的会话在数据模块/分享链接中只读查看聊天记录
+    if (accountId && ownerMap) {
+      items = items.filter((item) => {
+        const owner = ownerMap!.get(item.id)
+        return !owner || owner === accountId
+      })
+    }
+    if (!items.length) {
+      await ctx.sessions.create()
+      items = liveSessionItems(ctx, await ctx.sessions.listSummaries())
+      if (accountId && ownerMap) {
+        try {
+          const store = getAccountPort(ctx)?.store
+          const workspaceId = currentRequestWorkspaceId() || store?.activeWorkspaceId?.() || ''
+          if (workspaceId && store?.collectionRecordOwners) {
+            ownerMap = store.collectionRecordOwners(workspaceId, '/agents')
+          }
+        } catch {
+          /* ignore */
+        }
+        items = items.filter((item) => {
+          const owner = ownerMap!.get(item.id)
+          return !owner || owner === accountId
+        })
+      }
     }
     route.send(200, {
       sessions: items.map((item) => {
@@ -1487,8 +1545,8 @@ export function apply(ctx: Context) {
     route.send(200, { turns: result as Record<string, TurnStat> })
   })
   ctx.http.route('POST', '/api/agents/:id/artifacts', async (route) => {
-    const record = await visibleSession(route.params.id)
-    if (!record) return route.send(404, { error: 'unknown session' })
+    const record = await requireWritableSession(route.params.id, route)
+    if (!record) return
     try {
       const saved = await persistDroppedFile(route.params.id, {
         name: String(route.query.get('name') ?? '').trim(),
@@ -1545,7 +1603,7 @@ export function apply(ctx: Context) {
   })
   ctx.http.route('PUT', '/api/agents/:id/project', async (route) => {
     if (!getRuntimePolicy().allowHostPathBinding) return route.send(403, { error: '云端空间使用隔离沙箱工作区，不支持绑定宿主机路径' })
-    if (!(await visibleSession(route.params.id))) return route.send(404, { error: 'unknown session' })
+    if (!(await requireWritableSession(route.params.id, route))) return
     const payload = (await route.json()) as { path?: string | null; name?: string | null }
     try {
       // path 优先；兼容旧客户端误传 name=null 解绑
@@ -1563,8 +1621,8 @@ export function apply(ctx: Context) {
   ctx.http.route('POST', '/api/agents/:id/project/pick', async (route) => {
     if (!getRuntimePolicy().allowHostPathBinding) return route.send(403, { error: '云端空间不支持选择宿主机目录' })
     try {
-      const record = await visibleSession(route.params.id)
-      if (!record) return route.send(404, { error: 'unknown session' })
+      const record = await requireWritableSession(route.params.id, route)
+      if (!record) return
       const { pickHostDirectory } = await import('@biu/host-fs/workspace-pick')
       const current = record.project?.path
       const path = await pickHostDirectory(current)
@@ -1593,8 +1651,8 @@ export function apply(ctx: Context) {
   })
   ctx.http.route('DELETE', '/api/agents/:id', async (route) => {
     const id = route.params.id
-    const record = await visibleSession(id)
-    if (!record) return route.send(404, { error: 'unknown session' })
+    const record = await requireWritableSession(id, route)
+    if (!record) return
     const db = databaseOf(ctx)
     if (db?.tags.isDeleted('/agents', id)) return route.send(404, { error: 'unknown session' })
     ctx.agents.get(id)?.dispose()
@@ -1617,8 +1675,8 @@ export function apply(ctx: Context) {
       images?: Array<{ name?: string; mime?: string; url?: string }>
       liveContext?: unknown
     }
-    if (!(await visibleSession(route.params.id))) {
-      return route.send(404, { error: 'unknown session' })
+    if (!(await requireWritableSession(route.params.id, route))) {
+      return
     }
     const agent = await ctx.agents.create(route.params.id)
     // re-sync in-memory LLM without rewriting disk
@@ -1682,7 +1740,7 @@ export function apply(ctx: Context) {
   })
   ctx.http.route('POST', '/api/agents/:id/inbox/drop', async (route) => {
     const id = route.params.id
-    if (!(await visibleSession(id))) return route.send(404, { error: 'unknown session' })
+    if (!(await requireWritableSession(id, route))) return
     await ctx.agents.create(id)
     const payload = ((await route.json().catch(() => null)) ?? {}) as { id?: string }
     const itemId = typeof payload.id === 'string' ? payload.id : ''
@@ -1693,7 +1751,7 @@ export function apply(ctx: Context) {
   })
   ctx.http.route('POST', '/api/agents/:id/inbox/patch', async (route) => {
     const id = route.params.id
-    if (!(await visibleSession(id))) return route.send(404, { error: 'unknown session' })
+    if (!(await requireWritableSession(id, route))) return
     await ctx.agents.create(id)
     const payload = ((await route.json().catch(() => null)) ?? {}) as { id?: string; text?: string }
     const itemId = typeof payload.id === 'string' ? payload.id : ''
@@ -1705,7 +1763,7 @@ export function apply(ctx: Context) {
   })
   ctx.http.route('POST', '/api/agents/:id/goal', async (route) => {
     const id = route.params.id
-    if (!(await visibleSession(id))) return route.send(404, { error: 'unknown session' })
+    if (!(await requireWritableSession(id, route))) return
     const payload = ((await route.json().catch(() => null)) ?? {}) as { action?: string }
     const action = payload.action
     if (action !== 'pause' && action !== 'resume' && action !== 'clear') {
@@ -1720,15 +1778,15 @@ export function apply(ctx: Context) {
   })
   ctx.http.route('POST', '/api/agents/:id/cancel', async (route) => {
     const id = route.params.id
-    if (!(await visibleSession(id))) return route.send(404, { error: 'unknown session' })
+    if (!(await requireWritableSession(id, route))) return
     const agent = await ctx.agents.create(id)
     agent.cancel()
     route.send(200, { ok: true })
   })
   ctx.http.route('POST', '/api/agents/:id/inbox/flush', async (route) => {
     const id = route.params.id
-    if (!(await visibleSession(id))) {
-      return route.send(404, { error: 'unknown session' })
+    if (!(await requireWritableSession(id, route))) {
+      return
     }
     const agent = await ctx.agents.create(id)
     chat.patch({}, { persist: false })
@@ -1745,8 +1803,8 @@ export function apply(ctx: Context) {
   })
   ctx.http.route('POST', '/api/chat', async (route) => {
     const payload = (await route.json()) as { messages?: ChatMessage[]; sessionId?: string; text?: string }
-    if (payload?.sessionId && !(await visibleSession(payload.sessionId))) {
-      return route.send(404, { error: 'unknown session' })
+    if (payload?.sessionId && !(await requireWritableSession(payload.sessionId, route))) {
+      return
     }
     const messages = Array.isArray(payload?.messages)
       ? payload.messages

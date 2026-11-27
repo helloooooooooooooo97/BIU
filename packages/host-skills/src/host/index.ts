@@ -75,12 +75,37 @@ export class SkillsService extends Service {
     }
   }
 
+  private canReadSkill(id: string): boolean {
+    if (getRuntimePolicy().authzMode !== 'rbac') return true
+    const account = this.ctx.get('account' as never) as
+      | {
+          authorization?: {
+            currentActor?: () => { accountId: string; workspaceId: string } | null
+            authorize?: (
+              actor: { accountId: string; workspaceId: string },
+              action: string,
+              resource: { type: 'record'; workspaceId: string; collection: string; recordId: string },
+            ) => { allowed: boolean }
+          }
+        }
+      | undefined
+    const authz = account?.authorization
+    const actor = authz?.currentActor?.()
+    if (!authz?.authorize || !actor) return true
+    return authz.authorize(actor, 'resource:read', {
+      type: 'record',
+      workspaceId: actor.workspaceId,
+      collection: '/skills',
+      recordId: id,
+    }).allowed
+  }
+
   list(): SkillRecord[] {
     return this.activeStore()?.list() ?? []
   }
 
   listEnabled() {
-    return this.list().filter((skill) => skill.enabled && skill.description.trim())
+    return this.list().filter((skill) => skill.enabled && skill.description.trim() && this.canReadSkill(skill.id))
   }
 
   summaries(): SkillSummary[] {
@@ -107,6 +132,7 @@ export class SkillsService extends Service {
 
   /** 读技能目录里一个文件的文本。相对路径已做越界校验。 */
   fileText(id: string, path: string): string {
+    if (!this.canReadSkill(id)) throw new Error(`permission denied: skill ${id}`)
     return this.requireStore().readFile(id, path).text
   }
 
@@ -117,6 +143,7 @@ export class SkillsService extends Service {
   }
 
   read(id: string) {
+    if (!this.canReadSkill(id)) throw new Error(`permission denied: skill ${id}`)
     const skill = this.record(id)
     return {
       id: skill.id,

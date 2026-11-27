@@ -17,6 +17,7 @@ import {
   WORKSPACE_MEMBERS_COLLECTION_PATH,
   DATA_MODULE_ID,
   isIndexCollection,
+  isPersonalOnlyCollection,
   isSystemCollection,
   normalizeCollectionPath,
 } from '../paths.ts'
@@ -39,6 +40,7 @@ export {
   VIEWS_COLLECTION_PATH,
   WORKSPACE_MEMBERS_COLLECTION_PATH,
   isIndexCollection,
+  isPersonalOnlyCollection,
   isSystemCollection,
 }
 

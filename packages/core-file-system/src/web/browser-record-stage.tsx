@@ -7,7 +7,7 @@ import type { TableHoldSnap } from './browser-list-cache.ts'
 import type { BrowserTableColumn } from './browser-table-paint.tsx'
 import { PluginSurface } from './browser-row-title.tsx'
 import { UiGlyph } from './nav-glyphs.tsx'
-import { PLUGINS_COLLECTION_PATH } from './database-path.ts'
+import { PLUGINS_COLLECTION_PATH, isPersonalOnlyCollection } from './database-path.ts'
 import { getDatabaseUi } from './database-ui.ts'
 import { PageContentLoading } from './page-content-status.tsx'
 import type { TableColumnSlice } from './table-window.ts'
@@ -354,7 +354,7 @@ export const BrowserRecordStage = memo(function BrowserRecordStage(props: Browse
         }
         actionProperty={rowActionColumn ? renderRecordActions(selected) : null}
         share={
-          nested && detailId ? (
+          nested && detailId && !isPersonalOnlyCollection(collectionPath) ? (
             <SharePanel
               embedded
               localOnly={localData}
