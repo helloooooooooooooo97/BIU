@@ -1,8 +1,13 @@
 import type { CollectionSpec, DbRecord } from '@biu/type-file-system'
 import { actionVisibleToUser, recordBuiltinValues } from '@biu/type-file-system'
 import { parseStampRecordId, stampRecordId } from './tags-collection.ts'
-import { normalizeCollectionPath } from '../paths.ts'
-import { DATA_COLLECTION_PATH, DATA_MODULE_ID, TAGS_COLLECTION_PATH, isIndexCollection, isSystemCollection } from '../paths.ts'
+import {
+  DATA_COLLECTION_PATH,
+  DATA_MODULE_ID,
+  TRASH_COLLECTION_PATH,
+  WORKSPACE_MEMBERS_COLLECTION_PATH,
+  normalizeCollectionPath,
+} from '../paths.ts'
 import { matchActionWhen } from '../shared/fields.ts'
 
 export function overviewActionIds(spec: Pick<CollectionSpec, 'actions'>, row: DbRecord): string[] {
@@ -15,11 +20,16 @@ export function overviewActionIds(spec: Pick<CollectionSpec, 'actions'>, row: Db
     .map((action) => action.id)
 }
 
+const DATA_OVERVIEW_EXCLUDED_PATHS = new Set<string>([
+  DATA_COLLECTION_PATH,
+  TRASH_COLLECTION_PATH,
+  WORKSPACE_MEMBERS_COLLECTION_PATH,
+])
+
 export function isDataOverviewSource(path: string) {
-  if (path === DATA_COLLECTION_PATH) return false
-  if (isSystemCollection(path)) return false
-  if (isIndexCollection(path) && normalizeCollectionPath(path) !== TAGS_COLLECTION_PATH) return false
-  return true
+  const normalized = normalizeCollectionPath(path)
+  if (!normalized || normalized === '/') return false
+  return !DATA_OVERVIEW_EXCLUDED_PATHS.has(normalized)
 }
 
 export function overviewRecord(
