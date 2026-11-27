@@ -463,10 +463,17 @@ test('/workspace-members locked views are admin-only and guarded when referenced
     /MEMBER_VIEW_REFERENCED/,
   )
 
-  // Once references are released, admin can unlock cleanly
+  // Once references are released, locked view still cannot be deleted directly until unlocked
   refCount = 0
+  assert.throws(
+    () => store.applyPatch('/workspace-members', { remove: ['mv-eng'] }, 'admin-1'),
+    /VIEW_LOCKED/,
+  )
   store.applyPatch('/workspace-members', { upsert: [{ id: 'mv-eng', locked: false }] }, 'admin-1')
   assert.equal(store.isLockedMemberView('ws-1', 'mv-eng'), false)
+  // After unlocking, deletion succeeds
+  store.applyPatch('/workspace-members', { remove: ['mv-eng'] }, 'admin-1')
+  assert.equal(store.clientViewsFor('/workspace-members', 'admin-1', 'ws-1').some((v) => v.id === 'mv-eng'), false)
 })
 
 test('viewsCollection emits user PersonValue for createdBy and updatedBy, and actor overlay resolves member name', async () => {

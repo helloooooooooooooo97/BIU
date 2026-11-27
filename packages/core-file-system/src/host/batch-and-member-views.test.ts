@@ -445,7 +445,16 @@ test('unified /views record ACL, lazy seed views, field-level patch with revisio
   const bobBeforeShare = await asUser(bob.id, () => http.call('GET', '/api/db/saved-views?path=/docs'))
   assert.equal((bobBeforeShare.body.views as Array<{ id: string }>).some((v) => v.id === 'v_done'), false)
 
-  // 4b. Nobody (even workspace owner Ada) can delete or privatize the ONLY remaining workspace view ('all')
+  // 4b. Locked view cannot be deleted directly until unlocked, and even after unlocking nobody can delete or privatize the ONLY remaining workspace view ('all')
+  const delLocked = await asUser(ada.id, () =>
+    http.call('POST', '/api/db/saved-views', { path: '/docs', remove: ['all'] }),
+  )
+  assert.equal(delLocked.status, 403)
+  assert.match(String(delLocked.body.error), /VIEW_LOCKED/)
+  const unlockRes = await asUser(ada.id, () =>
+    http.call('POST', '/api/db/saved-views', { path: '/docs', upsert: [{ id: 'all', locked: false }] }),
+  )
+  assert.equal(unlockRes.status, 200)
   const delLastWs = await asUser(ada.id, () =>
     http.call('POST', '/api/db/saved-views', { path: '/docs', remove: ['all'] }),
   )

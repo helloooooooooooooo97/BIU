@@ -309,6 +309,9 @@ export class SavedViewsStore {
         throw new Error(`MEMBER_VIEW_REFERENCED: 该锁定成员视图正被 ${refCount} 条记录动态引用，请先固化为名单或取消关联授权`)
       }
     }
+    if (prev?.locked === true) {
+      throw new Error('permission denied: VIEW_LOCKED — 视图已锁定，请先解锁后再删除')
+    }
     if (this.policyGuard?.canRemoveView && accountId && prev) {
       if (!this.policyGuard.canRemoveView(workspaceId, path, prev, accountId)) {
         throw new Error('permission denied: VIEW_DELETE_REQUIRED')

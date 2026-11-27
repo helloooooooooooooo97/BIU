@@ -29,7 +29,7 @@ import { dataSidebarKind, isRecordTreeCollection, sortDataCollections } from './
 import { rememberInspectorWorkingView } from './inspector-db-route.ts'
 import { readJson } from './db-client.ts'
 import { paintCollectionViews } from './collection-nav.ts'
-import { canRemoveCollectionView, normalizeSavedView, type SavedView } from './saved-view.ts'
+import { canDeleteSavedView, canRemoveCollectionView, normalizeSavedView, type SavedView } from './saved-view.ts'
 import { useMemberDirectory } from './person-cell.tsx'
 import {
   fetchViewPreview,
@@ -992,8 +992,7 @@ export const DataSidebar = memo(function DataSidebar({
   }
 
   function viewRowDelete(path: string, view: SavedView, listed: SavedView[]) {
-    if (view.ephemeral || !canRemoveCollectionView(listed, view)) return undefined
-    if (view.viewRole && view.viewRole !== 'owner' && view.viewRole !== 'manager') return undefined
+    if (view.ephemeral || !canDeleteSavedView(view) || !canRemoveCollectionView(listed, view)) return undefined
     return () => onDeleteView(view, path)
   }
 

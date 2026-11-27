@@ -1349,17 +1349,16 @@ export function registerDatabaseHttpRoutes(
       } else {
         transition = account.store.revokeAllMemberViewGrants?.(actorId, workspaceId, viewId) ?? {}
       }
+      savedViews.applyPatch(
+        WORKSPACE_MEMBERS_COLLECTION_PATH,
+        {
+          upsert: [{ id: viewId, locked: false }],
+        },
+        actorId,
+        workspaceId,
+      )
       if (action === 'delete') {
         savedViews.remove(`${WORKSPACE_MEMBERS_COLLECTION_PATH}::${viewId}`, actorId, [], workspaceId)
-      } else {
-        savedViews.applyPatch(
-          WORKSPACE_MEMBERS_COLLECTION_PATH,
-          {
-            upsert: [{ id: viewId, locked: false }],
-          },
-          actorId,
-          workspaceId,
-        )
       }
       db.notifyViewCatalog(WORKSPACE_MEMBERS_COLLECTION_PATH)
       db.notifyShareChange()

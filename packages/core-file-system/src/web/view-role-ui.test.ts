@@ -24,10 +24,13 @@ describe('view role permissions & UI guards', () => {
 
     assert.equal(canDeleteSavedView({ viewRole: 'owner' }), true)
     assert.equal(canDeleteSavedView({ viewRole: 'manager' }), true)
+    assert.equal(canDeleteSavedView({ viewRole: 'owner', locked: true }), false)
+    assert.equal(canDeleteSavedView({ viewRole: 'manager', locked: true }), false)
     assert.equal(canDeleteSavedView({ viewRole: 'editor' }), false)
     assert.equal(canDeleteSavedView({ viewRole: 'commenter' }), false)
     assert.equal(canDeleteSavedView({ viewRole: 'viewer' }), false)
     assert.equal(canDeleteSavedView({}), true)
+    assert.equal(canDeleteSavedView({ locked: true }), false)
   })
 
   it('propagates and updates viewRole through savedViewFromRecord and mergeSavedViewLists', () => {
