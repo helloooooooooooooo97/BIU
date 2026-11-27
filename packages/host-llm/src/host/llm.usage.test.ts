@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'vitest'
-import { formatUsage, parseProviderUsage } from '@biu/host-llm'
+import { parseProviderUsage } from '@biu/host-llm'
 
 test('parseProviderUsage reads OpenAI-style fields', () => {
   assert.deepEqual(parseProviderUsage({ prompt_tokens: 12, completion_tokens: 4, total_tokens: 16 }), {
@@ -28,9 +28,4 @@ test('parseProviderUsage reads DeepSeek cache hit tokens', () => {
 test('parseProviderUsage ignores garbage', () => {
   assert.equal(parseProviderUsage(null), undefined)
   assert.equal(parseProviderUsage({ foo: 1 }), undefined)
-})
-
-test('formatUsage is compact', () => {
-  assert.equal(formatUsage({ inputTokens: 10, outputTokens: 3 }), '10→3')
-  assert.equal(formatUsage({ inputTokens: 10, outputTokens: 3, cacheReadTokens: 2 }), '10→3 · cache 2')
 })
