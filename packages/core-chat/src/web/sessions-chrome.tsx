@@ -131,8 +131,17 @@ export function SessionRecordChat({
       window.removeEventListener('fsdb:detail-refresh', onRefresh)
     }
   }, [sessionId, value])
-  const onFork = useCallback(async () => {
-    const res = await apiFetch(`/api/agents/${sessionId}/fork`, { method: 'POST' })
+  const onFork = useCallback(async (upToSeq?: number) => {
+    const res = await apiFetch(
+      `/api/agents/${sessionId}/fork`,
+      upToSeq != null
+        ? {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ upToSeq }),
+          }
+        : { method: 'POST' },
+    )
     const body = (await res.json().catch(() => ({}))) as { id?: string }
     const id = String(body.id ?? '').trim()
     if (!res.ok || !id) return

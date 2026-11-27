@@ -275,6 +275,33 @@ test('fork copies the append-only log into a child session', async () => {
   assert.equal((await ctx.sessions.require(parent.id)).events.some((item) => item.type === 'assistant/message'), false)
 })
 
+test('fork with upToSeq slices events at the chosen turn and names child as "<title>的副本"', async () => {
+  const ctx = new Context()
+  await ctx.plugin(sessionStore, { driver: 'memory' })
+  await ctx.plugin(sessions)
+  const parent = await ctx.sessions.create(undefined, { title: '第一个' })
+  await ctx.sessions.append(parent.id, { type: 'user/message', text: '第一条消息', kind: 'wake' })
+  await ctx.sessions.append(parent.id, { type: 'turn/start', turn: 1 })
+  await ctx.sessions.append(parent.id, { type: 'assistant/message', text: '第一条回复' })
+  const turn1End = await ctx.sessions.append(parent.id, { type: 'turn/end', turn: 1, reason: 'complete' })
+  await ctx.sessions.append(parent.id, { type: 'user/message', text: '第二条消息', kind: 'wake' })
+  await ctx.sessions.append(parent.id, { type: 'turn/start', turn: 2 })
+  await ctx.sessions.append(parent.id, { type: 'assistant/message', text: '第二条回复' })
+  await ctx.sessions.append(parent.id, { type: 'turn/end', turn: 2, reason: 'complete' })
+
+  const child = await ctx.sessions.fork(parent.id, undefined, { upToSeq: turn1End.seq })
+  assert.equal(child.config?.title, '第一个的副本')
+  const msgs = ctx.sessions.deriveMessages(child.id).map((item) => item.content)
+  assert.equal(msgs.includes('第一条消息'), true)
+  assert.equal(msgs.includes('第一条回复'), true)
+  assert.equal(msgs.includes('第二条消息'), false)
+  assert.equal(msgs.includes('第二条回复'), false)
+  assert.deepEqual(
+    child.events.map((event) => event.seq),
+    child.events.map((_, idx) => idx),
+  )
+})
+
 test('setProject binds host absolute path and clears it', async () => {
   const ctx = new Context()
   await ctx.plugin(sessionStore, { driver: 'memory' })

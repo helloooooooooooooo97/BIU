@@ -1638,9 +1638,20 @@ export function apply(ctx: Context) {
   ctx.http.route('POST', '/api/agents/:id/fork', async (route) => {
     try {
       if (!(await visibleSession(route.params.id))) return route.send(404, { error: 'unknown session' })
-      const child = await ctx.sessions.fork(route.params.id)
+      const body = (await route.json().catch(() => ({}))) as { upToSeq?: unknown } | null
+      const rawUpTo = body?.upToSeq
+      const upToSeq =
+        typeof rawUpTo === 'number' && Number.isFinite(rawUpTo) && rawUpTo >= 0
+          ? Math.floor(rawUpTo)
+          : undefined
+      const child = await ctx.sessions.fork(
+        route.params.id,
+        undefined,
+        upToSeq != null ? { upToSeq } : undefined,
+      )
       route.send(201, {
         id: child.id,
+        ...(child.config?.title ? { title: child.config.title } : {}),
         version: child.version,
         parentId: route.params.id,
         ...(child.mascot ? { mascot: child.mascot } : {}),

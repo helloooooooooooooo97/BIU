@@ -120,6 +120,8 @@ export type ChatNode =
       parts: ChatReplyPart[]
       /** 本回合所有助手正文，供一键复制 */
       copyText: string
+      /** 本回合最后一条事件 seq（含 turn/end），用于从指定回复精确 fork */
+      lastSeq?: number
       turn?: number
       stepCount?: number
       steps?: ChatStepStat[]
@@ -159,6 +161,7 @@ export function projectNodes(events: SessionEvent[]): ChatNode[] {
   let currentStep: number | undefined
   let reply: {
     id: string
+    lastSeq: number
     parts: ChatReplyPart[]
     streamingId: string | null
     streamingThinkId: string | null
@@ -179,6 +182,7 @@ export function projectNodes(events: SessionEvent[]): ChatNode[] {
     if (!reply) {
       reply = {
         id: `r-${seq}`,
+        lastSeq: seq,
         parts: [],
         streamingId: null,
         streamingThinkId: null,
@@ -192,10 +196,15 @@ export function projectNodes(events: SessionEvent[]): ChatNode[] {
         stepHist: new Map(),
         ...(currentTurn != null ? { turn: currentTurn } : {}),
       }
-    } else if (currentTurn != null) {
-      reply.streaming = true
+    } else {
+      if (seq > reply.lastSeq) reply.lastSeq = seq
+      if (currentTurn != null) reply.streaming = true
     }
     return reply
+  }
+
+  function touchReplySeq(seq: number) {
+    if (reply && seq > reply.lastSeq) reply.lastSeq = seq
   }
 
   function ensureStepStat(step: number): ChatStepStat {
@@ -253,13 +262,14 @@ export function projectNodes(events: SessionEvent[]): ChatNode[] {
     }
   }
 
-  function flushReply(endTs?: number, finished = false, reason?: string) {
+  function flushReply(endTs?: number, finished = false, reason?: string, endSeq?: number) {
     if (!reply || (reply.parts.length === 0 && !reply.contentEdits?.length)) {
       reply = null
       currentStep = undefined
       stepStartTs = undefined
       return
     }
+    const lastSeq = endSeq != null ? Math.max(reply.lastSeq, endSeq) : reply.lastSeq
     // 兜底：当前 step 若恰好没有 step/end（回合就直接结束），用 flush 时间补算耗时
     if (currentStep != null) recordStepDuration(currentStep, endTs)
     const copyText = reply.parts
@@ -298,6 +308,7 @@ export function projectNodes(events: SessionEvent[]): ChatNode[] {
       kind: 'reply',
       parts: reply.parts,
       copyText,
+      lastSeq,
       ...(reply.turn != null ? { turn: reply.turn } : {}),
       ...(steps.length ? { stepCount: steps.length, steps } : {}),
       ...(usage ? { usage } : {}),
@@ -326,6 +337,7 @@ export function projectNodes(events: SessionEvent[]): ChatNode[] {
       ensureReply(event.seq)
       ensureStepStat(event.step)
     } else if (event.type === 'step/end') {
+      touchReplySeq(event.seq)
       if (currentStep === event.step) {
         recordStepDuration(event.step, event.ts)
         currentStep = undefined
@@ -498,7 +510,7 @@ export function projectNodes(events: SessionEvent[]): ChatNode[] {
       const r = ensureReply(event.seq)
       r.contentEdits = mergeContentEditFiles(r.contentEdits ?? [], event.files)
     } else if (event.type === 'turn/end') {
-      flushReply(event.ts, true, event.reason)
+      flushReply(event.ts, true, event.reason, event.seq)
       turnStartTs = undefined
       currentTurn = undefined
       currentStep = undefined
@@ -772,6 +784,7 @@ function sameChatNode(a: ChatNode, b: ChatNode): ChatNode | null {
       stepsSame &&
       editsSame &&
       a.copyText === b.copyText &&
+      a.lastSeq === b.lastSeq &&
       a.turn === b.turn &&
       a.stepCount === b.stepCount &&
       a.durationMs === b.durationMs &&

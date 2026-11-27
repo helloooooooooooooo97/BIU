@@ -165,6 +165,26 @@ describe('sticky user message markers', () => {
     expect(document.querySelectorAll('.chat-reply-bar')).toHaveLength(0)
   })
 
+  it('passes the clicked reply lastSeq to onFork so earlier turns exclude later turns', async () => {
+    const onInspect = vi.fn()
+    const onFork = vi.fn(async (_upToSeq?: number) => {})
+    const nodes: ChatNode[] = [
+      { id: 'u-1', kind: 'user', text: '第一条', ts: 1 },
+      { id: 'r-1', kind: 'reply', parts: [{ id: 'a-1', kind: 'assistant', text: '回复一' }], copyText: '回复一', lastSeq: 4, finished: true },
+      { id: 'u-2', kind: 'user', text: '第二条', ts: 2 },
+      { id: 'r-2', kind: 'reply', parts: [{ id: 'a-2', kind: 'assistant', text: '回复二' }], copyText: '回复二', lastSeq: 8, finished: true },
+    ]
+    render(<ChatNodeList nodes={nodes} onInspect={onInspect} onFork={onFork} />)
+
+    const reply1 = document.querySelector('[data-node-id="r-1"]')
+    const forkBtn1 = reply1?.querySelector('button[aria-label="Fork 代理"]') as HTMLButtonElement | null
+    expect(forkBtn1).toBeTruthy()
+    forkBtn1?.click()
+    await waitFor(() => {
+      expect(onFork).toHaveBeenCalledWith(4)
+    })
+  })
+
   it('renders pick handles as chips in the user bubble', async () => {
     const onInspect = vi.fn()
     const onFork = vi.fn(async () => {})

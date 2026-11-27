@@ -1431,12 +1431,26 @@ export class SessionViewService extends Service {
     this.replace({ project, sessions })
   }
 
-  async forkCurrent() {
+  async forkCurrent(opts?: { upToSeq?: number }) {
     const sessionId = this.value.sessionId
     if (!sessionId) throw new Error('no session')
-    const res = await apiFetch(`/api/agents/${sessionId}/fork`, { method: 'POST' })
+    const upToSeq =
+      typeof opts?.upToSeq === 'number' && Number.isFinite(opts.upToSeq) && opts.upToSeq >= 0
+        ? Math.floor(opts.upToSeq)
+        : undefined
+    const res = await apiFetch(
+      `/api/agents/${sessionId}/fork`,
+      upToSeq != null
+        ? {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ upToSeq }),
+          }
+        : { method: 'POST' },
+    )
     const body = (await res.json()) as {
       id?: string
+      title?: string
       error?: string
       mascot?: SessionListItem['mascot']
     }
@@ -1444,11 +1458,13 @@ export class SessionViewService extends Service {
     markSidebarMascotFresh(body.id)
     const parent = this.value.sessions.find((item) => item.id === sessionId)
     if (parent && !this.value.sessions.some((item) => item.id === body.id)) {
+      const nextTitle = body.title?.trim() || (parent.title ? `${parent.title}的副本` : parent.title)
       this.replace({
         sessions: [
           {
             ...parent,
             id: body.id,
+            title: nextTitle,
             pinned: false,
             tag: { tags: [], values: {} },
             ...(body.mascot ? { mascot: body.mascot } : {}),
