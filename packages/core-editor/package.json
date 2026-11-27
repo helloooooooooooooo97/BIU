@@ -34,7 +34,6 @@
     "@codemirror/state": "^6.7.4",
     "@codemirror/view": "^6.43.11",
     "@heroicons/react": "^2.2.0",
-    "@lezer/highlight": "^1.2.3",
-    "sucrase": "^3.35.1"
+    "@lezer/highlight": "^1.2.3"
   }
 }

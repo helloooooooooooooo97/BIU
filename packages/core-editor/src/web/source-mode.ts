@@ -1,4 +1,3 @@
-import { useSyncExternalStore } from 'react'
 import { PAGE_VIEW_EVENT } from './editor-view-state.ts'
 
 export const PAGE_BUILTIN_MODES = ['doc', 'outline', 'table', 'source', 'hidden'] as const
@@ -13,12 +12,8 @@ export function isPageCustomView(mode: string) {
 }
 
 const folded = new Map<string, Set<string>>()
-let seq = 0
-const listeners = new Set<() => void>()
 
 function bump() {
-  seq += 1
-  for (const fn of listeners) fn()
   if (typeof window !== 'undefined') window.dispatchEvent(new Event(PAGE_VIEW_EVENT))
 }
 
@@ -35,12 +30,5 @@ export function togglePageOutlineFold(recordId: string, blockId: string) {
   else next.add(block)
   folded.set(id, next)
   bump()
-}
-
-export function subscribePagePresent(fn: () => void) {
-  listeners.add(fn)
-  return () => {
-    listeners.delete(fn)
-  }
 }
 

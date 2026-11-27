@@ -5,7 +5,6 @@ import { compileJsxSource, compileSandboxSource, looksLikeJsx, transpileJsx } fr
 import { sandboxGlobals } from './gate.ts'
 import { sandboxUi } from '@biu/core-file-system/sandbox-ui'
 const roots = new WeakMap<ShadowRoot, Root>()
-const relays = new WeakMap<ShadowRoot, () => void>()
 
 let cachedThemeKey = ''
 let cachedThemeCss = ''
