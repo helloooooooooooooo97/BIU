@@ -15,6 +15,7 @@ import { SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-
 import { CSS as DndCSS } from '@dnd-kit/utilities'
 import { ChevronRightIcon } from '@heroicons/react/16/solid'
 import type { CollectionSchemaPack, FieldSpec, FieldType } from '@biu/type-file-system'
+import { OVERLAY_Z, overlayZ } from '@biu/biu-ui/overlay-portal'
 import { tagTone as schemaTagTone } from '@biu/biu-ui/tag-chip'
 import { moveList } from '../query-logic.ts'
 import { CheckRow } from './controls.tsx'
@@ -341,7 +342,7 @@ export function ColumnOrderMenu({
         </SortableContext>
         {typeof document !== 'undefined'
           ? createPortal(
-              <DragOverlay zIndex={280}>
+              <DragOverlay zIndex={overlayZ(OVERLAY_Z.drag)}>
                 {active ? (
                   <div className="fsdb-query-drag-overlay" data-fsdb-sort-overlay>
                     <div className="fsdb-col-drag-row">

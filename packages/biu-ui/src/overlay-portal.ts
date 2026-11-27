@@ -13,6 +13,7 @@ export const OVERLAY_Z = {
   chatLift: 500,
   tooltip: 520,
   pick: 500,
+  drag: 560,
 } as const
 
 export const SHARE_OVERLAY_Z = OVERLAY_Z.shareLift
