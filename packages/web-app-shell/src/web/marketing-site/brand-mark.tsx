@@ -92,11 +92,6 @@ export type BrandMarkProps = {
   className?: string
   title?: string
   /**
-   * 渲染尺寸档位。'icon' 用于导航栏等小尺寸场景：
-   * 线条按比例加粗到可见下限，避免亚像素描边发虚。
-   */
-  scene?: 'default' | 'icon'
-  /**
    * 实际显示宽度（像素）。SVG 里的线宽是 viewBox 单位，
    * 不知道真实尺寸就没法保证线条落在清晰的正像素上 —— 这正是毛边的来源。
    * 不传时按 viewBox 单位原样使用（适合尺寸已知且足够大的场合）。
@@ -114,7 +109,6 @@ export function BrandMark({
   showBackground = true,
   className,
   title = 'BIU brand mark',
-  scene = 'default',
   displayWidth,
 }: BrandMarkProps) {
   // 圆的实际半径：只受 circleRatio 影响，背景方块保持 ViewBox 大小不变。

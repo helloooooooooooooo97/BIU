@@ -201,7 +201,6 @@ export function SiteHeader({ onLogin, onStart }: { onLogin: SiteAction; onStart:
           background={brand.background}
           showBackground={brand.showBackground}
           circleRatio={brand.circleRatio}
-          scene="icon"
           // 24px 是 CSS 里定死的显示尺寸；组件靠它保证线条不缩成亚像素。
           displayWidth={NAV_BRAND_PX}
           title="BIU"

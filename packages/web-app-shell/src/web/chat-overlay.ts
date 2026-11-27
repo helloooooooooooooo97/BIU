@@ -294,8 +294,6 @@ export function inspectorWidthForExpandedChat(opts: {
 
 let overlay = false
 let autohide = false
-let resizing = false
-let pinned = false
 const OVERLAY_THREAD_KEY = 'cordis.overlay.thread'
 let overlayThread = false
 let overlayThreadReady = false
@@ -326,20 +324,10 @@ function hydrateOverlayThread() {
   overlayThread = readStoredOverlayThread()
 }
 const listeners = new Set<() => void>()
-const autohideListeners = new Set<() => void>()
-const pinListeners = new Set<() => void>()
 const threadListeners = new Set<() => void>()
 
 function emit() {
   for (const fn of listeners) fn()
-}
-
-function emitAutohide() {
-  for (const fn of autohideListeners) fn()
-}
-
-function emitPin() {
-  for (const fn of pinListeners) fn()
 }
 
 function emitThread() {
@@ -482,22 +470,7 @@ export function getOverlayAutohide() {
   return autohide
 }
 export function setOverlayAutohide(next: boolean) {
-  if (autohide === next) return
   autohide = next
-  emitAutohide()
-}export function setOverlayPinned(next: boolean) {
-  if (pinned === next) return
-  pinned = next
-  if (next) setOverlayAutohide(false)
-  emitPin()
-}
-
-export function requestInspectorWidth(width: number) {
-  window.dispatchEvent(new CustomEvent('biu:inspector-width', { detail: width }))
-}
-
-export function requestInspectorOpen() {
-  window.dispatchEvent(new Event('biu:inspector-open'))
 }
 
 export function requestInspectorClose() {
@@ -515,32 +488,6 @@ export function inspectorTabFromEvent(event: Event): string | undefined {
     return tabId || undefined
   }
   return undefined
-}
-
-export function toggleChatOverlay() {
-  if (overlay) {
-    let inspectorWidth = INSPECTOR_MIN
-    const n = Number(getSidebarPersist(SIDEBAR_PERSIST.inspectorWidth))
-    if (Number.isFinite(n) && n >= INSPECTOR_MIN) inspectorWidth = n
-    const shell = document.querySelector('[data-testid="app-shell"]')
-    const col = shell ? Number.parseFloat(getComputedStyle(shell).getPropertyValue('--sidebar-col')) : NaN
-    const sidebarCollapsed = !Number.isFinite(col) || col < SIDEBAR_MIN
-    requestInspectorWidth(
-      inspectorWidthForExpandedChat({
-        viewportWidth: window.innerWidth,
-        inspectorWidth,
-        sidebarCollapsed,
-      }),
-    )
-    setChatOverlay(false)
-    return
-  }
-  if (typeof window !== 'undefined' && isChatPagePath(window.location.pathname)) {
-    requestComposerFocus()
-    return
-  }
-  requestInspectorOpen()
-  setChatOverlay(true)
 }
 
 export const OVERLAY_CHAT_HEIGHT_MIN = 96

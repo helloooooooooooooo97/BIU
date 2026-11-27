@@ -201,24 +201,3 @@ export function MarketingSite({ onLogin, onStart, auth, login = true }: Marketin
   )
 }
 
-/** 供外层判断当前是否处于官网路径。 */
-export const SITE_PATHS = [
-  '/',
-  '/product',
-  '/pricing',
-  '/download',
-  '/security',
-  '/compare',
-  '/use-cases',
-  '/brand',
-  '/invest',
-  '/enterprise',
-  '/changelog',
-  '/about',
-  '/blog',
-  '/customers',
-  '/help',
-  '/docs',
-  '/terms',
-] as const
-

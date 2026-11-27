@@ -1,6 +1,6 @@
 import { test } from 'vitest'
 import assert from 'node:assert/strict'
-import { inspectorPanelMatches, inspectorViewProps, inspectorTabCollectionPath, inspectorTabIsOpen, inspectorPlusPinRank, inspectorHomeRank, isInspectorHomeOffer, pruneOpenedForCollections, resolveInspectorTab, rememberedInspectorTab } from './inspector-panels.ts'
+import { inspectorPanelMatches, inspectorViewProps, inspectorTabCollectionPath, inspectorPlusPinRank, inspectorHomeRank, isInspectorHomeOffer, pruneOpenedForCollections, resolveInspectorTab } from './inspector-panels.ts'
 
 test('inspector home only lists the four core collections', () => {
   assert.equal(isInspectorHomeOffer('database:/data'), true)
@@ -72,13 +72,6 @@ test('inspector keeps the restored tab even before its panel is listed', () => {
   )
 })
 
-test('remembered inspector tab prefers the locally clicked pane', () => {
-  const opened = ['database:/pages', 'database:/tasks']
-  assert.equal(rememberedInspectorTab(opened, 'database:/tasks', 'database:/pages'), 'database:/tasks')
-  assert.equal(rememberedInspectorTab(opened, '', 'database:/tasks'), 'database:/tasks')
-  assert.equal(rememberedInspectorTab(opened, 'database:/tasks::x', 'database:/tasks::old'), 'database:/tasks')
-})
-
 test('legacy untagged panels stay out of the inspector', () => {
   assert.equal(inspectorPanelMatches({}, 's1'), false)
   assert.equal(inspectorPanelMatches({ requiresSession: true }, null), false)
@@ -104,7 +97,6 @@ test('opened database tabs drop when the collection is gone', () => {
   assert.equal(inspectorTabCollectionPath('database:/pages'), '/pages')
   assert.equal(inspectorTabCollectionPath('database:/pages::a1'), '/pages')
   assert.equal(inspectorTabCollectionPath('traj'), null)
-  assert.equal(inspectorTabIsOpen('database:/pages', ['database:/pages::a1', 'traj']), true)
   assert.deepEqual(
     pruneOpenedForCollections(['database:/pages', 'traj', 'database:/tasks::x'], [{ path: '/tasks' }]),
     ['traj', 'database:/tasks::x'],
