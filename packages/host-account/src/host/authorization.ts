@@ -95,7 +95,6 @@ export type ResourcePolicyInput = {
   memberDefaultRole?: 'viewer' | 'editor'
   parentCollection?: string
   parentRecordId?: string
-  inheritParent?: boolean
 }
 
 type PolicyRow = {
@@ -107,7 +106,6 @@ type PolicyRow = {
   member_default_role: 'viewer' | 'editor'
   parent_collection: string
   parent_record_id: string
-  inherit_parent?: number
 }
 
 type ScanGrant = {
@@ -130,8 +128,6 @@ type CollectionScan = {
 }
 
 const POLICY_SELECT = `workspace_id, collection, record_id, owner_account_id, access_mode,
-                member_default_role, parent_collection, parent_record_id, inherit_parent`
-const POLICY_SELECT_LEGACY = `workspace_id, collection, record_id, owner_account_id, access_mode,
                 member_default_role, parent_collection, parent_record_id`
 
 const ROLE_RANK: Record<ResourceRole, number> = { viewer: 1, commenter: 2, editor: 3, manager: 4, owner: 5 }
@@ -168,25 +164,6 @@ export function requiredCapability(action: Action): Capability {
   }
 }
 
-export function actionForCapability(cap: Capability): Action {
-  switch (cap) {
-    case 'read':
-      return 'resource:read'
-    case 'comment':
-      return 'resource:comment'
-    case 'write':
-      return 'resource:update'
-    case 'move':
-      return 'resource:move'
-    case 'delete':
-      return 'resource:delete'
-    case 'grant':
-      return 'resource:manage-permissions'
-    default:
-      return 'workspace:delete'
-  }
-}
-
 function collectionScanKey(workspaceId: string, collection: string, accountId: string) {
   return `${workspaceId}\t${collection}\t${accountId}`
 }
@@ -212,28 +189,6 @@ function memberAccessRole(policy: PolicyRow, membership: string | null): Resourc
 function normalizeStoredAccessMode(raw: string | null | undefined): AccessMode {
   if (raw === 'members' || raw === 'inherit') return raw
   return 'private'
-}
-
-function requiredRole(action: Action): ResourceRole {
-  switch (action) {
-    case 'resource:list':
-    case 'resource:read':
-      return 'viewer'
-    case 'resource:comment':
-      return 'commenter'
-    case 'resource:create':
-    case 'resource:create-child':
-    case 'resource:update':
-      return 'editor'
-    case 'resource:move':
-    case 'resource:delete':
-    case 'resource:restore':
-    case 'resource:share':
-    case 'resource:manage-permissions':
-      return 'manager'
-    default:
-      return 'owner'
-  }
 }
 
 export class AuthorizationService {
@@ -323,7 +278,7 @@ export class AuthorizationService {
   }
 
   isLockedMemberView(workspaceId: string, viewId: string): boolean {
-    if (!this.memberViewLockChecker) return true
+    if (!this.memberViewLockChecker) return false
     return this.memberViewLockChecker(workspaceId, viewId)
   }
 
@@ -435,16 +390,9 @@ export class AuthorizationService {
       return
     }
     const policies = new Map<string, PolicyRow>()
-    let policyRows: PolicyRow[]
-    try {
-      policyRows = this.db
-        .prepare(`SELECT ${POLICY_SELECT} FROM resource_policies WHERE workspace_id = ? AND collection = ?`)
-        .all(workspaceId, collection) as PolicyRow[]
-    } catch {
-      policyRows = this.db
-        .prepare(`SELECT ${POLICY_SELECT_LEGACY} FROM resource_policies WHERE workspace_id = ? AND collection = ?`)
-        .all(workspaceId, collection) as PolicyRow[]
-    }
+    const policyRows = this.db
+      .prepare(`SELECT ${POLICY_SELECT} FROM resource_policies WHERE workspace_id = ? AND collection = ?`)
+      .all(workspaceId, collection) as PolicyRow[]
     for (const row of policyRows) {
       policies.set(row.record_id, row)
     }
@@ -566,7 +514,7 @@ export class AuthorizationService {
       if (resource.collection === '/workspace-members') {
         const effectiveRole: ResourceRole =
           membership === 'owner' ? 'owner' : membership === 'admin' ? 'manager' : 'viewer'
-        return ROLE_RANK[effectiveRole] >= ROLE_RANK[requiredRole(action)]
+        return roleCoversAction(effectiveRole, action)
           ? { allowed: true, effectiveRole, source: 'workspace-default' }
           : { allowed: false, reason: 'INSUFFICIENT_PERMISSION' }
       }
@@ -582,7 +530,7 @@ export class AuthorizationService {
         : membership === 'viewer' || memberKind === 'external' || memberKind === 'guest'
           ? 'viewer'
           : 'editor'
-      return ROLE_RANK[effectiveRole] >= ROLE_RANK[requiredRole(action)]
+      return roleCoversAction(effectiveRole, action)
         ? { allowed: true, effectiveRole, source: 'workspace-default' }
         : { allowed: false, reason: 'INSUFFICIENT_PERMISSION' }
     }
@@ -590,7 +538,7 @@ export class AuthorizationService {
     if (resource.collection === '/workspace-members') {
       const effectiveRole: ResourceRole =
         membership === 'owner' ? 'owner' : membership === 'admin' ? 'manager' : 'viewer'
-      return ROLE_RANK[effectiveRole] >= ROLE_RANK[requiredRole(action)]
+      return roleCoversAction(effectiveRole, action)
         ? { allowed: true, effectiveRole, source: 'workspace-default' }
         : { allowed: false, reason: 'INSUFFICIENT_PERMISSION' }
     }
@@ -665,55 +613,26 @@ export class AuthorizationService {
     const accessMode: AccessMode = input.accessMode ?? (parentRecordId ? 'inherit' : 'private')
     const memberDefaultRole: 'viewer' | 'editor' =
       input.memberDefaultRole ?? (accessMode === 'members' ? 'editor' : 'viewer')
-    const inheritParent = input.inheritParent !== undefined
-      ? (input.inheritParent ? 1 : 0)
-      : (accessMode === 'inherit' && Boolean(parentRecordId) ? 1 : 0)
-
-    let inserted: { changes: number | bigint }
-    try {
-      inserted = this.db
-        .prepare(
-          `INSERT INTO resource_policies
-            (workspace_id, collection, record_id, owner_account_id, access_mode,
-             member_default_role, parent_collection, parent_record_id, created_by, created_at, inherit_parent)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-           ON CONFLICT(workspace_id, collection, record_id) DO NOTHING`,
-        )
-        .run(
-          resource.workspaceId,
-          resource.collection,
-          resource.recordId,
-          accountId,
-          accessMode,
-          memberDefaultRole,
-          parentCollection,
-          parentRecordId,
-          accountId,
-          now,
-          inheritParent,
-        )
-    } catch {
-      inserted = this.db
-        .prepare(
-          `INSERT INTO resource_policies
-            (workspace_id, collection, record_id, owner_account_id, access_mode,
-             member_default_role, parent_collection, parent_record_id, created_by, created_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-           ON CONFLICT(workspace_id, collection, record_id) DO NOTHING`,
-        )
-        .run(
-          resource.workspaceId,
-          resource.collection,
-          resource.recordId,
-          accountId,
-          accessMode,
-          memberDefaultRole,
-          parentCollection,
-          parentRecordId,
-          accountId,
-          now,
-        )
-    }
+    const inserted = this.db
+      .prepare(
+        `INSERT INTO resource_policies
+          (workspace_id, collection, record_id, owner_account_id, access_mode,
+           member_default_role, parent_collection, parent_record_id, created_by, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         ON CONFLICT(workspace_id, collection, record_id) DO NOTHING`,
+      )
+      .run(
+        resource.workspaceId,
+        resource.collection,
+        resource.recordId,
+        accountId,
+        accessMode,
+        memberDefaultRole,
+        parentCollection,
+        parentRecordId,
+        accountId,
+        now,
+      )
     this.grant(accountId, resource, 'account', accountId, 'owner', now)
     if (Number(inserted.changes) > 0) this.dropScans(resource.workspaceId, resource.collection)
   }
@@ -804,23 +723,13 @@ export class AuthorizationService {
       (accessMode === 'members'
         ? (policy.access_mode === 'members' ? policy.member_default_role : 'editor')
         : policy.member_default_role)
-    try {
-      this.db
-        .prepare(
-          `UPDATE resource_policies
-           SET access_mode = ?, member_default_role = ?, inherit_parent = 0
-           WHERE workspace_id = ? AND collection = ? AND record_id = ?`,
-        )
-        .run(accessMode, nextDefaultRole, resource.workspaceId, resource.collection, resource.recordId)
-    } catch {
-      this.db
-        .prepare(
-          `UPDATE resource_policies
-           SET access_mode = ?, member_default_role = ?
-           WHERE workspace_id = ? AND collection = ? AND record_id = ?`,
-        )
-        .run(accessMode, nextDefaultRole, resource.workspaceId, resource.collection, resource.recordId)
-    }
+    this.db
+      .prepare(
+        `UPDATE resource_policies
+         SET access_mode = ?, member_default_role = ?
+         WHERE workspace_id = ? AND collection = ? AND record_id = ?`,
+      )
+      .run(accessMode, nextDefaultRole, resource.workspaceId, resource.collection, resource.recordId)
     if (!options.skipInvalidate) this.dropScans(resource.workspaceId, resource.collection)
     return { accessMode, memberDefaultRole: nextDefaultRole }
   }
@@ -852,39 +761,20 @@ export class AuthorizationService {
             : currentMode === 'inherit'
               ? currentEffective
               : currentMode
-    const nextInheritParent = Boolean(parent) && nextAccessMode === 'inherit' ? 1 : 0
-    try {
-      this.db
-        .prepare(
-          `UPDATE resource_policies
-           SET parent_collection = ?, parent_record_id = ?, access_mode = ?, inherit_parent = ?
-           WHERE workspace_id = ? AND collection = ? AND record_id = ?`,
-        )
-        .run(
-          parent?.collection ?? '',
-          parent?.recordId ?? '',
-          nextAccessMode,
-          nextInheritParent,
-          resource.workspaceId,
-          resource.collection,
-          resource.recordId,
-        )
-    } catch {
-      this.db
-        .prepare(
-          `UPDATE resource_policies
-           SET parent_collection = ?, parent_record_id = ?, access_mode = ?
-           WHERE workspace_id = ? AND collection = ? AND record_id = ?`,
-        )
-        .run(
-          parent?.collection ?? '',
-          parent?.recordId ?? '',
-          nextAccessMode,
-          resource.workspaceId,
-          resource.collection,
-          resource.recordId,
-        )
-    }
+    this.db
+      .prepare(
+        `UPDATE resource_policies
+         SET parent_collection = ?, parent_record_id = ?, access_mode = ?
+         WHERE workspace_id = ? AND collection = ? AND record_id = ?`,
+      )
+      .run(
+        parent?.collection ?? '',
+        parent?.recordId ?? '',
+        nextAccessMode,
+        resource.workspaceId,
+        resource.collection,
+        resource.recordId,
+      )
     this.dropScans(resource.workspaceId, resource.collection)
     if (parent) this.dropScans(parent.workspaceId, parent.collection)
     return {
@@ -941,43 +831,22 @@ export class AuthorizationService {
     }
     if (mode === 'inherit') {
       if (!policy.parent_record_id) throw new Error('这条内容没有上级记录')
-      try {
-        this.db
-          .prepare(
-            `UPDATE resource_policies
-             SET access_mode = 'inherit', inherit_parent = 1
-             WHERE workspace_id = ? AND collection = ? AND record_id = ?`,
-          )
-          .run(resource.workspaceId, resource.collection, resource.recordId)
-      } catch {
-        this.db
-          .prepare(
-            `UPDATE resource_policies
-             SET access_mode = 'inherit'
-             WHERE workspace_id = ? AND collection = ? AND record_id = ?`,
-          )
-          .run(resource.workspaceId, resource.collection, resource.recordId)
-      }
+      this.db
+        .prepare(
+          `UPDATE resource_policies
+           SET access_mode = 'inherit'
+           WHERE workspace_id = ? AND collection = ? AND record_id = ?`,
+        )
+        .run(resource.workspaceId, resource.collection, resource.recordId)
     } else {
       const effectiveMode = this.effectiveAccessMode(resource)
-      try {
-        this.db
-          .prepare(
-            `UPDATE resource_policies
-             SET access_mode = CASE WHEN access_mode = 'inherit' THEN ? ELSE access_mode END,
-                 inherit_parent = 0
-             WHERE workspace_id = ? AND collection = ? AND record_id = ?`,
-          )
-          .run(effectiveMode, resource.workspaceId, resource.collection, resource.recordId)
-      } catch {
-        this.db
-          .prepare(
-            `UPDATE resource_policies
-             SET access_mode = CASE WHEN access_mode = 'inherit' THEN ? ELSE access_mode END
-             WHERE workspace_id = ? AND collection = ? AND record_id = ?`,
-          )
-          .run(effectiveMode, resource.workspaceId, resource.collection, resource.recordId)
-      }
+      this.db
+        .prepare(
+          `UPDATE resource_policies
+           SET access_mode = CASE WHEN access_mode = 'inherit' THEN ? ELSE access_mode END
+           WHERE workspace_id = ? AND collection = ? AND record_id = ?`,
+        )
+        .run(effectiveMode, resource.workspaceId, resource.collection, resource.recordId)
     }
     this.dropScans(resource.workspaceId, resource.collection)
   }
@@ -1152,7 +1021,7 @@ export class AuthorizationService {
     const shouldInherit = Boolean(
       policy &&
       policy.parent_record_id &&
-      (policy.inherit_parent === 1 || policy.access_mode === 'inherit'),
+      policy.access_mode === 'inherit',
     )
     if (shouldInherit && policy) {
       const parentRef: Extract<ResourceRef, { type: 'record' }> = {
@@ -1238,21 +1107,12 @@ export class AuthorizationService {
   private policy(resource: Extract<ResourceRef, { type: 'record' }>) {
     const scan = this.collectionScan(resource.workspaceId, resource.collection)
     if (scan) return scan.policies.get(resource.recordId)
-    try {
-      return this.db
-        .prepare(
-          `SELECT ${POLICY_SELECT} FROM resource_policies
-           WHERE workspace_id = ? AND collection = ? AND record_id = ?`,
-        )
-        .get(resource.workspaceId, resource.collection, resource.recordId) as PolicyRow | undefined
-    } catch {
-      return this.db
-        .prepare(
-          `SELECT ${POLICY_SELECT_LEGACY} FROM resource_policies
-           WHERE workspace_id = ? AND collection = ? AND record_id = ?`,
-        )
-        .get(resource.workspaceId, resource.collection, resource.recordId) as PolicyRow | undefined
-    }
+    return this.db
+      .prepare(
+        `SELECT ${POLICY_SELECT} FROM resource_policies
+         WHERE workspace_id = ? AND collection = ? AND record_id = ?`,
+      )
+      .get(resource.workspaceId, resource.collection, resource.recordId) as PolicyRow | undefined
   }
 
   private legacyOwnerId(resource: Extract<ResourceRef, { type: 'record' }>) {

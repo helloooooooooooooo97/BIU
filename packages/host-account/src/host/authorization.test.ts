@@ -177,6 +177,7 @@ test('collection scan preload matches live sqlite authorization including locked
   auth.attach(actor(ada.id), page('own'), { accessMode: 'private' })
   auth.attach(actor(ada.id), page('shared'), { accessMode: 'members' })
   auth.attach(actor(ada.id), page('mv'), { accessMode: 'private' })
+  auth.setMemberViewLockChecker((_ws, viewId) => viewId === 'mv_team')
   auth.setMemberViewMatcher((_ws, viewId, accountId) => viewId === 'mv_team' && accountId === bob.id)
   auth.grant(ada.id, page('mv'), 'member_view', 'mv_team', 'editor')
 
@@ -285,6 +286,7 @@ test('freezeMemberViewGrants and revokeAllMemberViewGrants guard locked view unl
   const asAda = <T>(op: () => T) => runWithAccount(ada.id, () => runWithRequestWorkspace(workspace.id, op))
   asAda(() => store.attach(workspace.id, '/pages', 'p1', 110, { accessMode: 'private' }))
   asAda(() => store.attach(workspace.id, '/pages', 'p2', 111, { accessMode: 'private' }))
+  auth.setMemberViewLockChecker((_ws, viewId) => viewId === 'mv_rd' || viewId === 'mv_ops')
   asAda(() => store.grantMemberView(ada.id, '/pages', 'p1', 'mv_rd', 'editor'))
   asAda(() => store.grantMemberView(ada.id, '/pages', 'p2', 'mv_rd', 'viewer'))
 
@@ -341,4 +343,17 @@ test('removeMember transfers owned records to recipient and clears direct grants
   assert.equal(auth.authorize(actor(cara.id), 'resource:delete', page('bob-private')).allowed, true)
   assert.equal(auth.authorize(actor(bob.id), 'resource:read', page('bob-private')).allowed, false)
   assert.ok(auth.getActorScope(workspace.id, 'mcp', 'mcp_1')?.revokedAt)
+})
+
+test('isLockedMemberView fails closed when no lock checker is registered', () => {
+  const { auth, workspace, ada } = setup()
+  const page = (id: string) => ({ type: 'record' as const, workspaceId: workspace.id, collection: '/pages', recordId: id })
+  const actor = (id: string) => ({ type: 'account' as const, accountId: id, workspaceId: workspace.id })
+
+  auth.attach(actor(ada.id), page('p1'), { accessMode: 'private' })
+  assert.equal(auth.isLockedMemberView(workspace.id, 'mv-any'), false)
+  assert.throws(
+    () => auth.grant(ada.id, page('p1'), 'member_view', 'mv-any', 'viewer'),
+    /LOCKED_MEMBER_VIEW_REQUIRED/,
+  )
 })

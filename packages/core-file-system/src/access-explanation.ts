@@ -81,6 +81,7 @@ export type AncestorAccessInput = {
   recordId: string
   title?: string
   scope: DataScopeName
+  memberDefaultRole?: 'viewer' | 'editor'
   ownerId: string
   people: Array<{ id: string; name: string; role: string; memberKind: 'member' | 'external' | 'guest' }>
   memberViews?: Array<{ id: string; name: string; role: string }>
@@ -105,6 +106,7 @@ export type BuildAccessExplanationInput = {
   recordTitles?: Record<string, string>
   access?: {
     scope: DataScopeName
+    memberDefaultRole?: 'viewer' | 'editor'
     ownerId: string
     people: Array<{ id: string; name: string; role: string; memberKind: 'member' | 'external' | 'guest' }>
     memberViews?: Array<{ id: string; name: string; role: string }>
@@ -256,10 +258,8 @@ export function buildAccessExplanation(input: BuildAccessExplanationInput): Acce
           })
         }
       }
-      let addedFromAncestor = false
       for (const person of ancestor.people) {
         if (person.id === ancestor.ownerId) continue
-        addedFromAncestor = true
         inheritedAudience.push({
           id: `inh:${ancestor.recordId}:account:${person.id}`,
           sourceRecordId: ancestor.recordId,
@@ -271,7 +271,6 @@ export function buildAccessExplanation(input: BuildAccessExplanationInput): Acce
         })
       }
       for (const mv of ancestor.memberViews ?? []) {
-        addedFromAncestor = true
         inheritedAudience.push({
           id: `inh:${ancestor.recordId}:member_view:${mv.id}`,
           sourceRecordId: ancestor.recordId,
@@ -282,7 +281,7 @@ export function buildAccessExplanation(input: BuildAccessExplanationInput): Acce
           role: normalizeRole(mv.role),
         })
       }
-      if (!addedFromAncestor && ancestor.scope === 'workspace') {
+      if (ancestor.scope === 'workspace') {
         inheritedAudience.push({
           id: `inh:${ancestor.recordId}:workspace_members`,
           sourceRecordId: ancestor.recordId,
@@ -290,7 +289,7 @@ export function buildAccessExplanation(input: BuildAccessExplanationInput): Acce
           subjectType: 'workspace_members',
           subjectName: '全部空间成员',
           audienceKind: 'internal',
-          role: 'editor',
+          role: ancestor.memberDefaultRole === 'viewer' ? 'viewer' : 'editor',
         })
       }
     }
@@ -326,7 +325,7 @@ export function buildAccessExplanation(input: BuildAccessExplanationInput): Acce
       subjectId: 'workspace_members',
       subjectName: '全部空间成员',
       audienceKind: 'internal',
-      role: 'editor',
+      role: access?.memberDefaultRole === 'viewer' ? 'viewer' : 'editor',
     })
   }
 
