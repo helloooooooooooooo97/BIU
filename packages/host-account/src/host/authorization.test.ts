@@ -372,6 +372,26 @@ test('tasks and mcp are strictly personal-only and reject all sharing operations
     assert.equal(auth.authorize(actor(ada.id), 'resource:manage-permissions', rec).allowed, false)
     assert.equal(auth.authorize(actor(bob.id), 'resource:read', rec).allowed, false)
 
+    // Unattached records must fail closed without throwing SQLite errors
+    const unattached = { type: 'record' as const, workspaceId: workspace.id, collection: col, recordId: 'missing-policy' }
+    assert.equal(auth.authorize(actor(ada.id), 'resource:read', unattached).allowed, false)
+  }
+
+  // /notices rows are tenant-scoped by NoticesStore without resource_policies rows
+  const ownNotice = {
+    type: 'record' as const,
+    workspaceId: workspace.id,
+    collection: '/notices',
+    recordId: 'n1',
+    record: { id: 'n1', accountId: ada.id },
+  }
+  assert.equal(auth.authorize(actor(ada.id), 'resource:read', ownNotice).allowed, true)
+  assert.equal(auth.authorize(actor(ada.id), 'resource:update', ownNotice).allowed, true)
+  assert.equal(auth.authorize(actor(ada.id), 'resource:share', ownNotice).allowed, false)
+  assert.equal(auth.authorize(actor(bob.id), 'resource:read', ownNotice).allowed, false)
+
+  for (const col of ['/tasks', '/mcp'] as const) {
+
     assert.throws(() => asAda(() => store.shareWithEmail(ada.id, col, 'r1', bob.email, 'viewer')), /不支持分享/)
     assert.throws(() => asAda(() => store.setRecordAccessMode(ada.id, col, 'r1', 'members', 'viewer')), /不支持分享/)
     assert.throws(() => asAda(() => store.createGuestInvite(ada.id, col, 'r1', 'viewer')), /不支持分享/)

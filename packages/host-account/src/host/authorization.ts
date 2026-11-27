@@ -547,15 +547,11 @@ export class AuthorizationService {
         }
         return { allowed: true, effectiveRole: 'owner', source: 'ownership' }
       }
-      const legacy = this.db
-        .prepare(
-          `SELECT owner_id FROM workspace_records
-           WHERE workspace_id = ? AND collection = ? AND record_id = ?`,
-        )
-        .get(resource.workspaceId, resource.collection, resource.recordId) as { owner_id?: string | null } | undefined
-      const legacyOwner = legacy?.owner_id ?? null
-      if (legacyOwner === actor.accountId) {
-        return { allowed: true, effectiveRole: 'owner', source: 'ownership' }
+      if (resource.collection === '/notices') {
+        const recAccountId = typeof resource.record?.accountId === 'string' ? resource.record.accountId.trim() : ''
+        if (!recAccountId || recAccountId === actor.accountId) {
+          return { allowed: true, effectiveRole: 'owner', source: 'ownership' }
+        }
       }
       return { allowed: false, reason: 'PRIVATE_RESOURCE' }
     }
