@@ -1,4 +1,4 @@
-import { parse as parseYaml, stringify as stringifyYaml } from 'yaml'
+import { parse as parseYaml } from 'yaml'
 
 export function splitMarkdown(raw: string): { matter: Record<string, unknown>; body: string } {
   const text = String(raw ?? '').replace(/^\uFEFF/, '')
@@ -14,9 +14,4 @@ export function splitMarkdown(raw: string): { matter: Record<string, unknown>; b
   const parsed = parseYaml(yamlText)
   const matter = parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? (parsed as Record<string, unknown>) : {}
   return { matter, body }
-}
-
-export function dumpMarkdown(matter: Record<string, unknown>, body: string): string {
-  const yaml = stringifyYaml(matter, { lineWidth: 0 }).trimEnd()
-  return `---\n${yaml}\n---\n${body}`
 }
