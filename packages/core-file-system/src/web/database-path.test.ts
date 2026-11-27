@@ -20,7 +20,6 @@ test('view and record helpers match the database URL scheme', () => {
 
 test('default all-view helpers keep the database URL scheme', () => {
   assert.equal(databaseAllViewPath('/agents'), '/database/agents/view/all')
-  assert.equal(databaseAllViewPath('/tasks'), '/database/tasks/view/all')
   assert.equal(databaseAllViewPath('/pages'), '/database/pages/view/all')
   assert.equal(databaseAllViewPath('/plugins'), '/database/plugins/view/all')
   assert.equal(databaseAllViewPath('/data'), '/database/data/view/all')
@@ -33,18 +32,17 @@ test('default all-view helpers keep the database URL scheme', () => {
 })
 
 test('table path without view still parses as a collection-view URL', () => {
-  const parsed = parseAppPath(databaseViewPath('/tasks'), plugins)
+  const parsed = parseAppPath(databaseViewPath('/pages'), plugins)
   assert.equal(parsed.kind, 'collection-view')
   if (parsed.kind === 'collection-view') {
-    assert.equal(parsed.collection, '/tasks')
+    assert.equal(parsed.collection, '/pages')
     assert.equal(parsed.viewId, undefined)
   }
 })
 
-test('only pages and tasks nest records in the data sidebar', () => {
+test('only pages nest records in the data sidebar', () => {
   assert.equal(isRecordTreeCollection('/pages'), true)
   assert.equal(isRecordTreeCollection('/pages/'), true)
-  assert.equal(isRecordTreeCollection('/tasks'), true)
   assert.equal(isRecordTreeCollection('/agents'), false)
   assert.equal(isRecordTreeCollection('/editor-blocks'), false)
   assert.equal(isRecordTreeCollection('/plugins'), false)
@@ -76,14 +74,13 @@ test('members and views are system collections; blocks and tags are index data',
     { path: '/agents' },
     { path: '/pages' },
     { path: '/editor-blocks' },
-    { path: '/tasks' },
     { path: '/mcp' },
     { path: '/skills' },
     { path: '/data' },
   ])
   assert.deepEqual(
     user.map((item) => item.path),
-    ['/agents', '/tasks', '/pages', '/editor-blocks'],
+    ['/agents', '/pages', '/editor-blocks'],
   )
   assert.deepEqual(
     system.map((item) => item.path),
@@ -103,7 +100,6 @@ test('data overview create menu excludes plugins, comments, system and index col
   assert.equal(isOverviewCreatableCollection('/trash'), false)
   assert.equal(isOverviewCreatableCollection('/pages'), true)
   assert.equal(isOverviewCreatableCollection('/agents'), true)
-  assert.equal(isOverviewCreatableCollection('/tasks'), true)
   assert.equal(isOverviewCreatableCollection('/mcp'), true)
   assert.equal(isOverviewCreatableCollection('/skills'), true)
   assert.equal(isOverviewCreatableCollection({ path: '/custom-readonly', caps: { create: false, overviewCreate: false } }), false)

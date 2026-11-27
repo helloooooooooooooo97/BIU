@@ -18,13 +18,12 @@ import {
 test('search opens inspector collections, not chat or database routes', () => {
   assert.equal(searchCollection('view'), '/views')
   assert.equal(searchCollection('session'), '/agents')
-  assert.equal(searchCollection('task'), '/tasks')
   assert.equal(searchCollection('page'), '/pages')
   assert.equal(searchCollection('plugin'), '/plugins')
   assert.equal(searchCollection('tag'), '/tags')
   assert.deepEqual(
     SEARCH_SCOPES.map((item) => item.label),
-    ['视图', '代理', '任务', '页面', '插件', '标签'],
+    ['视图', '代理', '页面', '插件', '标签'],
   )
 })
 
@@ -50,7 +49,6 @@ test('searchHref opens the left main pane by changing the route', () => {
   assert.equal(searchHref({ kind: 'view', id: 'pages::mine', record: { tablePath: '/pages', viewId: 'mine' } }), '/database/pages/view/mine')
   assert.equal(searchHref({ kind: 'session', id: 'abc' }), '/agents/abc')
   assert.equal(searchHref({ kind: 'page', id: 'p1' }), '/database/pages/record/p1')
-  assert.equal(searchHref({ kind: 'task', id: 't1' }), '/database/tasks/record/t1')
   assert.equal(searchHref({ kind: 'plugin', id: 'g1' }), '/database/plugins/record/g1')
   assert.equal(searchHref({ kind: 'tag', id: 'f1' }), '/database/tags/record/f1')
 })
@@ -87,7 +85,7 @@ test('empty search lists every kind by updatedAt instead of skipping remotes', (
   assert.doesNotMatch(src, /if \(!needle && scope === 'all'\) \{\s*setHits\(\[\]\)/)
   assert.match(src, /sort: 'updatedAt'/)
   assert.match(src, /item.id === 'session' \? '\/agents'/)
-  assert.match(src, /空着时视图、代理、任务、页面、插件、标签各按更新时间列最近/)
+  assert.match(src, /空着时视图、代理、页面、插件、标签各按更新时间列最近/)
   assert.doesNotMatch(src, /window\.confirm/)
   assert.match(src, /<ConfirmDialog/)
 })

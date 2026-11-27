@@ -208,9 +208,9 @@ function decorateTask(
   }
 }
 
-/** 从 task 体系取出本 live（作为 creator）派发的任务；用量读 reports 里已经累加好的字段。 */
+/** 从可选 task 服务取出本 live（作为 creator）派发的任务；用量读 reports 里已经累加好的字段。 */
 export async function loadLiveDispatchTasks(
-  ctx: {
+  ctx: Context | {
     tasks?: {
       list(filter: { creatorSessionId?: string }): Array<{
         id: string
@@ -228,8 +228,24 @@ export async function loadLiveDispatchTasks(
   },
   liveId: string,
 ): Promise<TaskDispatchSource[]> {
-  if (!ctx.tasks) return []
-  const rows = ctx.tasks.list({ creatorSessionId: liveId })
+  const tasksSvc = (ctx as {
+    tasks?: {
+      list(filter: { creatorSessionId?: string }): Array<{
+        id: string
+        title: string
+        status: string
+        createdAt: number
+        assignee?: { sessionId?: string } | null
+        reports?: Array<{
+          sessionId?: string
+          turn?: number | null
+          usage?: TokenUsageSum
+        }>
+      }>
+    }
+  }).tasks
+  if (!tasksSvc) return []
+  const rows = tasksSvc.list({ creatorSessionId: liveId })
   return rows
     .map((row) => {
       const usage = usageFromTaskReports(row.reports)

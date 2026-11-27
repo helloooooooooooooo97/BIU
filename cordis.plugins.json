@@ -119,16 +119,6 @@
       "enabled": true
     },
     {
-      "id": "core-task-system",
-      "name": "Core-Task System",
-      "layer": "core",
-      "blurb": "任务表 /tasks。让另一个代理做事：assignee 写成它的会话 id，再 db_action deliver。执行中的代理用 report 汇报。",
-      "package": "@biu/core-task-system/host",
-      "web": "@biu/core-task-system/web",
-      "togglable": false,
-      "enabled": true
-    },
-    {
       "id": "skills",
       "name": "技能",
       "layer": "capability",

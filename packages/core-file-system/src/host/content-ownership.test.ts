@@ -10,8 +10,6 @@ import { DatabaseService } from './index.ts'
 import { PagesStore } from '../../../core-page/src/host/store.ts'
 import { pagesCollection } from '../../../core-page/src/host/index.ts'
 import { PageBlocksIndex } from '../../../core-page/src/host/page-blocks-index.ts'
-import { TasksService } from '../../../core-task-system/src/host/index.ts'
-import { tasksCollection } from '../../../core-task-system/src/host/collection.ts'
 import { SkillsService } from '../../../host-skills/src/host/index.ts'
 import { skillsCollection } from '../../../host-skills/src/host/collection.ts'
 import { PluginStoreService } from '../../../core-plugin-system/src/host/store.ts'
@@ -40,15 +38,6 @@ test('host content writes persist once while collection mirrors and metadata sti
     const index = new PageBlocksIndex(pages)
     const reindex = vi.spyOn(index, 'reindexPage')
     db.register(pagesCollection(pages, index))
-    const tasks = new TasksService(contexts[0]!, sqlPath).open()
-    const task = tasks.create({ title: 'Task', creator: { kind: 'user', name: '用户' }, description: 'before' })
-    db.register(tasksCollection({
-      list: ({ q } = {}) => tasks.list({ q }),
-      get: tasks.get.bind(tasks),
-      update: tasks.update.bind(tasks),
-      create: (input) => tasks.create({ ...input, creator: { kind: 'user', name: '用户' } }),
-      delete: tasks.delete.bind(tasks),
-    }))
     const skills = new SkillsService(contexts[1]!)
     const skill = skills.create({ name: 'Example', description: 'test skill', notes: 'before' })
     db.register(skillsCollection(skills))
@@ -60,7 +49,7 @@ test('host content writes persist once while collection mirrors and metadata sti
     const plugins = new PluginStoreService(contexts[2]!, join(root, '.plugin'), join(root, 'store.json'), join(root, '.plugin-dev')).open()
     db.register(pluginsCollection(plugins))
 
-    const paths = [`/pages/${page.id}`, `/tasks/${task.id}`, `/skills/${skill.id}`, '/plugins/demo']
+    const paths = [`/pages/${page.id}`, `/skills/${skill.id}`, '/plugins/demo']
     // Warm read-side migration before measuring actual writes.
     for (const path of paths) await db.content(path)
     sql.exec(`CREATE TABLE content_write_audit (collection TEXT, record_id TEXT);
@@ -82,17 +71,14 @@ test('host content writes persist once while collection mirrors and metadata sti
       { collection: '/pages', writes: 1 },
       { collection: '/plugins', writes: 1 },
       { collection: '/skills', writes: 1 },
-      { collection: '/tasks', writes: 1 },
     ])
     assert.equal((await pages.get(page.id))?.notes, '# after\n')
     assert.equal(reindex.mock.calls.length, 1)
     assert.equal(reindex.mock.calls[0]?.[0].notes, '# after\n')
-    assert.equal(tasks.get(task.id)?.description, '# after\n')
     assert.match(await readFile(join(root, '.biu/skill', `${skill.id}.md`), 'utf8'), /# after/)
     assert.equal(await readFile(join(pluginDir, 'README.md'), 'utf8'), '# after\n')
     // Direct store callers retain responsibility for persisting their own writes.
     await pages.update(page.id, { notes: 'direct page' })
-    tasks.update(task.id, { description: 'direct task' })
     skills.patch(skill.id, { notes: 'direct skill' })
     await plugins.writeReadme('demo', 'direct plugin')
     for (const path of paths) assert.match(String((await db.content(path)).value), /^direct /)

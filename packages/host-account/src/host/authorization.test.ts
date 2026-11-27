@@ -358,11 +358,11 @@ test('isLockedMemberView fails closed when no lock checker is registered', () =>
   )
 })
 
-test('tasks and mcp are strictly personal-only and reject all sharing operations', () => {
+test('mcp and notices are strictly personal-only and reject all sharing operations', () => {
   const { store, auth, workspace, ada, bob, actor } = setup()
   const asAda = <T>(op: () => T) => runWithAccount(ada.id, () => runWithRequestWorkspace(workspace.id, op))
 
-  for (const col of ['/tasks', '/mcp'] as const) {
+  for (const col of ['/mcp'] as const) {
     const rec = { type: 'record' as const, workspaceId: workspace.id, collection: col, recordId: 'r1' }
     auth.attach(actor(ada.id), rec, { accessMode: 'private' })
 
@@ -390,7 +390,7 @@ test('tasks and mcp are strictly personal-only and reject all sharing operations
   assert.equal(auth.authorize(actor(ada.id), 'resource:share', ownNotice).allowed, false)
   assert.equal(auth.authorize(actor(bob.id), 'resource:read', ownNotice).allowed, false)
 
-  for (const col of ['/tasks', '/mcp'] as const) {
+  for (const col of ['/mcp'] as const) {
 
     assert.throws(() => asAda(() => store.shareWithEmail(ada.id, col, 'r1', bob.email, 'viewer')), /不支持分享/)
     assert.throws(() => asAda(() => store.setRecordAccessMode(ada.id, col, 'r1', 'members', 'viewer')), /不支持分享/)

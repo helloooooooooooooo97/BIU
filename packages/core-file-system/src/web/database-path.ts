@@ -11,7 +11,6 @@ import {
   PLUGINS_COLLECTION_PATH,
   SKILLS_COLLECTION_PATH,
   TAGS_COLLECTION_PATH,
-  TASKS_COLLECTION_PATH,
   TRASH_COLLECTION_PATH,
   VIEWS_COLLECTION_PATH,
   WORKSPACE_MEMBERS_COLLECTION_PATH,
@@ -35,7 +34,6 @@ export {
   PLUGINS_COLLECTION_PATH,
   SKILLS_COLLECTION_PATH,
   TAGS_COLLECTION_PATH,
-  TASKS_COLLECTION_PATH,
   TRASH_COLLECTION_PATH,
   VIEWS_COLLECTION_PATH,
   WORKSPACE_MEMBERS_COLLECTION_PATH,
@@ -74,16 +72,15 @@ export function databaseRecordPath(collection: string, recordId: string, viewId?
   } satisfies AppRoute)
 }
 
-/** 数据侧栏记录行按 parentId 嵌套：只有页面和任务。 */
+/** 数据侧栏记录行按 parentId 嵌套：目前为页面。 */
 export function isRecordTreeCollection(path: string) {
   const normalized = normalizeCollectionPath(path)
-  return normalized === PAGES_COLLECTION_PATH || normalized === TASKS_COLLECTION_PATH
+  return normalized === PAGES_COLLECTION_PATH
 }
 
-/** 侧栏「核心数据」：代理、任务、页面、组件。 */
+/** 侧栏「核心数据」：代理、页面、组件。 */
 const CORE_COLLECTION_ORDER = [
   AGENTS_COLLECTION_PATH,
-  TASKS_COLLECTION_PATH,
   PAGES_COLLECTION_PATH,
   PAGE_BLOCKS_COLLECTION_PATH,
 ] as const

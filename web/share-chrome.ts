@@ -5,7 +5,6 @@ import { PageBlockContent } from '@biu/core-page/web'
 import { sessionsChrome } from '../packages/core-chat/src/web/sessions-chrome.tsx'
 import { skillsChrome } from '@biu/host-skills/web'
 import { pluginsChrome } from '../packages/core-plugin-system/src/web/chrome.tsx'
-import { tasksChrome } from '../packages/core-task-system/src/web/chrome.tsx'
 import { DatabaseUiService, getDatabaseUi } from '../packages/core-file-system/src/web/database-ui.ts'
 import { tagsChrome } from '../packages/core-file-system/src/web/tag-chrome.tsx'
 import { viewsChrome } from '../packages/core-file-system/src/web/views-chrome.ts'
@@ -26,7 +25,6 @@ export function installShareCollectionChrome(ctx: Context) {
   ui.decorate('/agents', sessionsChrome())
   ui.decorate('/skills', skillsChrome)
   ui.decorate('/plugins', pluginsChrome)
-  ui.decorate('/tasks', tasksChrome)
   ui.decorate(TAGS_COLLECTION_PATH, tagsChrome)
   ui.decorate(VIEWS_COLLECTION_PATH, viewsChrome)
 }

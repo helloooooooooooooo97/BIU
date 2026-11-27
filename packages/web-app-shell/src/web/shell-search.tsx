@@ -5,7 +5,6 @@ import {
   ArchiveBoxArrowDownIcon,
   ArrowPathIcon,
   CursorArrowRaysIcon,
-  CheckCircleIcon,
   DocumentIcon,
   MagnifyingGlassIcon,
   PaperAirplaneIcon,
@@ -26,7 +25,7 @@ import type { CollectionActionInfo, DbRecord } from '@biu/type-file-system'
 import { getDatabaseUi, loadTags } from './data-bridge.ts'
 import { setChatOverlay, requestComposerFocus } from './chat-overlay.ts'
 
-export type SearchKind = 'view' | 'session' | 'task' | 'page' | 'plugin' | 'tag'
+export type SearchKind = 'view' | 'session' | 'page' | 'plugin' | 'tag'
 
 export const SEARCH_SCOPES: Array<{
   id: SearchKind
@@ -35,7 +34,6 @@ export const SEARCH_SCOPES: Array<{
 }> = [
   { id: 'view', label: '视图', path: '/views' },
   { id: 'session', label: '代理', path: null },
-  { id: 'task', label: '任务', path: '/tasks' },
   { id: 'page', label: '页面', path: '/pages' },
   { id: 'plugin', label: '插件', path: '/plugins' },
   { id: 'tag', label: '标签', path: '/tags' },
@@ -401,7 +399,6 @@ function KindGlyph({ kind, compact }: { kind: SearchKind | 'all'; compact?: bool
   if (kind === 'all') return <Squares2X2Icon className={className} />
   if (kind === 'view') return <TableCellsIcon className={className} />
   if (kind === 'session') return <CursorArrowRaysIcon className={className} />
-  if (kind === 'task') return <CheckCircleIcon className={className} />
   if (kind === 'page') return <DocumentIcon className={className} />
   if (kind === 'plugin') return <PuzzlePieceIcon className={className} />
   return <TagIcon className={className} />
@@ -529,7 +526,7 @@ export function ShellSearchPanel({
 
   const grouped = useMemo(() => {
     const remote = hits.filter((item) => scope === 'all' || item.kind === scope)
-    const order: SearchKind[] = ['view', 'session', 'task', 'page', 'plugin', 'tag']
+    const order: SearchKind[] = ['view', 'session', 'page', 'plugin', 'tag']
     return order
       .map((kind) => {
         const fromRemote = remote.filter((item) => item.kind === kind)
@@ -599,7 +596,7 @@ export function ShellSearchPanel({
             autoFocus
             placeholder={
               scope === 'all'
-                ? '搜索视图、代理、任务、页面、插件、标签'
+                ? '搜索视图、代理、页面、插件、标签'
                 : `搜索${SEARCH_SCOPES.find((item) => item.id === scope)?.label ?? ''}`
             }
             value={query}
@@ -655,7 +652,7 @@ export function ShellSearchPanel({
         <div ref={bodyRef} className="shell-search-body" aria-busy={busy}>
           {!needle && scope === 'all' && !flat.length && !busy ? (
             <p className="shell-search-hint">
-              空着时视图、代理、任务、页面、插件、标签各按更新时间列最近 {PER_KIND} 条。
+              空着时视图、代理、页面、插件、标签各按更新时间列最近 {PER_KIND} 条。
             </p>
           ) : null}
           {grouped.map((group) => (
@@ -664,7 +661,7 @@ export function ShellSearchPanel({
               {group.items.map((item) => {
                 cursor += 1
                 const index = cursor
-                const tags = (item.kind === 'session' || item.kind === 'task' || item.kind === 'page' || item.kind === 'plugin')
+                const tags = (item.kind === 'session' || item.kind === 'page' || item.kind === 'plugin')
                   ? item.tags
                   : undefined
                 const actions = visibleRowActions(item.actions, item.record ?? { id: item.id })

@@ -1139,7 +1139,7 @@ export function computeTurnStats(events: SessionEvent[], targetTurn?: number): R
 }
 
 export const name = 'chat'
-export const inject = ['http', 'hub', 'agents', 'sessions', 'systemPrompt', 'tools', 'tasks']
+export const inject = ['http', 'hub', 'agents', 'sessions', 'systemPrompt', 'tools']
 
 function databaseOf(ctx: Context) {
   return ctx.get('database') as
