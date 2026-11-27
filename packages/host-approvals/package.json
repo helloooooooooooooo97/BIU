@@ -13,7 +13,6 @@
   },
   "dependencies": {
     "@biu/host-plugin-loader": "0.1.0",
-    "@biu/host-sessions": "0.1.0",
     "@biu/host-tools": "0.1.0"
   }
 }
