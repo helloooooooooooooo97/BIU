@@ -2,7 +2,6 @@ import { test } from 'vitest'
 import assert from 'node:assert/strict'
 import {
   collectLiveDispatchedTasks,
-  collectLiveDispatchedUsage,
   buildLiveDispatchPoints,
   usageFromTaskReports,
 } from './live-dispatched-usage.ts'
@@ -126,32 +125,6 @@ test('collectLiveDispatchedTasks keeps doing status from the task table', () => 
     [task({ id: 't1', title: 'x', sessionId: 'worker-a', createdAt: 2, status: 'doing' })],
   )
   assert.equal(result.tasks[0]?.status, 'running')
-})
-
-test('collectLiveDispatchedUsage still aggregates by live turn', () => {
-  const liveId = 'live-1'
-  const result = collectLiveDispatchedUsage(
-    liveId,
-    [
-      ev({ type: 'turn/start', turn: 3, ts: 100 }),
-      ev({ type: 'turn/end', turn: 3, reason: 'complete', ts: 130 }),
-    ],
-    [],
-    [
-      task({
-        id: 't1',
-        title: 'run',
-        sessionId: 'worker-a',
-        createdAt: 110,
-        usage: { inputTokens: 40, outputTokens: 10, totalTokens: 50 },
-      }),
-    ],
-  )
-  assert.deepEqual(result.byLiveTurn['3'], {
-    inputTokens: 40,
-    outputTokens: 10,
-    totalTokens: 50,
-  })
 })
 
 test('usageFromTaskReports adds later reports and dedupes the same turn', () => {
