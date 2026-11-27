@@ -1,7 +1,6 @@
 import { test } from 'vitest'
 import assert from 'node:assert/strict'
 import {
-  PINNED_GROUP_KEY,
   UNGROUPED_PROJECT_KEY,
   buildSidebarSections,
   folderNameFromPath,
@@ -110,7 +109,6 @@ test('buildSidebarSections puts pinned rows in their own section above projects'
     sections[1]?.groups?.map((group) => group.key),
     ['/x', UNGROUPED_PROJECT_KEY],
   )
-  assert.notEqual(sections[1]?.groups?.[0]?.key, PINNED_GROUP_KEY)
 })
 
 test('buildSidebarSections has no pinned section when nothing is pinned', () => {

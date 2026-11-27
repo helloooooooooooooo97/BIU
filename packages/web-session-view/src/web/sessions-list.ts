@@ -59,7 +59,7 @@ export async function getSessionTurns<T = Record<string, unknown>>(
   ) as Promise<{ status: number; body: T } | null>
 }
 
-function hasAccountToken() {
+export function hasAccountToken() {
   if (typeof localStorage === 'undefined') return true
   try {
     return Boolean(readStorageString('biu.account.token'))

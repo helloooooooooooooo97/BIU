@@ -1,7 +1,6 @@
 import type { SessionListItem } from './index.ts'
 
 export const UNGROUPED_PROJECT_KEY = '__ungrouped__'
-export const PINNED_GROUP_KEY = '__pinned__'
 
 export type SidebarGroupKind = 'project' | 'ungrouped'
 
