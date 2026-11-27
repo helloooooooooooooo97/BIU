@@ -10,7 +10,9 @@ import {
 } from '@biu/host-plugin-loader/data-dir'
 import { getAccountPort, getBlobPort } from '@biu/host-plugin-loader/ports'
 import { getRuntimePolicy, resolveScopedWorkspaceId } from '@biu/host-plugin-loader/runtime'
+import { getAccountService } from '@biu/host-account'
 import { type Action as PermissionAction, type AuthorizationService } from '@biu/host-account/authorization'
+import { SHARE_ROLE_ENUM, SHARE_SCOPE_ENUM } from '../shared/authz-labels.ts'
 import { BoundedMap } from '@biu/biu-ui/cache'
 import { Service, type Context } from 'cordis'
 import {
@@ -178,7 +180,7 @@ function schemaFor(spec: CollectionSpec): CollectionSchema {
       computed: true,
       writable: false,
       sortable: true,
-      enum: ['私人', '共享', '空间'],
+      enum: [...SHARE_SCOPE_ENUM],
       description: '计算属性。Notion 对齐三态内部访问范围：私人 / 共享 / 空间（公开外链与外部协作者以独立角标呈现）。',
     }
     fields.shareRole = {
@@ -187,8 +189,8 @@ function schemaFor(spec: CollectionSpec): CollectionSchema {
       computed: true,
       writable: false,
       sortable: true,
-      enum: ['管理', '编辑', '查看'],
-      description: '计算属性。当前用户对这一条的权限：管理、编辑或查看。',
+      enum: [...SHARE_ROLE_ENUM],
+      description: '计算属性。当前用户对这一条的权限：管理、编辑、评论或查看。',
     }
     columns = columnAfter(ensureColumn(columns, 'shareScope'), 'shareRole', 'shareScope')
   }
@@ -624,11 +626,7 @@ export class DatabaseService extends Service implements Database {
   }
 
   private collabStore() {
-    try {
-      return (this.ctx.get('account') as { store?: WorkspaceFiles } | undefined)?.store
-    } catch {
-      return undefined
-    }
+    return getAccountService(this.ctx)?.store
   }
 
   private logMemberActivity(input: {
@@ -640,17 +638,7 @@ export class DatabaseService extends Service implements Database {
   }) {
     if (isSystemCollection(input.collection) || isIndexCollection(input.collection)) return
     try {
-      const store = this.collabStore() as {
-        recordActivity?: (row: {
-          category: 'data' | 'access' | 'member' | 'session' | 'automation'
-          action: string
-          collection?: string
-          recordId?: string
-          recordTitle?: string
-          detail?: string
-        }) => void
-      } | undefined
-      store?.recordActivity?.({
+      this.collabStore()?.recordActivity?.({
         category: 'data',
         action: input.action,
         collection: input.collection,
@@ -664,17 +652,13 @@ export class DatabaseService extends Service implements Database {
   }
 
   private authorization() {
-    try {
-      const auth = (this.ctx.get('account') as { authorization?: AuthorizationService } | undefined)?.authorization
-      if (auth && auth !== this.boundAuth) {
-        this.unbindAuth?.()
-        this.boundAuth = auth
-        this.unbindAuth = auth.onInvalidate(() => this.bump())
-      }
-      return auth
-    } catch {
-      return undefined
+    const auth = getAccountService(this.ctx)?.authorization
+    if (auth && auth !== this.boundAuth) {
+      this.unbindAuth?.()
+      this.boundAuth = auth
+      this.unbindAuth = auth.onInvalidate(() => this.bump())
     }
+    return auth
   }
 
   private withLocationShareScope(schema: CollectionSchema) {
@@ -1668,17 +1652,7 @@ export class DatabaseService extends Service implements Database {
           return undefined
         }
       },
-      accountService: () => {
-        try {
-          return this.ctx.get('account') as {
-            markLocal?: (collection: string, id: string) => void
-            workspaceLocation?: (workspaceId: string) => 'device' | 'cloud'
-            store?: { activeWorkspaceId?: () => string | null }
-          }
-        } catch {
-          return undefined
-        }
-      },
+      accountService: () => getAccountService(this.ctx),
     }
   }
 
@@ -1689,26 +1663,14 @@ export class DatabaseService extends Service implements Database {
   /** 本机空间：私人与共享都留在这台设备。 */
   private deviceWorkspace() {
     if (getRuntimePolicy().hostMode === 'cloud') return false
-    try {
-      const account = this.ctx.get('account') as {
-        workspaceLocation?: (workspaceId: string) => 'device' | 'cloud'
-        store?: { activeWorkspaceId?: () => string | null }
-      } | undefined
-      const workspaceId = account?.store?.activeWorkspaceId?.() ?? ''
-      if (workspaceId && account?.workspaceLocation) return account.workspaceLocation(workspaceId) === 'device'
-    } catch {
-      /* 没有账号服务时按桌面运行时处理 */
-    }
+    const account = getAccountService(this.ctx)
+    const workspaceId = account?.store?.activeWorkspaceId?.() ?? ''
+    if (workspaceId && account?.workspaceLocation) return account.workspaceLocation(workspaceId) === 'device'
     return true
   }
 
   private markDeviceRecord(collection: string, id: string) {
-    try {
-      const account = this.ctx.get('account') as { markLocal?: (collection: string, id: string) => void } | undefined
-      account?.markLocal?.(collection, id)
-    } catch {
-      /* 没有账号库时仍按当前归属挂到空间 */
-    }
+    getAccountService(this.ctx)?.markLocal?.(collection, id)
   }
 
   /** 侧栏「添加聊天」走 sessions.create，不经过表格的 create，这里补创建人和本地归属。 */
@@ -2636,49 +2598,7 @@ export function apply(ctx: Context) {
     if (workspaceId) savedViews.clearWorkspace(workspaceId)
   })
   db.recordViews.open(biuSqlitePath())
-  const account = ctx.get('account') as {
-    authorization?: AuthorizationService
-    workspaceLocation?: (workspaceId: string) => 'device' | 'cloud'
-    store?: {
-      activeWorkspaceId?: () => string | null
-      members: (accountId: string, workspaceId: string) => Array<{
-        id: string
-        name: string
-        email: string
-        role: string
-        member_kind: 'member' | 'external'
-        created_at: number
-      }>
-      externallySharedRecords?: (
-        accountId: string,
-        workspaceId: string,
-      ) => Array<{ collection: string; record_id: string }>
-      memberById?: (
-        workspaceId: string,
-        accountId: string,
-      ) => {
-        id: string
-        name: string
-        email: string
-        role: string
-        member_kind: 'member' | 'external' | 'guest'
-        created_at: number
-      } | null
-      memberRole?: (accountId: string, workspaceId: string) => string | null
-      memberViewGrantCount?: (workspaceId: string, viewId: string) => number
-      workspaceOwnerId?: (workspaceId: string) => string | null
-      attachAs?: (
-        workspaceId: string,
-        collection: string,
-        recordId: string,
-        ownerAccountId: string,
-        policy?: { accessMode?: 'private' | 'members' | 'inherit'; memberDefaultRole?: 'viewer' | 'editor' },
-      ) => void
-      detachRecord?: (workspaceId: string, collection: string, recordId: string) => void
-      collectionOwnership?: (workspaceId: string, collection: string) => Map<string, 'personal' | 'workspace' | 'shared'>
-      collectionExternalSharedIds?: (workspaceId: string, collection: string) => Set<string>
-    }
-  } | undefined
+  const account = getAccountService(ctx)
   savedViews.setWorkspaceResolver(() => resolveScopedWorkspaceId(ctx))
   const authorizeViewRecord = (
     workspaceId: string,

@@ -1,5 +1,12 @@
-export type DataScopeName = 'personal' | 'workspace' | 'shared'
-export type ViewGrantRole = 'viewer' | 'commenter' | 'editor' | 'manager' | 'owner'
+import {
+  ROLE_RANK,
+  normalizeAuthzRole,
+  type AuthzRole,
+  type AuthzShareScope,
+} from './shared/authz-labels.ts'
+
+export type DataScopeName = AuthzShareScope
+export type ViewGrantRole = AuthzRole
 
 export type AccessExplanation = {
   builtin?: boolean
@@ -118,7 +125,6 @@ export type BuildAccessExplanationInput = {
   }
 }
 
-const ROLE_RANK: Record<ViewGrantRole, number> = { viewer: 1, commenter: 2, editor: 3, manager: 4, owner: 5 }
 const KIND_PRIORITY: Record<AccessExplanation['myAccess']['paths'][number]['kind'], number> = {
   ownership: 4,
   direct: 3,
@@ -127,12 +133,7 @@ const KIND_PRIORITY: Record<AccessExplanation['myAccess']['paths'][number]['kind
 }
 
 function normalizeRole(role: string | undefined, fallback: ViewGrantRole = 'viewer'): ViewGrantRole {
-  if (role === 'owner' || role === 'manager' || role === 'editor' || role === 'commenter' || role === 'viewer') return role
-  if (role === '管理') return 'manager'
-  if (role === '编辑') return 'editor'
-  if (role === '评论') return 'commenter'
-  if (role === '查看' || role === '阅读') return 'viewer'
-  return fallback
+  return normalizeAuthzRole(role) ?? fallback
 }
 
 function titleOf(recordTitles: Record<string, string> | undefined, collection: string, recordId: string, fallback: string) {

@@ -2,6 +2,7 @@ import { createCipheriv, createDecipheriv, createHash, randomBytes } from 'node:
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname } from 'node:path'
 import { currentAccountId, currentRequestWorkspaceId, dataDir, dataHome, dataPath } from '@biu/host-plugin-loader/data-dir'
+import { getAccountPort } from '@biu/host-plugin-loader/ports'
 import { getRuntimePolicy } from '@biu/host-plugin-loader/runtime'
 import { TenantStateMap } from '@biu/host-plugin-loader/tenant-state'
 import { Service, type Context } from 'cordis'
@@ -1356,20 +1357,11 @@ export function apply(ctx: Context) {
     let ownerMap: Map<string, string> | null = null
     try {
       const accountId = currentAccountId()
-      const accountSvc = ctx.get('account') as
-        | {
-            activeWorkspaceId?: () => string | null
-            store?: {
-              workspacePrefs?: (actorId: string, workspaceId?: string) => { pinnedAgents: string[] }
-              collectionRecordOwners?: (workspaceId: string, collection: string) => Map<string, string>
-            }
-          }
-        | undefined
-      const store = accountSvc?.store
+      const store = getAccountPort(ctx)?.store
       if (accountId && store?.workspacePrefs) {
         pinnedSet = new Set(store.workspacePrefs(accountId).pinnedAgents)
       }
-      const workspaceId = currentRequestWorkspaceId() || accountSvc?.activeWorkspaceId?.() || ''
+      const workspaceId = currentRequestWorkspaceId() || store?.activeWorkspaceId?.() || ''
       if (workspaceId && store?.collectionRecordOwners) {
         ownerMap = store.collectionRecordOwners(workspaceId, '/agents')
       }

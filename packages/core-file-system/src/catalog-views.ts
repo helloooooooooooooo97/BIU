@@ -6,9 +6,10 @@ import {
   WORKSPACE_MEMBERS_COLLECTION_PATH,
   normalizeCollectionPath,
 } from './paths.ts'
+import { SHARE_SCOPE_LABEL, type AuthzShareScope } from './shared/authz-labels.ts'
 import { normalizeSavedView, type SavedView } from './shared/saved-view.ts'
 
-export type DataScope = 'personal' | 'workspace' | 'shared'
+export type DataScope = AuthzShareScope
 
 /** 视图的逻辑域归属：默认 'all'（单逻辑表展示全部我可见数据），或通过 filters.$scope 筛选 'workspace' / 'personal' / 'shared'。 */
 export type ViewDomain = DataScope | 'all'
@@ -27,14 +28,8 @@ export function viewDomainOf(
   return 'all'
 }
 
-const SCOPE_NAME: Record<DataScope, string> = {
-  personal: '私人',
-  workspace: '空间',
-  shared: '共享',
-}
-
 export function scopedCollectionName(table: TableRef, scope: DataScope) {
-  return `${SCOPE_NAME[scope]}${collectionNoun(table)}`
+  return `${SHARE_SCOPE_LABEL[scope]}${collectionNoun(table)}`
 }
 
 export const DEFAULT_VIEW_SORT_FIELD = 'updatedAt'

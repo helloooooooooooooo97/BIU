@@ -11,6 +11,7 @@ import { PLUGINS_COLLECTION_PATH } from './database-path.ts'
 import { getDatabaseUi } from './database-ui.ts'
 import { PageContentLoading } from './page-content-status.tsx'
 import type { TableColumnSlice } from './table-window.ts'
+import { normalizeAuthzRole } from '../shared/authz-labels.ts'
 import type { TableSandboxItem } from '../shared/table-sandbox-model.ts'
 
 const RecordDetail = lazy(() => import('./record-detail.tsx').then((m) => ({ default: m.RecordDetail })))
@@ -349,7 +350,7 @@ export const BrowserRecordStage = memo(function BrowserRecordStage(props: Browse
         tableIcon={currentTable?.view?.icon}
         readOnly={
           (collectionPath === PLUGINS_COLLECTION_PATH && selected.builtin === true && selected.canManagePackage !== true) ||
-          ((selected.shareRole === '查看' || selected.shareRole === '阅读') && !localData && selected.canManagePackage !== true)
+          (normalizeAuthzRole(selected.shareRole) === 'viewer' && !localData && selected.canManagePackage !== true)
         }
         actionProperty={rowActionColumn ? renderRecordActions(selected) : null}
         share={

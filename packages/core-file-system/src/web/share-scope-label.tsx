@@ -1,20 +1,16 @@
 import { ChatBubbleLeftEllipsisIcon, EyeIcon, PencilSquareIcon, ShieldCheckIcon, UserGroupIcon, UserIcon, UsersIcon } from '@heroicons/react/16/solid'
+import { accessLabel, normalizeAuthzScope, scopeLabel } from '../shared/authz-labels.ts'
 
 export function scopeText(scope: string) {
-  if (scope === 'shared') return '共享'
-  if (scope === 'workspace') return '空间'
-  return '私人'
+  return scopeLabel(scope)
 }
 
 export function scopeTone(scope: string) {
-  const text = scope === '私人' || scope === '空间' || scope === '共享' ? scope : scopeText(scope)
-  if (text === '共享') return 'shared'
-  if (text === '空间') return 'workspace'
-  return 'personal'
+  return normalizeAuthzScope(scope) ?? 'personal'
 }
 
 export function ScopeMark({ scope }: { scope: string }) {
-  const text = scope === '私人' || scope === '空间' || scope === '共享' ? scope : scopeText(scope)
+  const text = scopeLabel(scope)
   const icon = text === '共享'
     ? <UsersIcon aria-hidden className="size-[14px]" />
     : text === '空间'
@@ -33,12 +29,7 @@ export function ShareScopeLabel({ label }: { label: string }) {
 }
 
 export function accessText(role: string) {
-  if (role === '管理' || role === '编辑' || role === '评论' || role === '查看') return role
-  if (role === '阅读') return '查看'
-  if (role === 'owner' || role === 'manager') return '管理'
-  if (role === 'editor') return '编辑'
-  if (role === 'commenter') return '评论'
-  return '查看'
+  return accessLabel(role)
 }
 
 export function accessTone(text: string) {

@@ -7,10 +7,12 @@ import {
   runWithAccount,
   runWithRequestWorkspace,
 } from '@biu/host-plugin-loader/data-dir'
+import { getAccountService, type AccountService } from '@biu/host-account'
 import { getRuntimePolicy } from '@biu/host-plugin-loader/runtime'
 import { asPublicProfile, writeWorkspaceProfile } from '@biu/host-workspace'
 import { DATABASE_CHANNEL, databaseChannelPayload, normalizeSchemaPack } from '@biu/type-file-system'
 import { buildAccessExplanation, type BuildAccessExplanationInput } from '../access-explanation.ts'
+import { normalizeAuthzRole } from '../shared/authz-labels.ts'
 import {
   PAGES_COLLECTION_PATH,
   TAGS_COLLECTION_PATH,
@@ -94,26 +96,13 @@ export function registerDatabaseHttpRoutes(
     let dataLocation: 'device' | 'cloud' = getRuntimePolicy().hostMode === 'cloud' ? 'cloud' : 'device'
     let accountPrefs: Record<string, unknown> | null = null
     try {
-      const account = ctx.get('account') as {
-        store?: {
-          activeWorkspaceId(): string | null
-          workspacePrefs?(actorId: string, workspaceId?: string): {
-            starredViews: unknown[]
-            starredRecords: unknown[]
-            pinnedAgents: string[]
-            theme?: 'light' | 'dark'
-            accent?: string
-            pagePrefs?: Record<string, unknown>
-          }
-        }
-        workspaceLocation?: (workspaceId: string) => 'device' | 'cloud'
-      }
+      const account = getAccountService(ctx)
       const policy = getRuntimePolicy()
       const workspaceId =
-        currentRequestWorkspaceId() || (policy.allowImplicitActiveWorkspace ? account.store?.activeWorkspaceId() : '') || ''
-      if (workspaceId && account.workspaceLocation) dataLocation = account.workspaceLocation(workspaceId)
+        currentRequestWorkspaceId() || (policy.allowImplicitActiveWorkspace ? account?.store?.activeWorkspaceId() : '') || ''
+      if (workspaceId && account?.workspaceLocation) dataLocation = account.workspaceLocation(workspaceId)
       const actorId = currentAccountId()
-      if (actorId && workspaceId && account.store?.workspacePrefs) {
+      if (actorId && workspaceId && account?.store?.workspacePrefs) {
         const prefs = account.store.workspacePrefs(actorId, workspaceId)
         accountPrefs = {
           starredViews: prefs.starredViews,
@@ -156,23 +145,11 @@ export function registerDatabaseHttpRoutes(
       let savedAccountPrefs: Record<string, unknown> | null = null
       if (actorId) {
         try {
-          const account = ctx.get('account') as {
-            store?: {
-              activeWorkspaceId(): string | null
-              saveWorkspacePrefs?(actorId: string, patch: Record<string, unknown>, workspaceId?: string): {
-                starredViews: unknown[]
-                starredRecords: unknown[]
-                pinnedAgents: string[]
-                theme?: 'light' | 'dark'
-                accent?: string
-                pagePrefs?: Record<string, unknown>
-              }
-            }
-          }
+          const account = getAccountService(ctx)
           const workspaceId =
-            resolvedWorkspaceId || (policy.allowImplicitActiveWorkspace ? account.store?.activeWorkspaceId() : '') || ''
+            resolvedWorkspaceId || (policy.allowImplicitActiveWorkspace ? account?.store?.activeWorkspaceId() : '') || ''
           resolvedWorkspaceId = workspaceId
-          if (workspaceId && account.store?.saveWorkspacePrefs) {
+          if (workspaceId && account?.store?.saveWorkspacePrefs) {
             const saved = account.store.saveWorkspacePrefs(
               actorId,
               {
@@ -486,43 +463,7 @@ export function registerDatabaseHttpRoutes(
       route.send(status, { error: msg })
     }
   })
-  const resolveShareCollabStore = () => {
-    try {
-      const account = ctx.get('account') as {
-        store?: {
-          activeWorkspaceId?: () => string | null
-          recordInheritance?: (
-            workspaceId: string,
-            collection: string,
-            recordId: string,
-          ) => {
-            mode: 'inherit' | 'custom'
-            hasParent: boolean
-            parent: { collection: string; recordId: string } | null
-            ancestors: Array<{ collection: string; recordId: string }>
-          }
-          collectionInheritedSources?: (
-            workspaceId: string,
-            collection: string,
-            directKeys: ReadonlySet<string>,
-          ) => Map<string, { collection: string; recordId: string }>
-          collectInheritingDescendants?: (
-            workspaceId: string,
-            collection: string,
-            rootRecordId: string,
-            maxCount?: number,
-          ) => Array<{ collection: string; recordId: string; parentCollection: string; parentRecordId: string }>
-          publicMemberProfile?: (
-            workspaceId: string,
-            accountId: string,
-          ) => { accountId: string; name: string; avatar: string } | null
-        }
-      } | undefined
-      return account?.store
-    } catch {
-      return undefined
-    }
-  }
+  const resolveShareCollabStore = () => getAccountService(ctx)?.store
   const shareSnapshotOpts = (query: URLSearchParams, share?: { workspaceId?: string }) => {
     const collabStore = resolveShareCollabStore()
     const workspaceId = share?.workspaceId || currentRequestWorkspaceId() || collabStore?.activeWorkspaceId?.() || ''
@@ -542,11 +483,9 @@ export function registerDatabaseHttpRoutes(
     const code = String(route.req.headers['x-lan-member'] ?? '').trim()
     if (!code) return
     try {
-      const account = ctx.get('account') as {
-        store?: { activeWorkspaceId?: () => string | null; rememberLanMember?: (workspaceId: string, code: string) => unknown }
-      }
-      const workspaceId = account.store?.activeWorkspaceId?.() ?? ''
-      account.store?.rememberLanMember?.(workspaceId, code)
+      const account = getAccountService(ctx)
+      const workspaceId = account?.store?.activeWorkspaceId?.() ?? ''
+      account?.store?.rememberLanMember?.(workspaceId, code)
     } catch {
       /* 没有账号库时分享页仍可打开 */
     }
@@ -587,24 +526,10 @@ export function registerDatabaseHttpRoutes(
         [`${target.collection}\t${target.id}`]: recordTitle,
       }
       if (!localOnly) {
-        let account: {
-          store?: {
-            recordAccess?: (
-              actorId: string,
-              collection: string,
-              recordId: string,
-              record?: Record<string, unknown>,
-            ) => NonNullable<BuildAccessExplanationInput['access']>
-          }
-        } | undefined
-        try {
-          account = ctx.get('account') as typeof account
-        } catch {
-          account = undefined
-        }
+        const account = getAccountService(ctx)
         const actorId = currentAccountId()
         if (actorId && account?.store?.recordAccess) {
-          access = account.store.recordAccess(actorId, target.collection, target.id, record)
+          access = account.store.recordAccess(actorId, target.collection, target.id, record) as NonNullable<BuildAccessExplanationInput['access']>
           const refs = new Map<string, { collection: string; recordId: string }>()
           for (const anc of access.inheritance?.ancestors ?? []) {
             refs.set(`${anc.collection}\t${anc.recordId}`, { collection: anc.collection, recordId: anc.recordId })
@@ -640,15 +565,7 @@ export function registerDatabaseHttpRoutes(
           }
         }
       }
-      const fallbackRole = fallbackRoleParam === '查看' || fallbackRoleParam === '阅读' || fallbackRoleParam === 'viewer'
-        ? 'viewer' as const
-        : fallbackRoleParam === '编辑' || fallbackRoleParam === 'editor'
-          ? 'editor' as const
-          : fallbackRoleParam === '管理' || fallbackRoleParam === 'manager'
-            ? 'manager' as const
-            : localOnly
-              ? 'owner' as const
-              : 'viewer' as const
+      const fallbackRole = normalizeAuthzRole(fallbackRoleParam) ?? (localOnly ? 'owner' : 'viewer')
       const spec = db.collection(target.collection) ?? db.collection(collection)
       const explanation = buildAccessExplanation({
         collection: target.collection,
@@ -1272,51 +1189,7 @@ export function registerDatabaseHttpRoutes(
     }
   })
 
-  type AccountHttpService = {
-    store?: {
-      activeWorkspaceId?: () => string | null
-      memberRole?: (accountId: string, workspaceId: string) => string | null
-      members?: (actorId: string, workspaceId?: string) => Array<{
-        id: string
-        name: string
-        email: string
-        avatar?: string
-        role: string
-        member_kind: string
-        created_at: number
-      }>
-      memberViewGrantCount?: (workspaceId: string, viewId: string) => number
-      freezeMemberViewGrants?: (actorId: string, workspaceId: string, viewId: string, memberIds: string[]) => { frozenRecords: number; expandedGrants: number }
-      revokeAllMemberViewGrants?: (actorId: string, workspaceId: string, viewId: string) => { revokedRecords: number }
-      previewBatchRecordPermissions?: (
-        actorId: string,
-        collection: string,
-        recordIds: string[],
-      ) => { totalCount: number; manageableCount: number; skippedCount: number; manageableIds: string[] }
-      batchUpdateRecordPermissions?: (
-        actorId: string,
-        input: {
-          collection: string
-          recordIds: string[]
-          mode: 'grant' | 'revoke' | 'access_mode'
-          subjects?: Array<{ subjectType: 'account' | 'member_view'; subjectId: string }>
-          role?: 'viewer' | 'commenter' | 'editor' | 'manager'
-          accessMode?: 'private' | 'members'
-          memberDefaultRole?: 'viewer' | 'editor'
-        },
-      ) => { totalCount: number; updatedCount: number; skippedCount: number; updatedIds: string[] }
-    }
-  }
-
-  const getAccountService = (): AccountHttpService | undefined => {
-    try {
-      return ctx.get('account') as AccountHttpService | undefined
-    } catch {
-      return undefined
-    }
-  }
-
-  const resolveWorkspaceContext = (account: AccountHttpService | undefined) => {
+  const resolveWorkspaceContext = (account: AccountService | undefined) => {
     const policy = getRuntimePolicy()
     const actorId = currentAccountId()
     const workspaceId =
@@ -1327,7 +1200,7 @@ export function registerDatabaseHttpRoutes(
   }
 
   const resolveMemberViewMatches = (
-    account: AccountHttpService | undefined,
+    account: AccountService | undefined,
     actorId: string,
     workspaceId: string,
     view: StoredView,
@@ -1369,7 +1242,7 @@ export function registerDatabaseHttpRoutes(
   // 成员视图列表：区分「管理员锁定动态成员组」与「个人/公开快捷名单」
   ctx.http.route('GET', '/api/db/member-views', async (route) => {
     try {
-      const account = getAccountService()
+      const account = getAccountService(ctx)
       const { actorId, workspaceId } = resolveWorkspaceContext(account)
       if (!workspaceId) {
         route.send(200, { views: [] })
@@ -1404,7 +1277,7 @@ export function registerDatabaseHttpRoutes(
         route.send(400, { error: 'viewId required' })
         return
       }
-      const account = getAccountService()
+      const account = getAccountService(ctx)
       const { actorId, workspaceId } = resolveWorkspaceContext(account)
       const visible = savedViews.listMemberViews(workspaceId, actorId)
       const view = visible.find((item) => String(item.id) === viewId)
@@ -1444,7 +1317,7 @@ export function registerDatabaseHttpRoutes(
         route.send(400, { error: 'mode must be freeze or revoke' })
         return
       }
-      const account = getAccountService()
+      const account = getAccountService(ctx)
       const { actorId, workspaceId } = resolveWorkspaceContext(account)
       if (!actorId || !workspaceId || !account?.store) {
         route.send(403, { error: 'permission denied' })
@@ -1542,7 +1415,7 @@ export function registerDatabaseHttpRoutes(
         q?: string
       }
       const { collection, recordIds } = await resolveBatchTargetIds(body)
-      const account = getAccountService()
+      const account = getAccountService(ctx)
       const { actorId } = resolveWorkspaceContext(account)
       if (!actorId || !account?.store?.previewBatchRecordPermissions) {
         route.send(200, {
@@ -1582,7 +1455,7 @@ export function registerDatabaseHttpRoutes(
         return
       }
       const { collection, recordIds } = await resolveBatchTargetIds(body)
-      const account = getAccountService()
+      const account = getAccountService(ctx)
       const { actorId } = resolveWorkspaceContext(account)
       if (!actorId || !account?.store?.batchUpdateRecordPermissions) {
         route.send(403, { error: 'permission denied' })

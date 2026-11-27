@@ -68,19 +68,8 @@ export type WorkspaceFiles = {
   isSuperAdmin?(accountId?: string | null): boolean
 }
 
-export const SHARE_SCOPE_LABEL = {
-  personal: '私人',
-  workspace: '空间',
-  shared: '共享',
-} as const
-
-export function accessLabel(role: 'viewer' | 'commenter' | 'editor' | 'manager' | 'owner' | null | undefined) {
-  if (role === 'editor') return '编辑'
-  if (role === 'commenter') return '评论'
-  if (role === 'viewer') return '查看'
-  if (role === 'manager' || role === 'owner') return '管理'
-  return '查看'
-}
+import { accessLabel, SHARE_SCOPE_LABEL } from '../shared/authz-labels.ts'
+export { accessLabel, SHARE_SCOPE_LABEL }
 
 export function resolveScopeTarget(
   collection: string,

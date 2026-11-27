@@ -3,7 +3,7 @@ import { Service, type Context } from 'cordis'
 import { hostRemoteOrigin } from '@biu/host-plugin-loader/env'
 import { biuSqlitePath, currentAccountId, eventsSqlitePath, openAndMigrateBiu, openAndMigrateEvents } from '@biu/host-plugin-loader/data-dir'
 import { getRuntimePolicy } from '@biu/host-plugin-loader/runtime'
-import { getRealtimePort } from '@biu/host-plugin-loader/ports'
+import { getRealtimePort, type AccountServicePort } from '@biu/host-plugin-loader/ports'
 import { emitTenantRevoked, emitWorkspaceDeleted } from '@biu/host-plugin-loader/tenant-state'
 import { resolveScopedWorkspaceId } from '@biu/host-plugin-loader/runtime'
 import type { RouteContext } from '@biu/types/http'
@@ -15,9 +15,20 @@ import { workspaceMembersCollection } from './workspace-members-collection.ts'
 export type { Actor, Action, ResourceRef, ResourceRole, WorkspaceRole, Decision } from './authorization.ts'
 
 declare module 'cordis' {
+  interface Context {
+    account: AccountService
+  }
   interface Events {
     'account/request'(payload: { accountId?: string; token?: string }): void
     dispose(): void
+  }
+}
+
+export function getAccountService(ctx: Context): AccountService | undefined {
+  try {
+    return ctx.get('account') as AccountService | undefined
+  } catch {
+    return undefined
   }
 }
 
@@ -35,7 +46,7 @@ type CloudConnection = {
   connectedAt: number
 }
 
-export class AccountService extends Service {
+export class AccountService extends Service implements AccountServicePort {
   store: CollabStore
   authorization: AuthorizationService
   private cloudAvatars = new Map<string, string>()
