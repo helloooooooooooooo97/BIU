@@ -2537,14 +2537,28 @@ export class CollabStore {
       owner_account_id: string
       parent_collection: string
       parent_record_id: string
+      inherit_parent?: number
     }
-    const policies = this.db
-      .prepare(
-        `SELECT record_id, access_mode, owner_account_id, parent_collection, parent_record_id
-         FROM resource_policies
-         WHERE workspace_id = ? AND collection = ?`,
-      )
-      .all(workspaceId, collection) as PolicyRow[]
+    const isInheriting = (row: Pick<PolicyRow, 'access_mode' | 'parent_record_id' | 'inherit_parent'> | null | undefined) =>
+      Boolean(row && row.parent_record_id && (row.access_mode === 'inherit' || row.inherit_parent === 1))
+    let policies: PolicyRow[]
+    try {
+      policies = this.db
+        .prepare(
+          `SELECT record_id, access_mode, owner_account_id, parent_collection, parent_record_id, inherit_parent
+           FROM resource_policies
+           WHERE workspace_id = ? AND collection = ?`,
+        )
+        .all(workspaceId, collection) as PolicyRow[]
+    } catch {
+      policies = this.db
+        .prepare(
+          `SELECT record_id, access_mode, owner_account_id, parent_collection, parent_record_id
+           FROM resource_policies
+           WHERE workspace_id = ? AND collection = ?`,
+        )
+        .all(workspaceId, collection) as PolicyRow[]
+    }
     const policyByKey = new Map<string, PolicyRow>()
     for (const row of policies) {
       policyByKey.set(`${collection}\t${row.record_id}`, row)
@@ -2580,13 +2594,24 @@ export class CollabStore {
       const key = `${col}\t${recId}`
       if (col === collection) return policyByKey.get(key) ?? null
       if (crossPolicyCache.has(key)) return crossPolicyCache.get(key) ?? null
-      const row = this.db
-        .prepare(
-          `SELECT record_id, access_mode, owner_account_id, parent_collection, parent_record_id
-           FROM resource_policies
-           WHERE workspace_id = ? AND collection = ? AND record_id = ?`,
-        )
-        .get(workspaceId, col, recId) as PolicyRow | undefined
+      let row: PolicyRow | undefined
+      try {
+        row = this.db
+          .prepare(
+            `SELECT record_id, access_mode, owner_account_id, parent_collection, parent_record_id, inherit_parent
+             FROM resource_policies
+             WHERE workspace_id = ? AND collection = ? AND record_id = ?`,
+          )
+          .get(workspaceId, col, recId) as PolicyRow | undefined
+      } catch {
+        row = this.db
+          .prepare(
+            `SELECT record_id, access_mode, owner_account_id, parent_collection, parent_record_id
+             FROM resource_policies
+             WHERE workspace_id = ? AND collection = ? AND record_id = ?`,
+          )
+          .get(workspaceId, col, recId) as PolicyRow | undefined
+      }
       const found = row ?? null
       crossPolicyCache.set(key, found)
       return found
@@ -2635,7 +2660,7 @@ export class CollabStore {
         scope = hasLegacyOwner(col, recId) ? 'workspace' : hasDirectGrant(col, recId, '') ? 'shared' : 'personal'
       } else if (policy.access_mode === 'members') {
         scope = 'workspace'
-      } else if (policy.access_mode === 'inherit' && policy.parent_record_id) {
+      } else if (isInheriting(policy)) {
         const parentCol = policy.parent_collection || col
         const parentScope = resolveScope(parentCol, policy.parent_record_id, visiting, depth + 1)
         if (parentScope === 'workspace') {
@@ -2679,18 +2704,33 @@ export class CollabStore {
       .all(workspaceId, collection) as Array<{ record_id: string }>
     const directSet = new Set(directRows.map((r) => r.record_id))
 
-    const policies = this.db
-      .prepare(
-        `SELECT record_id, access_mode, parent_collection, parent_record_id
-         FROM resource_policies
-         WHERE workspace_id = ? AND collection = ?`,
-      )
-      .all(workspaceId, collection) as Array<{
+    type ExtPolicyRow = {
       record_id: string
       access_mode: string
       parent_collection: string
       parent_record_id: string
-    }>
+      inherit_parent?: number
+    }
+    const isInheriting = (p: Pick<ExtPolicyRow, 'access_mode' | 'parent_record_id' | 'inherit_parent'> | null | undefined) =>
+      Boolean(p && p.parent_record_id && (p.access_mode === 'inherit' || p.inherit_parent === 1))
+    let policies: ExtPolicyRow[]
+    try {
+      policies = this.db
+        .prepare(
+          `SELECT record_id, access_mode, parent_collection, parent_record_id, inherit_parent
+           FROM resource_policies
+           WHERE workspace_id = ? AND collection = ?`,
+        )
+        .all(workspaceId, collection) as ExtPolicyRow[]
+    } catch {
+      policies = this.db
+        .prepare(
+          `SELECT record_id, access_mode, parent_collection, parent_record_id
+           FROM resource_policies
+           WHERE workspace_id = ? AND collection = ?`,
+        )
+        .all(workspaceId, collection) as ExtPolicyRow[]
+    }
     const policyById = new Map(policies.map((p) => [p.record_id, p]))
     const memo = new Map<string, boolean>()
     const crossExtCache = new Map<string, boolean>()
@@ -2706,8 +2746,8 @@ export class CollabStore {
           result = true
         } else {
           const p = policyById.get(recId)
-          if (p?.access_mode === 'inherit' && p.parent_record_id) {
-            result = hasExternalOn(p.parent_collection || col, p.parent_record_id, visiting, depth + 1)
+          if (isInheriting(p)) {
+            result = hasExternalOn(p!.parent_collection || col, p!.parent_record_id, visiting, depth + 1)
           }
         }
       } else {
@@ -2729,17 +2769,26 @@ export class CollabStore {
           if (hit) {
             result = true
           } else {
-            const p = this.db
-              .prepare(
-                `SELECT access_mode, parent_collection, parent_record_id
-                 FROM resource_policies
-                 WHERE workspace_id = ? AND collection = ? AND record_id = ?`,
-              )
-              .get(workspaceId, col, recId) as
-              | { access_mode: string; parent_collection: string; parent_record_id: string }
-              | undefined
-            if (p?.access_mode === 'inherit' && p.parent_record_id) {
-              result = hasExternalOn(p.parent_collection || col, p.parent_record_id, visiting, depth + 1)
+            let p: { access_mode: string; parent_collection: string; parent_record_id: string; inherit_parent?: number } | undefined
+            try {
+              p = this.db
+                .prepare(
+                  `SELECT access_mode, parent_collection, parent_record_id, inherit_parent
+                   FROM resource_policies
+                   WHERE workspace_id = ? AND collection = ? AND record_id = ?`,
+                )
+                .get(workspaceId, col, recId) as typeof p
+            } catch {
+              p = this.db
+                .prepare(
+                  `SELECT access_mode, parent_collection, parent_record_id
+                   FROM resource_policies
+                   WHERE workspace_id = ? AND collection = ? AND record_id = ?`,
+                )
+                .get(workspaceId, col, recId) as typeof p
+            }
+            if (isInheriting(p)) {
+              result = hasExternalOn(p!.parent_collection || col, p!.parent_record_id, visiting, depth + 1)
             }
           }
           crossExtCache.set(key, result)
@@ -2752,7 +2801,7 @@ export class CollabStore {
 
     const out = new Set<string>(directSet)
     for (const p of policies) {
-      if (p.access_mode === 'inherit' && p.parent_record_id && hasExternalOn(collection, p.record_id)) {
+      if (isInheriting(p) && hasExternalOn(collection, p.record_id)) {
         out.add(p.record_id)
       }
     }

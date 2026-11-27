@@ -1100,7 +1100,7 @@ export class DatabaseService extends Service implements Database {
   }
 
   notifyShareChange() {
-    this.access.clearShareCaches()
+    this.access.clearCaches()
     this.bump()
   }
 
@@ -1112,7 +1112,7 @@ export class DatabaseService extends Service implements Database {
 
   private clearVisibleCaches() {
     this.visibleGen += 1
-    this.access.clearShareCaches()
+    this.access.clearCaches()
     this.inflightMatches.clear()
     this.inflightScans.clear()
     this.inflightVisible.clear()
@@ -1621,13 +1621,14 @@ export class DatabaseService extends Service implements Database {
     const wantScope = !need || need.shareScope
     const wantRole = !need || need.shareRole
     const recordId = String(row.id ?? '')
-    const stored = wantScope ? this.access.ownershipOf(spec.path, recordId) : 'personal'
-    const hasExternal = wantScope ? this.access.hasExternalAccess(spec.path, recordId) : false
+    const scopeTarget = wantScope ? resolveScopeTarget(spec.path, recordId, withMeta) : null
+    const stored = scopeTarget ? this.access.ownershipOf(scopeTarget.collection, scopeTarget.id) : 'personal'
+    const hasExternal = scopeTarget ? this.access.hasExternalAccess(scopeTarget.collection, scopeTarget.id) : false
     return {
       ...withMeta,
-      ...(wantScope
+      ...(scopeTarget
         ? {
-            shareScope: this.access.shareScopeLabel(spec.path, recordId, withMeta, stored),
+            shareScope: this.access.shareScopeLabel(scopeTarget.collection, scopeTarget.id, withMeta, stored),
             ...(hasExternal ? { hasExternal: true } : {}),
           }
         : {}),
@@ -2483,6 +2484,17 @@ export class DatabaseService extends Service implements Database {
     }
     if (!action.run) throw new Error(`action has no handler: ${actionId}`)
     const result = await action.run(parts[1]!, record, args)
+    if (actionId === 'add-child' && result && typeof result === 'object' && 'id' in result) {
+      const childId = String((result as { id?: unknown }).id ?? '').trim()
+      if (childId && spec.path !== WORKSPACE_MEMBERS_COLLECTION_PATH) {
+        await this.stampActor(spec.path, childId)
+        this.attachWorkspaceRecord(spec.path, childId, {
+          accessMode: 'inherit',
+          parentCollection: spec.path,
+          parentRecordId: parts[1]!,
+        })
+      }
+    }
     if (spec.path === PLUGINS_COLLECTION_PATH && actionId === 'sandbox' && !builtinPlugin && !this.access.recordOwner(spec.path, parts[1]!)) {
       this.stampPluginCreateScope(parts[1]!, args)
     }
