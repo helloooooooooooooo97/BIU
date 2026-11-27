@@ -16,9 +16,17 @@ const listeners = new Set<() => void>()
 const pending = new Set<string>()
 let inflight: Promise<void> | null = null
 let bound = false
+let cacheGen = 0
 
 function notify() {
   for (const listener of listeners) listener()
+}
+
+export function clearMentionTitleCache() {
+  cacheGen += 1
+  titles.clear()
+  pending.clear()
+  notify()
 }
 
 export function peekMentionTitle(id: string) {
@@ -60,16 +68,15 @@ export function requestMentionTitles(ids: Iterable<string>) {
 function bindChange() {
   if (bound || typeof window === 'undefined') return
   bound = true
-  window.addEventListener('fsdb:change', () => {
-    titles.clear()
-    notify()
-  })
+  window.addEventListener('fsdb:change', clearMentionTitleCache)
+  window.addEventListener('biu:account-token', clearMentionTitleCache)
 }
 
 async function flushMentionTitles() {
   if (inflight) return inflight
   inflight = (async () => {
     while (pending.size) {
+      const startGen = cacheGen
       const batch = [...pending]
       pending.clear()
       const groups = new Map<string, string[]>()
@@ -94,7 +101,9 @@ async function flushMentionTitles() {
             columns: 'id,title',
           })
           const res = await apiFetch(`/api/db/list?${params}`)
+          if (cacheGen !== startGen) return
           const body = (await res.json()) as { items?: Array<Record<string, unknown>> }
+          if (cacheGen !== startGen) return
           const items = Array.isArray(body.items) ? body.items : []
           for (const row of items) {
             const recordId = String(row.id ?? '').trim()

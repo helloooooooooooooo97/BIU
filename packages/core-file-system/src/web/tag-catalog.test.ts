@@ -1,6 +1,8 @@
 import { test } from 'vitest'
 import assert from 'node:assert/strict'
-import { createTag, tagLabel, loadTags, persistTags } from './tag-catalog.ts'
+import { registerApiRequestInterceptor } from '@biu/biu-ui/api-client'
+import { createTag, tagLabel, loadTags, persistTags, pullTags } from './tag-catalog.ts'
+import { resetWorkspaceClientCaches } from './workspace-client-store.ts'
 
 test('persistTags adopts catalog only after POST succeeds', async () => {
   let release!: (value: Response) => void
@@ -91,6 +93,43 @@ test('createTag keeps the typed title as label and adopts the returned id', asyn
     assert.equal(tagLabel('tag-3'), '风险')
     assert.equal(loadTags().some((item) => item.id === 'tag-3' && item.label === '风险'), true)
   } finally {
+    globalThis.fetch = originalFetch
+  }
+})
+
+test('resetWorkspaceClientCaches clears tag-catalog memory and pullTags uses apiFetch interceptors', async () => {
+  const originalFetch = globalThis.fetch
+  const prevWs = globalThis.localStorage?.getItem('biu.workspaceId') ?? null
+  let seenWorkspaceHeader = ''
+  const unregister = registerApiRequestInterceptor((_path, init) => {
+    const headers = new Headers(init.headers)
+    headers.set('x-biu-workspace-id', 'ws-tag-test')
+    return { ...init, headers }
+  })
+  globalThis.fetch = (async (_url, init) => {
+    const headers = new Headers(init?.headers)
+    seenWorkspaceHeader = headers.get('x-biu-workspace-id') ?? ''
+    return new Response(
+      JSON.stringify({ tags: [{ id: 'ws-a-tag', label: '空间A标签', fields: [] }] }),
+      { status: 200, headers: { 'content-type': 'application/json' } },
+    )
+  }) as typeof fetch
+  try {
+    globalThis.localStorage?.setItem('biu.workspaceId', 'ws-a')
+    resetWorkspaceClientCaches()
+    await pullTags()
+    assert.equal(seenWorkspaceHeader, 'ws-tag-test')
+    assert.equal(loadTags().some((item) => item.id === 'ws-a-tag'), true)
+
+    // Switch workspace and reset caches: memory must not leak ws-a tags into ws-b
+    globalThis.localStorage?.setItem('biu.workspaceId', 'ws-b')
+    resetWorkspaceClientCaches()
+    assert.equal(loadTags().some((item) => item.id === 'ws-a-tag'), false)
+  } finally {
+    if (prevWs === null) globalThis.localStorage?.removeItem('biu.workspaceId')
+    else globalThis.localStorage?.setItem('biu.workspaceId', prevWs)
+    resetWorkspaceClientCaches()
+    unregister()
     globalThis.fetch = originalFetch
   }
 })

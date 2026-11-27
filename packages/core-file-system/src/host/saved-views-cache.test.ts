@@ -48,3 +48,29 @@ test('notifyViewCatalog clears visibleCache so renamed views immediately appear 
   assert.equal(second.items.find((item) => item.viewId === 'v-shared')?.title, '新名称')
   assert.ok(broadcasts.some((b) => b.type === 'database'))
 })
+
+test('notifyTagCatalog clears visibleCache so tag catalog changes invalidate cached list rows', async () => {
+  const ctx = new Context()
+  const db = new DatabaseService(ctx)
+  db.tags.open(':memory:')
+  let listCalls = 0
+  db.register({
+    id: 'notes',
+    path: '/notes',
+    label: '笔记',
+    schema: { fields: { title: { type: 'string', label: '标题' } } },
+    list: async () => {
+      listCalls += 1
+      return [{ id: 'n1', title: '笔记 1' }]
+    },
+    get: async () => ({ id: 'n1', title: '笔记 1' }),
+  })
+
+  await db.list('/notes')
+  await db.list('/notes')
+  assert.equal(listCalls, 1)
+
+  db.notifyTagCatalog()
+  await db.list('/notes')
+  assert.equal(listCalls, 2)
+})

@@ -91,6 +91,7 @@ import {
   emptyListHold,
   forgetListCache,
   isListColumn,
+  listCache,
   listHoldFromCache,
   overviewStampOf,
   overlayListedRow,
@@ -1346,6 +1347,7 @@ export function CollectionBrowser({
           total: listed.total,
           stat: { ...nextStat, schema: nextSchema },
           groupBuckets: buckets,
+          groupBy: reqGroupBy,
           listLimit: reqPageSize,
         },
         reqViewId,
@@ -1616,6 +1618,8 @@ export function CollectionBrowser({
     let pendingShares = false
     const onChange = (event: Event) => {
       if (event.type === FSDB_SHARES_CHANGE_EVENT) {
+        listCache.clear()
+        invalidateListReads()
         pendingShares = true
         pendingData = true
       } else {

@@ -521,6 +521,7 @@ export class DatabaseService extends Service implements Database {
   private inflightScans = new Map<string, Promise<DbRecord[]>>()
   private inflightVisible = new Map<string, Promise<VisibleSortedPack>>()
   private visibleCache = new Map<string, VisibleSortedPack>()
+  private readonly visibleCacheMax = 128
   private visibleGen = 0
   private boundAuth?: AuthorizationService
   private unbindAuth?: () => void
@@ -997,11 +998,23 @@ export class DatabaseService extends Service implements Database {
     const rules = normalizeSorts(sorts, sortField, sortDir)
     const key = `${spec.path}\t${load.trash ? 1 : 0}\t${load.q ?? ''}\t${overlay ? 1 : 0}\t${JSON.stringify(load.filter ?? {})}\t${(load.ids ?? []).join(',')}\t${JSON.stringify(rules)}\t${actorKey}`
     const cached = this.visibleCache.get(key)
-    if (cached) return cached
+    if (cached) {
+      this.visibleCache.delete(key)
+      this.visibleCache.set(key, cached)
+      return cached
+    }
     return shareInflight(this.inflightVisible, key, async () => {
       const gen = this.visibleGen
       const pack = await this.visibleSortedCollectionRowsNow(spec, query, sortField, sortDir, sorts, overlay)
-      if (gen === this.visibleGen) this.visibleCache.set(key, pack)
+      if (gen === this.visibleGen) {
+        if (this.visibleCache.has(key)) {
+          this.visibleCache.delete(key)
+        } else if (this.visibleCache.size >= this.visibleCacheMax) {
+          const oldest = this.visibleCache.keys().next().value
+          if (oldest !== undefined) this.visibleCache.delete(oldest)
+        }
+        this.visibleCache.set(key, pack)
+      }
       return pack
     })
   }
@@ -1105,6 +1118,7 @@ export class DatabaseService extends Service implements Database {
   }
 
   notifyTagCatalog() {
+    this.clearVisibleCaches()
     this.ctx.emit('database/change')
     const http = this.ctx.get('http') as { broadcast?: (type: string, payload: unknown) => void } | undefined
     http?.broadcast?.(DATABASE_CHANNEL, databaseChannelPayload('tags'))
@@ -1135,6 +1149,7 @@ export class DatabaseService extends Service implements Database {
   }
 
   notifyContent(path: string) {
+    this.clearVisibleCaches()
     const http = this.ctx.get('http') as { broadcast?: (type: string, payload: unknown) => void } | undefined
     http?.broadcast?.(DATABASE_CHANNEL, databaseChannelPayload('content', { path }))
   }

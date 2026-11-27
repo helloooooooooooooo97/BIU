@@ -6,7 +6,7 @@ import type {
 } from '@biu/type-file-system'
 import { parseAppPath } from '@biu/web-session-view'
 import { stampRecordId } from '../catalog-views.ts'
-import { DATA_MODULE } from './database-path.ts'
+import { DATA_COLLECTION_PATH, DATA_MODULE } from './database-path.ts'
 import { BoundedMap } from './bounded-map.ts'
 import { registerWorkspaceCache } from './workspace-client-store.ts'
 import {
@@ -111,15 +111,30 @@ export type ListCacheSnap = {
   total: number
   stat: StatResult | null
   groupBuckets?: GroupBucket[]
+  groupBy?: string
   listLimit?: number
 }
-export const listCache = new BoundedMap<string, ListCacheSnap>(80)
+export const listCache = new BoundedMap<string, ListCacheSnap>(LIST_CACHE_MAX)
 registerWorkspaceCache('browser-list-cache', () => {
   listCache.clear()
 })
 
 export function listCacheKey(path: string, viewId?: string | null) {
   return `${path}\0${viewId ?? ''}`
+}
+
+function forgetExactPathCache(path: string, keepKey?: string) {
+  for (const key of [...listCache.keys()]) {
+    if (keepKey && key === keepKey) continue
+    if (key === path || key.startsWith(`${path}\0`)) listCache.delete(key)
+  }
+}
+
+function forgetDerivedOverviewCache(path: string) {
+  const basePath = path.split('\0')[0] ?? path
+  if (basePath !== DATA_COLLECTION_PATH && basePath !== TRASH_COLLECTION_PATH) {
+    forgetExactPathCache(DATA_COLLECTION_PATH)
+  }
 }
 
 export function peekListCache(path: string, viewId?: string | null, minLimit?: number) {
@@ -138,19 +153,33 @@ export function bucketsReadyToCache(buckets?: GroupBucket[]) {
 export function rememberListCache(path: string, snap: ListCacheSnap, viewId?: string | null) {
   if (!bucketsReadyToCache(snap.groupBuckets)) return
   const key = listCacheKey(path, viewId)
-  if (listCache.has(key)) listCache.delete(key)
   listCache.set(key, snap)
-  while (listCache.size > LIST_CACHE_MAX) {
-    const first = listCache.keys().next().value
-    if (first === undefined) break
-    listCache.delete(first)
-  }
 }
 
 export function forgetListCache(path: string) {
-  for (const key of [...listCache.keys()]) {
-    if (key === path || key.startsWith(`${path}\0`)) listCache.delete(key)
+  forgetExactPathCache(path)
+  forgetDerivedOverviewCache(path)
+}
+
+/** 服务端 WebSocket 推送数据/标签变更时，同步失效前端列表缓存，避免切表或退出详情页时读到陈旧快照。 */
+export function invalidateListCacheForFsdbChange(change: { scope?: string; path?: string } | null | undefined) {
+  if (!change) return
+  if (change.scope === 'tags') {
+    listCache.clear()
+    return
   }
+  if (change.scope !== 'records') return
+  const raw = String(change.path ?? '').trim()
+  if (!raw) {
+    listCache.clear()
+    return
+  }
+  const firstSegment = raw.split('/').filter(Boolean)[0]
+  if (!firstSegment) {
+    listCache.clear()
+    return
+  }
+  forgetListCache(`/${firstSegment}`)
 }
 
 export function sameSavedViews(a: SavedView[], b: SavedView[]) {
@@ -282,12 +311,14 @@ export function patchListCacheRecords(path: string, map: (row: DbRecord) => DbRe
     if (key !== path && !key.startsWith(`${path}\0`)) continue
     const snap = listCache.get(key)
     if (!snap) continue
+    // 每个视图快照各自按自身的 groupBy 重排分组，绝不用当前视图的 groupBy 破坏兄弟视图的 groupBuckets。
+    const effectiveGroupBy = snap.groupBy !== undefined ? snap.groupBy : groupBy
     listCache.set(key, {
       ...snap,
       items: snap.items.map((row) => map(row) as (typeof snap.items)[number]),
       groupBuckets: snap.groupBuckets
-        ? groupBy
-          ? remapGroupedRecords(snap.groupBuckets, map, groupBy)
+        ? effectiveGroupBy
+          ? remapGroupedRecords(snap.groupBuckets, map, effectiveGroupBy)
           : snap.groupBuckets.map((group) => ({
               ...group,
               rows: group.rows.map(map),
@@ -295,6 +326,7 @@ export function patchListCacheRecords(path: string, map: (row: DbRecord) => DbRe
         : snap.groupBuckets,
     })
   }
+  forgetDerivedOverviewCache(path)
 }
 
 export function dropListCacheRecords(path: string, ids: string[]) {
@@ -325,6 +357,7 @@ export function dropListCacheRecords(path: string, ids: string[]) {
       groupBuckets,
     })
   }
+  forgetDerivedOverviewCache(path)
 }
 
 export function seedListCacheSnap(row: DbRecord, groupBy?: string): ListCacheSnap {
@@ -333,28 +366,33 @@ export function seedListCacheSnap(row: DbRecord, groupBy?: string): ListCacheSna
     items: [row],
     total: 1,
     stat: null,
+    groupBy: groupBy ?? '',
     groupBuckets: groupBy ? [{ key, label: key || '未填', rows: [row], total: 1 }] : [],
   }
 }
 
 export function upsertListCacheRecord(path: string, row: DbRecord, groupBy?: string, viewId?: string | null) {
+  const targetKey = listCacheKey(path, viewId)
+  // 新建记录无法准确预测兄弟视图的筛选与排序，直接失效兄弟视图与 /data 总览，避免切过去读到旧快照。
+  forgetExactPathCache(path, targetKey)
+  forgetDerivedOverviewCache(path)
   const snap = peekListCache(path, viewId)
-  if (!snap) {
-    rememberListCache(path, seedListCacheSnap(row, groupBy), viewId)
-    return
-  }
+  // 目标视图尚未缓存时，不再伪造 total=1 的冷缓存快照（避免例如回收站首帧只显示 1 条、遮蔽历史数据）。
+  if (!snap) return
   if (snap.items.some((item) => item.id === row.id)) {
-    patchListCacheRecords(path, (item) => (item.id === row.id ? overlayListedRow(item, row) : item))
+    patchListCacheRecords(path, (item) => (item.id === row.id ? overlayListedRow(item, row) : item), groupBy)
     return
   }
-  const groupBuckets = placeCreatedRow(snap.groupBuckets ?? [], row, groupBy ?? '')
+  const effectiveGroupBy = snap.groupBy !== undefined ? snap.groupBy : groupBy ?? ''
+  const groupBuckets = placeCreatedRow(snap.groupBuckets ?? [], row, effectiveGroupBy)
   rememberListCache(
     path,
     {
       ...snap,
       items: [row, ...snap.items],
       total: snap.total + 1,
-      groupBuckets: groupBuckets.length ? groupBuckets : seedListCacheSnap(row, groupBy).groupBuckets,
+      groupBy: effectiveGroupBy,
+      groupBuckets: groupBuckets.length ? groupBuckets : seedListCacheSnap(row, effectiveGroupBy).groupBuckets,
     },
     viewId,
   )
@@ -410,8 +448,8 @@ function listedCrumbRow(row: DbRecord) {
   return {
     id: String(row.id),
     label: crumbRecordLabel(row),
-    emoji: recordPreviewEmoji(row),
-    mascot: recordPreviewMascot(row),
+    ...('emoji' in row ? { emoji: recordPreviewEmoji(row) } : {}),
+    ...('mascot' in row ? { mascot: recordPreviewMascot(row) } : {}),
   }
 }
 

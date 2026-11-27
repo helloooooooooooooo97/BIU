@@ -45,8 +45,8 @@ export function rememberRecords(collectionPath: string, rows: CrumbRecord[], vie
       ...last,
       ...row,
       label: keepCrumbLabel(row, last),
-      emoji: row.emoji || last?.emoji,
-      mascot: row.mascot ?? last?.mascot,
+      emoji: row.emoji !== undefined ? row.emoji : last?.emoji,
+      mascot: row.mascot !== undefined ? row.mascot : last?.mascot,
     }
     memoryRecordMeta.set(recordMetaKey(collectionPath, row.id), next)
     return next
@@ -68,8 +68,8 @@ export function applyListedCrumbMutation(
       ...last,
       ...mutation.row,
       label: keepCrumbLabel(mutation.row, last),
-      emoji: mutation.row.emoji || last?.emoji,
-      mascot: mutation.row.mascot ?? last?.mascot,
+      emoji: mutation.row.emoji !== undefined ? mutation.row.emoji : last?.emoji,
+      mascot: mutation.row.mascot !== undefined ? mutation.row.mascot : last?.mascot,
     }
     memoryRecordMeta.set(recordMetaKey(path, mutation.row.id), next)
     for (const [key, rows] of memoryRecords) {

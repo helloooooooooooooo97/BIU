@@ -8,6 +8,7 @@ import { PickOption, PickPanel } from '@biu/biu-ui/db-search'
 import { AGENTS_COLLECTION_PATH, WORKSPACE_MEMBERS_COLLECTION_PATH } from './database-path.ts'
 import { listCollection } from './db-client.ts'
 import { showRecordInInspector } from './inspector-db-route.ts'
+import { registerWorkspaceCache } from './workspace-client-store.ts'
 import { useWorkspaceProfile } from '@biu/biu-ui/use-workspace-profile'
 import { profileDisplayName } from '@biu/biu-ui/workspace-profile'
 
@@ -39,16 +40,27 @@ let memberDirCache: Map<string, MemberPerson> | null = null
 let memberDirLoadedAt = 0
 let memberDirInflight: Promise<Map<string, MemberPerson>> | null = null
 
+let cacheGen = 0
+
 function invalidateMembersCache() {
+  cacheGen += 1
+  agentsListed = null
+  agentsListedAt = 0
+  agentsInflight = null
   membersListed = null
   membersListedAt = 0
+  membersInflight = null
   memberDirCache = null
   memberDirLoadedAt = 0
+  memberDirInflight = null
 }
+
+registerWorkspaceCache('person-cell', invalidateMembersCache)
 
 function loadMemberDirectory(): Promise<Map<string, MemberPerson>> {
   if (memberDirCache && Date.now() - memberDirLoadedAt < MEMBERS_TTL_MS) return Promise.resolve(memberDirCache)
   if (memberDirInflight) return memberDirInflight
+  const startGen = cacheGen
   const params = new URLSearchParams({
     path: WORKSPACE_MEMBERS_COLLECTION_PATH,
     limit: '500',
@@ -67,13 +79,15 @@ function loadMemberDirectory(): Promise<Map<string, MemberPerson>> {
         const avatar = typeof item.avatar === 'string' ? item.avatar.trim() : ''
         map.set(id, { id, name, email, ...(avatar ? { avatar } : {}) })
       }
-      memberDirCache = map
-      memberDirLoadedAt = Date.now()
+      if (cacheGen === startGen) {
+        memberDirCache = map
+        memberDirLoadedAt = Date.now()
+      }
       return map
     })
     .catch(() => new Map<string, MemberPerson>())
     .finally(() => {
-      memberDirInflight = null
+      if (memberDirInflight === req) memberDirInflight = null
     })
   memberDirInflight = req
   return req
@@ -128,6 +142,7 @@ function openPersonInInspector(person: PersonValue) {
 export async function loadAgents(): Promise<ChatPerson[]> {
   if (agentsListed && Date.now() - agentsListedAt < AGENTS_TTL_MS) return agentsListed
   if (agentsInflight) return agentsInflight
+  const startGen = cacheGen
   const request = listCollection({
     path: AGENTS_COLLECTION_PATH,
     limit: 500,
@@ -150,12 +165,14 @@ export async function loadAgents(): Promise<ChatPerson[]> {
             ...(mascot ? { mascot } : {}),
           }
         })
-      agentsListed = rows
-      agentsListedAt = Date.now()
+      if (cacheGen === startGen) {
+        agentsListed = rows
+        agentsListedAt = Date.now()
+      }
       return rows
     })
     .finally(() => {
-      agentsInflight = null
+      if (agentsInflight === request) agentsInflight = null
     })
   agentsInflight = request
   return request
@@ -164,6 +181,7 @@ export async function loadAgents(): Promise<ChatPerson[]> {
 export async function loadMembers(): Promise<MemberPerson[]> {
   if (membersListed && Date.now() - membersListedAt < MEMBERS_TTL_MS) return membersListed
   if (membersInflight) return membersInflight
+  const startGen = cacheGen
   const request = listCollection({
     path: WORKSPACE_MEMBERS_COLLECTION_PATH,
     limit: 500,
@@ -181,17 +199,15 @@ export async function loadMembers(): Promise<MemberPerson[]> {
           const avatar = typeof item.avatar === 'string' ? item.avatar.trim() : ''
           return { id, name, email, ...(avatar ? { avatar } : {}) }
         })
-      membersListed = rows
-      membersListedAt = Date.now()
+      if (cacheGen === startGen) {
+        membersListed = rows
+        membersListedAt = Date.now()
+      }
       return rows
     })
-    .catch(() => {
-      membersListed = []
-      membersListedAt = Date.now()
-      return []
-    })
+    .catch(() => [])
     .finally(() => {
-      membersInflight = null
+      if (membersInflight === request) membersInflight = null
     })
   membersInflight = request
   return request

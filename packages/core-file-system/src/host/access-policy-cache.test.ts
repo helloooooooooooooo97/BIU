@@ -91,4 +91,37 @@ describe('DatabaseAccessPolicy multi-tenant bounded LRU caches', () => {
       assert.equal(ids.has('shared-in-a'), false)
     })
   })
+
+  it('markPublicView immediately invalidates recordShareIds cache', () => {
+    const records: Array<{ kind: string; collection: string; recordId: string }> = []
+    const store: WorkspaceFiles = {
+      activeWorkspaceId: () => 'ws-a',
+      membership: () => ({ active: 'ws-a', home: 'ws-a', mine: new Set(), any: new Set() }),
+      attach: () => {},
+    }
+    const host = {
+      tags: {} as AccessPolicyHost['tags'],
+      shares: {
+        list: () => records,
+        listRecords: () => records,
+        upsert: (entry: { kind: string; collection: string; recordId: string }) => {
+          records.push(entry)
+        },
+      } as unknown as AccessPolicyHost['shares'],
+      collabStore: () => store,
+      authorization: () => undefined,
+      deviceWorkspace: () => false,
+      markDeviceRecord: () => {},
+      collection: () => undefined,
+      schemaFor: () => ({ fields: {} }) as ReturnType<AccessPolicyHost['schemaFor']>,
+      applyTagOverlay: (_spec: unknown, row: Record<string, unknown>) => row,
+    } as unknown as AccessPolicyHost
+
+    const policy = new DatabaseAccessPolicy(host)
+    runWithRequestWorkspace('ws-a', () => {
+      assert.equal(policy.hasPublicShare('/pages', 'p1'), false)
+      policy.markPublicView('/pages', 'p1')
+      assert.equal(policy.hasPublicShare('/pages', 'p1'), true)
+    })
+  })
 })
