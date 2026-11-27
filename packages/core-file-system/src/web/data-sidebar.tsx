@@ -88,7 +88,7 @@ const RecordEmojiBoard = lazy(() => import('@biu/biu-ui/emoji-board').then((m) =
 
 const DATA_SECTION_FAV = 'fsdb.section.fav'
 const DATA_SECTION_USER = 'fsdb.section.user'
-const DATA_SECTION_STORE = 'fsdb.section.store'
+const DATA_SECTION_PUBLIC = 'fsdb.section.public'
 
 function SectionHead({
   label,
@@ -693,10 +693,10 @@ export const DataSidebar = memo(function DataSidebar({
   const listedTables = useMemo(() => {
     const visible = tables.filter((table) => table.view?.sidebar !== false)
     const raw = visible.length ? visible : ([{ path: collectionPath, label: title, view: { title } }] as CollectionInfo[])
-    const { user, system, store } = sortDataCollections(raw)
-    return [...user, ...system, ...store]
+    const { user, system, public: publicTables } = sortDataCollections(raw)
+    return [...user, ...system, ...publicTables]
   }, [collectionPath, tables, title])
-  const { user: userTables, system: systemTables, store: storeTables } = useMemo(() => sortDataCollections(listedTables), [listedTables])
+  const { user: userTables, system: systemTables, public: publicTables } = useMemo(() => sortDataCollections(listedTables), [listedTables])
   const [openTables, setOpenTables] = useState<Record<string, boolean>>({})
   const toggleTableOpen = (tableStateKey: string) => {
     setOpenTables((prev) => ({ ...prev, [tableStateKey]: !prev[tableStateKey] }))
@@ -717,7 +717,7 @@ export const DataSidebar = memo(function DataSidebar({
   const toggleSection = useSidebarCollapseStore((state) => state.toggle)
   const favOpen = collapsedSections[DATA_SECTION_FAV] !== true
   const userOpen = collapsedSections[DATA_SECTION_USER] !== true
-  const storeOpen = collapsedSections[DATA_SECTION_STORE] !== true
+  const publicOpen = collapsedSections[DATA_SECTION_PUBLIC] !== true
   const [expandedViewKeyLocal, setExpandedViewKeyLocal] = useState<string | null>(null)
   const expandedViewKey = expandedViewKeyProp !== undefined ? expandedViewKeyProp : expandedViewKeyLocal
   const setExpandedViewKey = onExpandedViewKeyChange ?? setExpandedViewKeyLocal
@@ -1038,7 +1038,7 @@ export const DataSidebar = memo(function DataSidebar({
     return () => onDeleteView(view, path)
   }
 
-  function renderTableRows(rows: CollectionInfo[], group: 'user' | 'system' | 'store' = 'system') {
+  function renderTableRows(rows: CollectionInfo[], group: 'user' | 'system' | 'public' = 'system') {
     return rows.map((table) => {
       const name = table.view?.title ?? table.label
       const tableStateKey = `${group}:${table.path}`
@@ -1354,17 +1354,17 @@ export const DataSidebar = memo(function DataSidebar({
 
           <section className="min-w-0">
             <SectionHead
-              label="商店数据"
-              count={storeTables.length}
-              open={storeOpen}
-              title="展开或收起商店数据"
-              testId="sidebar-store-home"
-              onToggle={() => toggleSection(DATA_SECTION_STORE)}
+              label="公共数据"
+              count={publicTables.length}
+              open={publicOpen}
+              title="展开或收起公共数据"
+              testId="sidebar-public-home"
+              onToggle={() => toggleSection(DATA_SECTION_PUBLIC)}
             />
-            <SidebarFold open={storeOpen}>
-              <div className="flex min-w-0 flex-col gap-px" data-testid="sidebar-store-collections">
-                {storeTables.length ? renderTableRows(storeTables, 'store') : (
-                  <div className="px-1 py-1 text-[12px] text-(--biu-color-text-subtle)">还没有商店数据</div>
+            <SidebarFold open={publicOpen}>
+              <div className="flex min-w-0 flex-col gap-px" data-testid="sidebar-public-collections">
+                {publicTables.length ? renderTableRows(publicTables, 'public') : (
+                  <div className="px-1 py-1 text-[12px] text-(--biu-color-text-subtle)">还没有公共数据</div>
                 )}
               </div>
             </SidebarFold>

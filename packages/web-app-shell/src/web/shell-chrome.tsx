@@ -6,7 +6,7 @@ import { syncWorkspaceEndpoint } from '@biu/biu-ui/workspace-transport'
 import { lazy, Suspense, useCallback, useEffect, useRef, useState, useSyncExternalStore, type ReactNode, type Ref } from 'react'
 import { createPortal } from 'react-dom'
 import { useLocation, useNavigate } from 'react-router-dom'
-import { ArrowPathIcon, ArrowRightStartOnRectangleIcon, BellIcon, BuildingStorefrontIcon, ChatBubbleLeftRightIcon, CheckIcon, ChevronDownIcon, ChevronRightIcon, CircleStackIcon, ClipboardDocumentIcon, CloudIcon, ComputerDesktopIcon, Cog6ToothIcon, CameraIcon, EyeIcon, EyeSlashIcon, MagnifyingGlassIcon, PlusIcon, XMarkIcon } from '@heroicons/react/16/solid'
+import { ArrowPathIcon, ArrowRightStartOnRectangleIcon, BellIcon, ChatBubbleLeftRightIcon, CheckIcon, ChevronDownIcon, ChevronRightIcon, CircleStackIcon, ClipboardDocumentIcon, CloudIcon, ComputerDesktopIcon, Cog6ToothIcon, CameraIcon, EyeIcon, EyeSlashIcon, MagnifyingGlassIcon, PlusIcon, XMarkIcon } from '@heroicons/react/16/solid'
 import { AnchorMenu } from '@biu/biu-ui/anchor-menu'
 import {
   AI_AVATAR_THEMES,
@@ -3345,16 +3345,12 @@ export function ShellSidePlaces({
   activeId,
   agentHref,
   onSettings,
-  onStore,
-  storeOpen = false,
   onSearch,
   searchOpen = false,
 }: {
   activeId: string
   agentHref: string
   onSettings: () => void
-  onStore?: () => void
-  storeOpen?: boolean
   onSearch?: () => void
   searchOpen?: boolean
 }) {
@@ -3382,16 +3378,6 @@ export function ShellSidePlaces({
         testId="chrome-settings"
         icon={<Cog6ToothIcon {...chromeIcon} />}
         onClick={onSettings}
-      />
-      <SideAction
-        title="商店"
-        active={storeOpen}
-        testId="chrome-store"
-        icon={<BuildingStorefrontIcon {...chromeIcon} />}
-        onClick={() => {
-          setNotifyOpen(false)
-          onStore?.()
-        }}
       />
       <SideAction
         title="会话"
