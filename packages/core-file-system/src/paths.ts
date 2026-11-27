@@ -26,36 +26,6 @@ const SYSTEM_COLLECTION_ORDER = [
 /** 组件和标签仍是反查索引（每人一份、没有分享）。 */
 const INDEX_COLLECTION_ORDER = [PAGE_BLOCKS_COLLECTION_PATH, TAGS_COLLECTION_PATH] as const
 
-export type CollectionTableMode = 'standard' | 'workspace-only' | 'personal-only' | 'derived'
-
-const WORKSPACE_ONLY_COLLECTIONS = new Set<string>([
-  WORKSPACE_MEMBERS_COLLECTION_PATH,
-  PLUGINS_COLLECTION_PATH,
-])
-
-const PERSONAL_ONLY_COLLECTIONS = new Set<string>([
-  NOTICES_COLLECTION_PATH,
-])
-
-const DERIVED_COLLECTIONS = new Set<string>([
-  PAGE_BLOCKS_COLLECTION_PATH,
-  COMMENTS_COLLECTION_PATH,
-  TRASH_COLLECTION_PATH,
-  DATA_COLLECTION_PATH,
-  TAGS_COLLECTION_PATH,
-  VIEWS_COLLECTION_PATH,
-])
-
-/** 集合的逻辑表形态：workspace-only（仅空间表）、personal-only（仅个人表）、derived（派生跟随源记录）、standard（单张逻辑表）。 */
-export function tableModeFor(path: string, explicit?: CollectionTableMode): CollectionTableMode {
-  if (explicit) return explicit
-  const normalized = normalizeCollectionPath(path)
-  if (WORKSPACE_ONLY_COLLECTIONS.has(normalized)) return 'workspace-only'
-  if (PERSONAL_ONLY_COLLECTIONS.has(normalized)) return 'personal-only'
-  if (DERIVED_COLLECTIONS.has(normalized)) return 'derived'
-  return 'standard'
-}
-
 /** 成员、视图、通知、回收站由系统维护。会话事件不进文件系统。 */
 export function isSystemCollection(path: string) {
   const normalized = normalizeCollectionPath(path)

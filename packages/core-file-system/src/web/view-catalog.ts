@@ -120,10 +120,6 @@ function named(items: Array<Partial<ViewCatalogOption> & { id: string; name: str
   return out
 }
 
-function withBuiltin(builtin: ViewCatalogOption, rest: ViewCatalogOption[]) {
-  return named([builtin, ...rest.filter((item) => item.id !== builtin.id)])
-}
-
 function contentIcon(id: string): ViewCatalogIcon {
   if (id === 'outline') return 'outline'
   if (id === 'table') return 'table'

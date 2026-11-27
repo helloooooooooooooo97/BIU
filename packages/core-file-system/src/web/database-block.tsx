@@ -6,6 +6,7 @@ import { CollectionBrowser } from './browser.tsx'
 import { DATA_COLLECTION_PATH, sortDataCollections } from './database-path.ts'
 import { getDatabaseUi } from './database-ui.ts'
 import { loadRootCollections, peekRootCollections } from './db-client.ts'
+import { assetEtag } from './record-sandboxes.ts'
 import { showRecordInInspector } from './inspector-db-route.ts'
 import { normalizeSavedView, type SavedView } from './saved-view.ts'
 
@@ -31,10 +32,6 @@ export function newDatabaseBlockFile() {
 
 function assetName(file: string) {
   return String(file ?? '').trim().replace(/^assets\//, '')
-}
-
-function assetEtag(raw: string) {
-  return raw.replace(/^W\//, '').replaceAll('"', '')
 }
 
 function resolvePageResourcePath(el: HTMLElement | null) {

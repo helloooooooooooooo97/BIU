@@ -2,7 +2,7 @@ import { test } from 'vitest'
 import assert from 'node:assert/strict'
 import type { CollectionSchema } from '@biu/type-file-system'
 import { REQUIRED_RECORD_FIELDS, normalizeSchemaPack, normalizeSchemaValue, parseAtomicFields } from '@biu/type-file-system'
-import { actionWhenKeys, columnHeadTip, defaultColumnKeys, tagFlatColumnKey, flattenTagColumns, tagColumnHeadLabel, tagColumnTagTip, tagColumnTitle, inferPackFieldType, hasMissingProjectedColumns, listProjectionKeys, parseTagFlatColumnKey, patchTagFlatValue, pinActionColumn, pinLabelColumn, contentFieldKey, flattenTree, formatField, fieldHasValue, fieldValueOptions, filterFieldValueOptions, GROUP_STRATEGIES, groupField, groupListFilter, groupListKeys, groupRecords, groupableFields, hasTreeLinks, treeChildren, isGroupableKind, isViewModeId, matchActionWhen, mergeListFilters, overlayListed, previewActionRecord, parentFieldKey, readTagFlatValue, recordGroupLabels, recordLinkIds, resolveFieldType, uniqueValues } from './fields'
+import { actionWhenKeys, columnHeadTip, defaultColumnKeys, tagFlatColumnKey, flattenTagColumns, tagColumnHeadLabel, tagColumnTagTip, tagColumnTitle, inferPackFieldType, hasMissingProjectedColumns, listProjectionKeys, parseTagFlatColumnKey, patchTagFlatValue, pinActionColumn, pinLabelColumn, contentFieldKey, flattenTree, formatField, fieldHasValue, fieldValueOptions, filterFieldValueOptions, GROUP_STRATEGIES, groupField, groupListFilter, groupListKeys, groupRecords, groupableFields, hasTreeLinks, treeChildren, isGroupableKind, isViewModeId, matchActionWhen, mergeListFilters, overlayListed, parentFieldKey, readTagFlatValue, recordGroupLabels, recordLinkIds, resolveFieldType, uniqueValues } from './fields'
 import { placedActions, visibleActions } from './fsdb-cells.tsx'
 
 test('isViewModeId accepts builtin and custom slugs', () => {
@@ -119,18 +119,6 @@ test('overlayListed clears omitted false flags from sparse list rows', () => {
   assert.equal(overlayListed(base, { ...listed, running: true }).running, true)
 })
 
-test('previewActionRecord flips running from action when', () => {
-  const row = { id: '1', installed: true, running: false }
-  assert.equal(previewActionRecord(row, { when: { installed: true, running: false } }).running, true)
-  assert.equal(previewActionRecord({ ...row, running: true }, { when: { installed: true, running: true } }).running, false)
-  assert.equal(previewActionRecord(row, { when: { installed: true } }), row)
-  const gone = previewActionRecord({ ...row, running: true, enabled: true }, { id: 'uninstall', when: { installed: true } })
-  assert.equal(gone.installed, false)
-  assert.equal(gone.running, false)
-  assert.equal(gone.enabled, false)
-  assert.equal(previewActionRecord({ id: 'draft', sandbox: true }, { id: 'pack', when: { sandbox: true } }).installed, true)
-})
-
 test('installed plugin actions show run or stop with uninstall, and install only after uninstall', () => {
   const schema: CollectionSchema = {
     fields: { ...REQUIRED_RECORD_FIELDS },
@@ -147,8 +135,10 @@ test('installed plugin actions show run or stop with uninstall, and install only
     visibleActions(schema, { ...installed, running: false }, 'row').map((item) => item.id),
     ['start', 'uninstall'],
   )
-  const removed = previewActionRecord(installed, { id: 'uninstall', when: { installed: true } })
-  assert.deepEqual(visibleActions(schema, removed, 'row').map((item) => item.id), ['pack'])
+  assert.deepEqual(
+    visibleActions(schema, { ...installed, installed: false, running: false, enabled: false }, 'row').map((item) => item.id),
+    ['pack'],
+  )
   assert.deepEqual(
     visibleActions(schema, { id: 'draft', sandbox: true }, 'row').map((item) => item.id),
     ['pack'],

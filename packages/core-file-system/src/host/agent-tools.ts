@@ -79,7 +79,6 @@ export type DatabaseToolsTarget = {
   editDoc(path: string, args?: Record<string, unknown>): Promise<unknown>
 }
 
-const PATH_PARAM = { type: 'object', properties: { path: { type: 'string' } }, required: ['path'] } as const
 const agentDbCompact = new AgentDbCompact()
 
 function rowFromToolResult(result: unknown): Record<string, unknown> | undefined {

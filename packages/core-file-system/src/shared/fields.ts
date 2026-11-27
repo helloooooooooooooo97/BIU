@@ -792,22 +792,6 @@ export function groupRowBucketKeys(
   return keys.length ? keys : ['']
 }
 
-export function previewActionRecord(row: DbRecord, action: { id?: string; when?: Record<string, unknown> }): DbRecord {
-  if (action.id === 'uninstall' || action.id === 'delete' || action.id === 'remove') {
-    if (row.installed === false && row.running !== true && row.enabled !== true) return row
-    return { ...row, installed: false, running: false, enabled: false }
-  }
-  if (action.id === 'pack') {
-    if (row.installed === true) return row
-    return { ...row, installed: true }
-  }
-  const when = action.when
-  if (!when || !('running' in when) || typeof when.running !== 'boolean') return row
-  const running = when.running === false
-  if (Object.is(row.running, running)) return row
-  return { ...row, running }
-}
-
 export function overlayListed(base: DbRecord, listed: DbRecord, projected?: string[] | null): DbRecord {
   let changed = false
   const next: DbRecord = { ...base }

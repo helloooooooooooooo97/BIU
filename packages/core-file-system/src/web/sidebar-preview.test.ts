@@ -6,9 +6,7 @@ import {
   getPreviewTotal,
   nextPreviewLimit,
   normalizeRecordEmoji,
-  orderViewTotalJobs,
   shouldFetchViewPreview,
-  shouldFetchViewTotal,
   previewCacheKey,
   previewColumns,
   recordPreviewLabel,
@@ -19,7 +17,6 @@ import {
   invalidatePreviewTotals,
   SIDEBAR_PREVIEW_PAGE,
   VIEW_PREVIEW_IDLE_MS,
-  VIEW_TOTAL_IDLE_MS,
   isPaintedListReady,
   markPaintedListReady,
   resetPaintedListReady,
@@ -103,16 +100,7 @@ test('sidebar preview does not refetch the currently painted view', () => {
   )
 })
 
-test('shouldFetchViewTotal skips only the currently open view on the active collection', () => {
-  const all = { id: 'all' }
-  const user = { id: 'mine' }
-  assert.equal(shouldFetchViewTotal({ path: '/editor-blocks', view: all, collectionPath: '/editor-blocks', activeViewId: all.id }), false)
-  assert.equal(shouldFetchViewTotal({ path: '/editor-blocks', view: user, collectionPath: '/editor-blocks', activeViewId: all.id }), true)
-  assert.equal(shouldFetchViewTotal({ path: '/editor-blocks', view: all, collectionPath: '/tasks', activeViewId: all.id }), true)
-})
-
-test('view totals wait past first paint so ready is not blocked', () => {
-  assert.equal(VIEW_TOTAL_IDLE_MS, 2800)
+test('view preview waits past first paint so ready is not blocked', () => {
   assert.equal(VIEW_PREVIEW_IDLE_MS, 800)
   const src = readFileSync(resolve(import.meta.dirname, './sidebar-preview.ts'), 'utf8')
   assert.doesNotMatch(src, /setTimeout\(run, 8000\)/)
@@ -128,12 +116,4 @@ test('sidebar preview waits until the painted list is marked ready', () => {
   assert.equal(isPaintedListReady(), true)
   resetPaintedListReady()
   assert.equal(isPaintedListReady(), false)
-})
-
-test('view total jobs put the open collection first and keep the rest stable', () => {
-  const jobs = [{ path: '/pages' }, { path: '/tasks' }, { path: '/pages' }, { path: '/skills' }]
-  assert.deepEqual(
-    orderViewTotalJobs(jobs, '/tasks').map((job) => job.path),
-    ['/tasks', '/pages', '/pages', '/skills'],
-  )
 })
