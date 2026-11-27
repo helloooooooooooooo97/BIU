@@ -66,7 +66,7 @@ test('members and views are system collections; blocks and tags are index data',
   assert.equal(isSystemCollection('/notices'), true)
   assert.equal(isSystemCollection('/trash'), true)
   assert.equal(isSystemCollection('/agents'), false)
-  const { user, index, system } = sortDataCollections([
+  const { user, system, store } = sortDataCollections([
     { path: '/workspace-members' },
     { path: '/plugins' },
     { path: '/views' },
@@ -83,15 +83,15 @@ test('members and views are system collections; blocks and tags are index data',
   ])
   assert.deepEqual(
     user.map((item) => item.path),
-    ['/agents', '/pages', '/tags', '/plugins'],
-  )
-  assert.deepEqual(
-    index.map((item) => item.path),
-    ['/tasks', '/mcp', '/skills', '/editor-blocks', '/views'],
+    ['/agents', '/tasks', '/pages', '/tags', '/editor-blocks'],
   )
   assert.deepEqual(
     system.map((item) => item.path),
-    ['/workspace-members', '/notices', '/trash'],
+    ['/workspace-members', '/views', '/notices', '/trash'],
+  )
+  assert.deepEqual(
+    store.map((item) => item.path),
+    ['/plugins', '/mcp', '/skills'],
   )
 })
 

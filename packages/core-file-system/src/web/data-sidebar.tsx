@@ -26,7 +26,7 @@ import { BoundedMap } from './bounded-map.ts'
 import { registerWorkspaceCache } from './workspace-client-store.ts'
 import { groupField, groupRecords, parentFieldKey, treeChildren } from './fields.ts'
 import type { DataScope } from '../catalog-views.ts'
-import { DATA_COLLECTION_PATH, TRASH_COLLECTION_PATH, WORKSPACE_MEMBERS_COLLECTION_PATH, isPersonalOnlyCollection, normalizeCollectionPath } from '../paths.ts'
+import { DATA_COLLECTION_PATH, TRASH_COLLECTION_PATH, WORKSPACE_MEMBERS_COLLECTION_PATH, isIndexCollection, isPersonalOnlyCollection, normalizeCollectionPath } from '../paths.ts'
 import { dataSidebarKind, isRecordTreeCollection, sortDataCollections } from './database-path.ts'
 import { rememberInspectorWorkingView } from './inspector-db-route.ts'
 import { readJson } from './db-client.ts'
@@ -88,7 +88,7 @@ const RecordEmojiBoard = lazy(() => import('@biu/biu-ui/emoji-board').then((m) =
 
 const DATA_SECTION_FAV = 'fsdb.section.fav'
 const DATA_SECTION_USER = 'fsdb.section.user'
-const DATA_SECTION_INDEX = 'fsdb.section.index'
+const DATA_SECTION_STORE = 'fsdb.section.store'
 
 function SectionHead({
   label,
@@ -693,10 +693,10 @@ export const DataSidebar = memo(function DataSidebar({
   const listedTables = useMemo(() => {
     const visible = tables.filter((table) => table.view?.sidebar !== false)
     const raw = visible.length ? visible : ([{ path: collectionPath, label: title, view: { title } }] as CollectionInfo[])
-    const { user, index, system } = sortDataCollections(raw)
-    return [...user, ...index, ...system]
+    const { user, system, store } = sortDataCollections(raw)
+    return [...user, ...system, ...store]
   }, [collectionPath, tables, title])
-  const { user: userTables, index: indexTables, system: systemTables } = useMemo(() => sortDataCollections(listedTables), [listedTables])
+  const { user: userTables, system: systemTables, store: storeTables } = useMemo(() => sortDataCollections(listedTables), [listedTables])
   const [openTables, setOpenTables] = useState<Record<string, boolean>>({})
   const toggleTableOpen = (tableStateKey: string) => {
     setOpenTables((prev) => ({ ...prev, [tableStateKey]: !prev[tableStateKey] }))
@@ -717,7 +717,7 @@ export const DataSidebar = memo(function DataSidebar({
   const toggleSection = useSidebarCollapseStore((state) => state.toggle)
   const favOpen = collapsedSections[DATA_SECTION_FAV] !== true
   const userOpen = collapsedSections[DATA_SECTION_USER] !== true
-  const indexOpen = collapsedSections[DATA_SECTION_INDEX] !== true
+  const storeOpen = collapsedSections[DATA_SECTION_STORE] !== true
   const [expandedViewKeyLocal, setExpandedViewKeyLocal] = useState<string | null>(null)
   const expandedViewKey = expandedViewKeyProp !== undefined ? expandedViewKeyProp : expandedViewKeyLocal
   const setExpandedViewKey = onExpandedViewKeyChange ?? setExpandedViewKeyLocal
@@ -936,7 +936,7 @@ export const DataSidebar = memo(function DataSidebar({
       Icon = UserGroupIcon
       tip = '纯空间数据 · 空间成员共享'
     } else if (
-      dataSidebarKind(normalized) === 'index' ||
+      isIndexCollection(normalized) ||
       normalized === DATA_COLLECTION_PATH ||
       normalized === TRASH_COLLECTION_PATH
     ) {
@@ -1038,7 +1038,7 @@ export const DataSidebar = memo(function DataSidebar({
     return () => onDeleteView(view, path)
   }
 
-  function renderTableRows(rows: CollectionInfo[], group: 'user' | 'index' | 'system' = 'system') {
+  function renderTableRows(rows: CollectionInfo[], group: 'user' | 'system' | 'store' = 'system') {
     return rows.map((table) => {
       const name = table.view?.title ?? table.label
       const tableStateKey = `${group}:${table.path}`
@@ -1346,28 +1346,28 @@ export const DataSidebar = memo(function DataSidebar({
           </section>
 
           <section className="min-w-0">
-            <SectionHead
-              label="能力数据"
-              count={indexTables.length}
-              open={indexOpen}
-              title="展开或收起能力数据"
-              testId="sidebar-index-home"
-              onToggle={() => toggleSection(DATA_SECTION_INDEX)}
-            />
-            <SidebarFold open={indexOpen}>
-              <div className="flex min-w-0 flex-col gap-px" data-testid="sidebar-index-collections">
-                {indexTables.length ? renderTableRows(indexTables, 'index') : (
-                  <div className="px-1 py-1 text-[12px] text-(--biu-color-text-subtle)">还没有能力数据</div>
-                )}
-              </div>
-            </SidebarFold>
-          </section>
-
-          <section className="min-w-0">
             <SectionHead label="系统数据" count={systemTables.length} title="系统运行时记下的数据" />
             <div className="flex min-w-0 flex-col gap-px" data-testid="sidebar-system-collections">
               {renderTableRows(systemTables)}
             </div>
+          </section>
+
+          <section className="min-w-0">
+            <SectionHead
+              label="商店数据"
+              count={storeTables.length}
+              open={storeOpen}
+              title="展开或收起商店数据"
+              testId="sidebar-store-home"
+              onToggle={() => toggleSection(DATA_SECTION_STORE)}
+            />
+            <SidebarFold open={storeOpen}>
+              <div className="flex min-w-0 flex-col gap-px" data-testid="sidebar-store-collections">
+                {storeTables.length ? renderTableRows(storeTables, 'store') : (
+                  <div className="px-1 py-1 text-[12px] text-(--biu-color-text-subtle)">还没有商店数据</div>
+                )}
+              </div>
+            </SidebarFold>
           </section>
         </div>
       </div>
