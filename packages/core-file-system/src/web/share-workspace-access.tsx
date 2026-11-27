@@ -1,7 +1,17 @@
 import { useEffect, useState } from 'react'
 import { LinkIcon, LockClosedIcon, UserGroupIcon, XMarkIcon } from '@heroicons/react/16/solid'
+import {
+  applyBatchPermissions,
+  createGuestInvite,
+  fetchMemberViews,
+  fetchRecordAccess,
+  grantRecordAccess,
+  patchRecordAccess,
+  resolveMemberView,
+  revokeRecordAccess,
+} from './authz-api.ts'
 import { WORKSPACE_MEMBERS_COLLECTION_PATH } from './database-path.ts'
-import { listCollection, readJson } from './db-client.ts'
+import { listCollection } from './db-client.ts'
 import { FSDB_SHARES_CHANGE_EVENT, emitFsdbEvent } from './fsdb-events.ts'
 import { roleLabel } from './share-chain-detail.tsx'
 import {
@@ -96,7 +106,7 @@ export function WorkspaceAccess({
   const [error, setError] = useState('')
 
   async function load() {
-    const data = await readJson<{
+    const data = await fetchRecordAccess<{
       scope?: 'personal' | 'workspace' | 'shared'
       hasExternalCollaborator?: boolean
       accessMode?: 'inherit' | 'private' | 'members'
@@ -112,7 +122,7 @@ export function WorkspaceAccess({
         parent?: { collection: string; recordId: string; title?: string } | null
         ancestors?: InheritedAncestor[]
       }
-    }>(`/api/account/access?collection=${encodeURIComponent(collection)}&recordId=${encodeURIComponent(recordId)}`)
+    }>(collection, recordId)
     setScope(data.scope ?? 'personal')
     setHasExternalCollaborator(Boolean(data.hasExternalCollaborator))
     setAccessMode(data.accessMode ?? (data.scope === 'workspace' ? 'members' : 'private'))
@@ -135,9 +145,7 @@ export function WorkspaceAccess({
       console.warn('[share-popover] load grants failed', collection, error)
       setPeople([])
     })
-    void readJson<{ views?: Array<{ id: string; name: string; isLocked: boolean; memberCount: number }> }>(
-      '/api/db/member-views',
-    )
+    void fetchMemberViews()
       .then((res) => {
         setAvailableMemberViews(Array.isArray(res.views) ? res.views : [])
       })
@@ -178,16 +186,12 @@ export function WorkspaceAccess({
   ) {
     setError('')
     setStatusNotice('')
-    return readJson(`/api/account/access`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({
-        collection,
-        recordId,
-        role: nextRole ?? role,
-        ...(input.email ? { collaboratorKind } : {}),
-        ...input,
-      }),
+    return grantRecordAccess({
+      collection,
+      recordId,
+      role: nextRole ?? role,
+      ...(input.email ? { collaboratorKind } : {}),
+      ...input,
     })
       .then(() => {
         if (!nextRole) {
@@ -207,9 +211,7 @@ export function WorkspaceAccess({
     setError('')
     setStatusNotice('')
     try {
-      const resolved = await readJson<{ members?: Array<{ id: string; name?: string }> }>(
-        `/api/db/member-views/${encodeURIComponent(viewId)}/resolve`,
-      )
+      const resolved = await resolveMemberView<{ id: string; name?: string }>(viewId)
       const matched = (resolved.members ?? []).filter(
         (m) => m.id && m.id !== ownerId && m.id !== currentAccountId,
       )
@@ -217,16 +219,12 @@ export function WorkspaceAccess({
         setError(`「${viewName}」当前没有可添加的其他成员`)
         return
       }
-      await readJson('/api/db/batch-permissions/apply', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({
-          collection,
-          recordIds: [recordId],
-          mode: 'grant',
-          role,
-          subjects: matched.map((m) => ({ type: 'account', id: m.id })),
-        }),
+      await applyBatchPermissions({
+        collection,
+        recordIds: [recordId],
+        mode: 'grant',
+        role,
+        subjects: matched.map((m) => ({ type: 'account', id: m.id })),
       })
       setMemberQuery('')
       setSelectedTarget(null)
@@ -244,15 +242,11 @@ export function WorkspaceAccess({
     setError('')
     setStatusNotice('')
     try {
-      await readJson('/api/account/access', {
-        method: 'DELETE',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({
-          collection,
-          recordId,
-          subjectType,
-          subjectId,
-        }),
+      await revokeRecordAccess({
+        collection,
+        recordId,
+        subjectType,
+        subjectId,
       })
       emitFsdbEvent(FSDB_SHARES_CHANGE_EVENT)
       notifyViewShareChanged(collection, recordId)
@@ -269,15 +263,11 @@ export function WorkspaceAccess({
     setStatusNotice('')
     setInheritanceBusy(true)
     try {
-      await readJson('/api/account/access', {
-        method: 'PATCH',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({
-          collection,
-          recordId,
-          accessMode: nextAccessMode,
-          ...(nextAccessMode === 'members' ? { memberDefaultRole: nextMemberDefaultRole ?? memberDefaultRole } : {}),
-        }),
+      await patchRecordAccess({
+        collection,
+        recordId,
+        accessMode: nextAccessMode,
+        ...(nextAccessMode === 'members' ? { memberDefaultRole: nextMemberDefaultRole ?? memberDefaultRole } : {}),
       })
       if (wasInheriting) {
         setStatusNotice('已切换为独立通用访问，已自动关闭「继承上级权限」')
@@ -297,14 +287,10 @@ export function WorkspaceAccess({
     setError('')
     setInheritanceBusy(true)
     try {
-      await readJson('/api/account/access', {
-        method: 'PATCH',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({
-          collection,
-          recordId,
-          inheritanceMode: on ? 'inherit' : 'custom',
-        }),
+      await patchRecordAccess({
+        collection,
+        recordId,
+        inheritanceMode: on ? 'inherit' : 'custom',
       })
       emitFsdbEvent(FSDB_SHARES_CHANGE_EVENT)
       notifyViewShareChanged(collection, recordId)
@@ -319,15 +305,11 @@ export function WorkspaceAccess({
   async function createGuestLink() {
     setError('')
     try {
-      const data = await readJson<{ path: string; url?: string }>('/api/account/access/guest-invite', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({
-          collection,
-          recordId,
-          role: role === 'editor' ? 'editor' : 'viewer',
-          expiresInHours: 24,
-        }),
+      const data = await createGuestInvite({
+        collection,
+        recordId,
+        role: role === 'editor' ? 'editor' : 'viewer',
+        expiresInHours: 24,
       })
       const url = data.url ? String(data.url) : new URL(data.path, window.location.origin).toString()
       setGuestUrl(url)

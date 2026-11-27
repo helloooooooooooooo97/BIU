@@ -1,4 +1,5 @@
 import { writeStorageString } from '@biu/biu-ui/client-storage'
+import { useViewerIdentity } from './authz-api.ts'
 import { registerWorkspaceCache } from './workspace-client-store.ts'
 import { useBrowserPopovers } from './use-browser-popovers.ts'
 import { useBrowserBulkUi } from './use-browser-bulk-ui.ts'
@@ -630,29 +631,8 @@ export function CollectionBrowser({
   const [routeViewReady, setRouteViewReady] = useState(() => !routeViewNeedsFetch(collectionPath, routeViewId))
   const routeViewReadyRef = useRef(routeViewReady)
   routeViewReadyRef.current = routeViewReady
-  const [viewerAccountId, setViewerAccountId] = useState('')
-  useEffect(() => {
-    if (sheet || localData) return
-    let alive = true
-    const loadIdentity = () => {
-      void Promise.all([
-        readJson<{ accountId?: string }>('/api/account/workspace-profile').catch(() => null),
-        readJson<{ id?: string; account?: { id?: string } | null }>('/api/account/me').catch(() => null),
-      ])
-        .then(([wp, data]) => {
-          if (!alive) return
-          const id = String(wp?.accountId ?? data?.id ?? data?.account?.id ?? '').trim()
-          if (id) setViewerAccountId(id)
-        })
-        .catch(() => {})
-    }
-    loadIdentity()
-    window.addEventListener('biu:account-token', loadIdentity)
-    return () => {
-      alive = false
-      window.removeEventListener('biu:account-token', loadIdentity)
-    }
-  }, [localData, sheet])
+  const viewerIdentity = useViewerIdentity(!sheet && !localData)
+  const viewerAccountId = viewerIdentity.accountId
   const catalogLocks = useMemo(() => {
     if (sheet) return lockedFilters
     return { ...catalogLockFilters(activeViewId, views, viewerAccountId), ...lockedFilters }

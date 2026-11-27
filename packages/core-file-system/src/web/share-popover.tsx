@@ -3,7 +3,12 @@ import { useEffect, useRef, useState } from 'react'
 import { ArrowPathIcon, CheckIcon, LinkIcon, ShareIcon } from '@heroicons/react/16/solid'
 import { HeadlessDismiss } from '@biu/biu-ui/headless-dismiss'
 import { VIEWS_COLLECTION_PATH } from './database-path.ts'
-import { readJson } from './db-client.ts'
+import {
+  fetchRecordAccess,
+  fetchRecordShare,
+  patchRecordAccess,
+  saveRecordShare,
+} from './authz-api.ts'
 import { FSDB_OPEN_VIEW_SHARE_EVENT, FSDB_SHARES_CHANGE_EVENT, emitFsdbEvent } from './fsdb-events.ts'
 import { mintSharePin, shareClipboardText } from '../share-resources.ts'
 import { ShareToggle, notifyViewShareChanged } from './share-controls.tsx'
@@ -93,25 +98,22 @@ export function ShareButton({
     let gone = false
     const check = async () => {
       try {
-        const params = new URLSearchParams({
-          kind: 'record',
-          collection: target.collection,
-          recordId: target.recordId,
-        })
-        const shareData = await readJson<SharePayload>(`/api/db/shares?${params}`).catch(() => ({ share: null, inheritedShare: null }))
+        const shareData = await fetchRecordShare<SharePayload>(target.collection, target.recordId).catch(() => ({
+          share: null,
+          inheritedShare: null,
+        }))
         if (gone) return
         if (shareData.share || shareData.inheritedShare) {
           setHasActiveShare(true)
           return
         }
         if (!localOnly && target.recordId) {
-          const accessParams = new URLSearchParams({ collection: target.collection, recordId: target.recordId })
-          const accessData = await readJson<{
+          const accessData = await fetchRecordAccess<{
             scope?: string
             ownerId?: string
             people?: Array<{ id?: string; role?: string }>
             memberViews?: unknown[]
-          }>(`/api/account/access?${accessParams}`).catch(() => null)
+          }>(target.collection, target.recordId).catch(() => null)
           if (gone) return
           const nonOwnerPeople = (accessData?.people ?? []).filter(
             (p) => p.role !== 'owner' && (!accessData?.ownerId || p.id !== accessData.ownerId),
@@ -203,14 +205,8 @@ export function SharePanel({
     if (localOnly && tab !== 'public') setTab('public')
   }, [localOnly, tab])
 
-  const params = new URLSearchParams({
-    kind: 'record',
-    collection: target.collection,
-    recordId: target.recordId,
-  })
-
   async function refreshPublicShare() {
-    const data = await readJson<SharePayload>(`/api/db/shares?${params}`, undefined, { fresh: true })
+    const data = await fetchRecordShare<SharePayload>(target.collection, target.recordId, { fresh: true })
     applyPayload(data)
     setInheritedShare(data.inheritedShare ?? null)
     setPublicInheritance(data.inheritance ?? null)
@@ -220,7 +216,7 @@ export function SharePanel({
   useEffect(() => {
     if (tab !== 'public') return
     let gone = false
-    void readJson<SharePayload>(`/api/db/shares?${params}`, undefined, { fresh: true }).then((data) => {
+    void fetchRecordShare<SharePayload>(target.collection, target.recordId, { fresh: true }).then((data) => {
       if (gone) return
       applyPayload(data)
       setInheritedShare(data.inheritedShare ?? null)
@@ -244,14 +240,10 @@ export function SharePanel({
     setError('')
     setPublicInheritBusy(true)
     try {
-      await readJson('/api/account/access', {
-        method: 'PATCH',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({
-          collection: target.collection,
-          recordId: target.recordId,
-          inheritanceMode: on ? 'inherit' : 'custom',
-        }),
+      await patchRecordAccess({
+        collection: target.collection,
+        recordId: target.recordId,
+        inheritanceMode: on ? 'inherit' : 'custom',
       })
       emitFsdbEvent(FSDB_SHARES_CHANGE_EVENT)
       notifyViewShareChanged(target.collection, target.recordId)
@@ -311,15 +303,10 @@ export function SharePanel({
       setError('')
     }
     try {
-      const data = await readJson<SharePayload>('/api/db/shares', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({
-          kind: 'record',
-          collection: target.collection,
-          recordId: target.recordId,
-          ...patch,
-        }),
+      const data = await saveRecordShare<SharePayload>({
+        collection: target.collection,
+        recordId: target.recordId,
+        ...patch,
       })
       applyPayload(data, opts.pin, opts.flagsOnly)
       if (patch.enabled === false && data.share == null && share) rememberPin(share.token, '')

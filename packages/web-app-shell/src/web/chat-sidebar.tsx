@@ -9,6 +9,7 @@ import {
 } from '@biu/public-mascot'
 import { AiAvatar } from '@biu/biu-ui/ai-avatar'
 import { apiFetch } from '@biu/biu-ui/api-client'
+import { onAppEvents } from '@biu/biu-ui/app-events'
 import { ChatCount } from '@biu/biu-ui/chat-count'
 import { SidebarFold } from '@biu/biu-ui/sidebar-fold'
 import { useActiveWorkspaceLocation } from './shell-chrome.tsx'
@@ -50,7 +51,6 @@ const sessionRowMainProps = {
 } as const
 
 type ChatMemberInfo = { id: string; name: string; avatar?: string }
-const ACCOUNT_EVENT = 'biu:account-token'
 
 function useCloudSessionCreators(isCloud: boolean) {
   const [myAccountId, setMyAccountId] = useState('')
@@ -95,12 +95,10 @@ function useCloudSessionCreators(isCloud: boolean) {
       })
     }
     load()
-    window.addEventListener(ACCOUNT_EVENT, load)
-    window.addEventListener('biu:workspace-profile', load)
+    const off = onAppEvents(['biu:account-token', 'biu:workspace-profile'], load)
     return () => {
       cancelled = true
-      window.removeEventListener(ACCOUNT_EVENT, load)
-      window.removeEventListener('biu:workspace-profile', load)
+      off()
     }
   }, [isCloud])
 
