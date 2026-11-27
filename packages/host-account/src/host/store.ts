@@ -1601,6 +1601,33 @@ export class CollabStore {
     return account ? { accountId: actorId, workspaceId: workspaceId ?? '', name: account.name } : null
   }
 
+  /** 读取指定工作区成员用于公开分享页展示的昵称与头像（不暴露邮箱等私密信息）。 */
+  publicMemberProfile(workspaceId: string, accountId: string): { accountId: string; name: string; avatar: string } | null {
+    const id = String(accountId ?? '').trim()
+    if (!id) return null
+    const ws = String(workspaceId ?? '').trim()
+    if (ws) {
+      const row = this.db
+        .prepare(
+          `SELECT COALESCE(NULLIF(m.display_name, ''), NULLIF(a.name, ''), NULLIF(a.email, ''), '') AS name,
+                  COALESCE(NULLIF(m.avatar, ''), '') AS avatar
+           FROM workspace_members m
+           JOIN accounts a ON a.id = m.account_id
+           WHERE m.workspace_id = ? AND m.account_id = ?`,
+        )
+        .get(ws, id) as { name: string; avatar: string } | undefined
+      if (row) return { accountId: id, name: row.name.trim(), avatar: row.avatar.trim() }
+    }
+    const account = this.db
+      .prepare(
+        `SELECT COALESCE(NULLIF(name, ''), NULLIF(email, ''), '') AS name,
+                COALESCE(NULLIF(avatar, ''), '') AS avatar
+         FROM accounts WHERE id = ?`,
+      )
+      .get(id) as { name: string; avatar: string } | undefined
+    return account ? { accountId: id, name: account.name.trim(), avatar: account.avatar.trim() } : null
+  }
+
   saveWorkspaceProfile(actorId: string, patch: { name?: string; avatar?: string }) {
     const current = this.workspaceProfile(actorId)
     const name = patch.name !== undefined ? patch.name.trim().slice(0, 40) : current.name

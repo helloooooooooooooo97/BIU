@@ -143,3 +143,65 @@ test('record share page supports inheriting subpages directory, unified inherita
   assert.match(detail, /继承的公开链接/)
   assert.match(browser, /for \(const parentId of Object\.keys\(treeKidsByParentRef\.current\)\)/)
 })
+
+test('share corner renders creator AiAvatar when creator has no uploaded photo and buildShareSnapshot resolves creator profile', async () => {
+  const cornerSrc = readFileSync(resolve(import.meta.dirname, './share-owner-corner.tsx'), 'utf8')
+  assert.match(cornerSrc, /import \{ AiAvatar \} from '@biu\/biu-ui\/ai-avatar'/)
+  assert.match(cornerSrc, /<AiAvatar seed=\{avatarSeed\} size=\{36\}/)
+  assert.match(cornerSrc, /<AiAvatar seed=\{avatarSeed\} size=\{40\}/)
+
+  const { buildShareSnapshot } = await import('../host/share-payload.ts')
+  const fakeDb = {
+    stat: async () => ({ kind: 'collection', label: '页面', schema: { labelField: 'title', fields: { title: { type: 'text', label: '标题' } } } }),
+    list: async () => ({ items: [] }),
+    read: async () => ({
+      value: {
+        id: 'p1',
+        title: '测试页',
+        createdBy: { kind: 'user', accountId: 'acc_97', name: '97' },
+      },
+    }),
+    content: async () => ({ value: '# hi' }),
+  }
+  const fakeViews = { viewsFor: () => [] }
+  const share = {
+    token: 'tok_1',
+    kind: 'record' as const,
+    collection: '/pages',
+    viewId: '',
+    recordId: 'p1',
+    hasPassword: false,
+    sharePlugins: false,
+    allowCopy: true,
+    workspaceId: 'ws_1',
+    createdBy: 'acc_other',
+    createdAt: 1,
+    updatedAt: 1,
+  }
+  const snap = await buildShareSnapshot(fakeDb as never, fakeViews as never, share, {
+    workspaceId: 'ws_1',
+    collabStore: {
+      publicMemberProfile: (wsId, accId) =>
+        wsId === 'ws_1' && accId === 'acc_97'
+          ? { accountId: 'acc_97', name: '97', avatar: 'data:image/png;base64,abc' }
+          : null,
+    },
+  })
+  assert.deepEqual(snap.owner, {
+    accountId: 'acc_97',
+    name: '97',
+    avatar: 'data:image/png;base64,abc',
+  })
+
+  const snapDefaultAvatar = await buildShareSnapshot(fakeDb as never, fakeViews as never, share, {
+    workspaceId: 'ws_1',
+    collabStore: {
+      publicMemberProfile: () => ({ accountId: 'acc_97', name: '97', avatar: '' }),
+    },
+  })
+  assert.deepEqual(snapDefaultAvatar.owner, {
+    accountId: 'acc_97',
+    name: '97',
+    avatar: '',
+  })
+})

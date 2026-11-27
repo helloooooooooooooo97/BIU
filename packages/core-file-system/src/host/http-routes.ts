@@ -512,6 +512,10 @@ export function registerDatabaseHttpRoutes(
             rootRecordId: string,
             maxCount?: number,
           ) => Array<{ collection: string; recordId: string; parentCollection: string; parentRecordId: string }>
+          publicMemberProfile?: (
+            workspaceId: string,
+            accountId: string,
+          ) => { accountId: string; name: string; avatar: string } | null
         }
       } | undefined
       return account?.store

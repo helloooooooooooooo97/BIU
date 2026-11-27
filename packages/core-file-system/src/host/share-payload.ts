@@ -1,5 +1,5 @@
 import type { CollectionSchema, CollectionSchemaPack, Database, DbRecord } from '@biu/type-file-system'
-import { normalizeSchemaValue } from '@biu/type-file-system'
+import { asPerson, normalizeSchemaValue } from '@biu/type-file-system'
 import { collectAssetNames } from './assets-store.ts'
 import type { SavedViewsStore, StoredView } from './saved-views.ts'
 import { freezeSchema, type ShareSnapshot } from '../share-snapshot.ts'
@@ -26,9 +26,58 @@ function audienceRecord(record: DbRecord): DbRecord {
   return { ...record, shareRole: '查看' }
 }
 
+function resolveShareOwner(
+  snap: Omit<ShareSnapshot, 'resources' | 'pluginIds' | 'sharePlugins' | 'allowCopy'>,
+  share: ShareRecord,
+  opts?: ShareSnapshotOpts,
+): ShareSnapshot['owner'] {
+  const wsId = share.workspaceId || opts?.workspaceId || ''
+  let creatorAccountId = ''
+  let creatorName = ''
+  if (snap.kind === 'record') {
+    const primary = snap.records[0]
+    const rawCreatedBy = primary?.createdBy
+    if (typeof rawCreatedBy === 'string' && rawCreatedBy.trim()) {
+      creatorAccountId = rawCreatedBy.trim()
+    } else {
+      const person = asPerson(rawCreatedBy)
+      if (person?.kind === 'user') {
+        creatorAccountId = person.accountId?.trim() || ''
+        creatorName = person.name?.trim() || ''
+      }
+    }
+  } else if (snap.kind === 'view') {
+    const viewCreator = typeof snap.view?.createdBy === 'string' ? snap.view.createdBy.trim() : ''
+    if (viewCreator) creatorAccountId = viewCreator
+  }
+  if (!creatorAccountId && share.createdBy) {
+    creatorAccountId = share.createdBy.trim()
+  }
+  if (creatorAccountId && opts?.collabStore?.publicMemberProfile) {
+    const member = opts.collabStore.publicMemberProfile(wsId, creatorAccountId)
+    if (member && (member.name || member.avatar)) {
+      return {
+        accountId: member.accountId,
+        name: member.name || creatorName || '分享者',
+        avatar: member.avatar,
+      }
+    }
+  }
+  if (creatorName || creatorAccountId) {
+    return {
+      ...(creatorAccountId ? { accountId: creatorAccountId } : {}),
+      name: creatorName || '分享者',
+      avatar: '',
+    }
+  }
+  const profile = asPublicProfile()
+  return profile.name || profile.avatar ? { name: profile.displayName, avatar: profile.avatar } : undefined
+}
+
 function withResources(
   snap: Omit<ShareSnapshot, 'resources' | 'pluginIds' | 'sharePlugins' | 'allowCopy'>,
   share: ShareRecord,
+  opts?: ShareSnapshotOpts,
 ): ShareSnapshot {
   const resources = collectShareResources(snap.records, snap.contents, {
     skipIds: snap.records.map((row) => String(row.id)),
@@ -40,10 +89,7 @@ function withResources(
     pluginIds: resources.pluginIds,
     sharePlugins: share.sharePlugins,
     allowCopy: share.allowCopy,
-    owner: (() => {
-      const profile = asPublicProfile()
-      return profile.name || profile.avatar ? { name: profile.displayName, avatar: profile.avatar } : undefined
-    })(),
+    owner: resolveShareOwner(snap, share, opts),
   }
 }
 
@@ -59,6 +105,10 @@ export type ShareCollabStore = {
     rootRecordId: string,
     maxCount?: number,
   ): Array<{ collection: string; recordId: string; parentCollection: string; parentRecordId: string }>
+  publicMemberProfile?(
+    workspaceId: string,
+    accountId: string,
+  ): { accountId: string; name: string; avatar: string } | null
 }
 
 export type ShareSnapshotOpts = {
@@ -262,7 +312,7 @@ export async function buildShareSnapshot(
       contents,
       assets: [...assetSet],
       tags: shareTagCatalog(db, sorted),
-    }, share)
+    }, share, opts)
   }
 
   const stat = asStat(await db.stat(share.collection))
@@ -327,7 +377,7 @@ export async function buildShareSnapshot(
       assets: [...assetSet],
       banner: record.banner ?? null,
       tags: shareTagCatalog(db, allRecords),
-    }, share)
+    }, share, opts)
   }
   throw new Error('unsupported share kind')
 }
