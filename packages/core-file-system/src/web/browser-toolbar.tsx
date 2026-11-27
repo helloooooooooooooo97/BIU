@@ -17,7 +17,7 @@ import { HEADLESS_DISMISS_IGNORE, HeadlessDismiss } from '@biu/biu-ui/headless-d
 import { overlayPortalRoot, overlayZ } from '@biu/biu-ui/overlay-portal'
 import { emitFsdbChange, type CollectionInfo, type CollectionSchema, type DbRecord, type FieldSpec } from '@biu/type-file-system'
 import type { CollectionRowViewType, CollectionViewType } from '@biu/type-file-system/ui'
-import { collectionNoun, viewDomainOf } from '../catalog-views.ts'
+import { collectionNoun } from '../catalog-views.ts'
 import { normalizeCollectionPath, savedViewRecordPath } from '../paths.ts'
 import { countFilterRules, type FilterGroup, type SortRule } from '../query-logic.ts'
 import type { BrowserDialogState } from './browser-dialogs.tsx'
@@ -904,24 +904,6 @@ export const BrowserListChrome = memo(function BrowserListChrome(props: BrowserL
                         ) : null}
                       </div>
                     </HeadlessDismiss>
-                  ) : activeView && (viewDomainOf(activeView) === 'workspace' || viewDomainOf(activeView) === 'personal') ? (
-                    <button
-                      type="button"
-                      className="fsdb-create-scope"
-                      aria-label={viewDomainOf(activeView) === 'workspace' ? '新建到空间数据' : '新建到我的数据'}
-                      title={viewDomainOf(activeView) === 'workspace' ? '新建到空间数据' : '新建到我的数据'}
-                      data-testid="fsdb-create-scope-badge"
-                      onClick={() => {
-                        if (canAskNewPlugin) askNewPlugin(createScope)
-                        else void createRecord()
-                      }}
-                    >
-                      {viewDomainOf(activeView) === 'workspace' ? (
-                        <UserGroupIcon aria-hidden className="size-[14px]" />
-                      ) : (
-                        <UserIcon aria-hidden className="size-[14px]" />
-                      )}
-                    </button>
                   ) : (
                     <HeadlessDismiss enabled={createScopeOpen} onDismiss={() => setCreateScopeOpen(false)}>
                       <div className="fsdb-create-scope-wrap">
