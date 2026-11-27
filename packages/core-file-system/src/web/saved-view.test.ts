@@ -4,6 +4,7 @@ import {
   canDeleteSavedView,
   canEditSavedView,
   canManageSavedView,
+  canRemoveCollectionView,
   colWidthStyle,
   DEFAULT_VIEW_PAGE_SIZE,
   normalizePageSize,
@@ -121,6 +122,17 @@ test('locked view freezes configuration edits while keeping manager unlock/delet
   assert.equal(canDeleteSavedView(lockedManager), true)
   assert.equal(canEditSavedView(ephemeral), false)
   assert.equal(canManageSavedView(ephemeral), false)
+})
+
+test('canRemoveCollectionView protects the last workspace view while allowing personal views to be deleted', () => {
+  const wsOnly = normalizeSavedView({ ...base, id: 'all', shareScope: 'workspace' })
+  const priv = normalizeSavedView({ ...base, id: 'mine', shareScope: 'personal' })
+  const wsSecond = normalizeSavedView({ ...base, id: 'team', shareScope: 'workspace' })
+
+  assert.equal(canRemoveCollectionView([wsOnly, priv], wsOnly), false)
+  assert.equal(canRemoveCollectionView([wsOnly, priv], priv), true)
+  assert.equal(canRemoveCollectionView([wsOnly, wsSecond, priv], wsOnly), true)
+  assert.equal(canRemoveCollectionView([wsOnly], wsOnly), false)
 })
 
 test('viewStateKey ignores name and treats missing query as empty', () => {

@@ -218,6 +218,9 @@ async function setupHttpEnv() {
 test('member views API supports locked dynamic groups, unlocked snapshot resolve, and freeze/revoke release', async () => {
   const { db, collab, savedViews, http, ada, bob, cara, asUser } = await setupHttpEnv()
 
+  // Seed default workspace member views (member/external/guest) first
+  savedViews.ensureSeedViews('/workspace-members', { path: '/workspace-members', label: '空间成员' })
+
   // Admin creates a locked member view (role=member -> matches Bob) and Bob creates a personal shortcut view
   savedViews.applyPatch(
     '/workspace-members',
@@ -441,6 +444,17 @@ test('unified /views record ACL, lazy seed views, field-level patch with revisio
   assert.equal(adaCreated?.shareScope, 'personal')
   const bobBeforeShare = await asUser(bob.id, () => http.call('GET', '/api/db/saved-views?path=/docs'))
   assert.equal((bobBeforeShare.body.views as Array<{ id: string }>).some((v) => v.id === 'v_done'), false)
+
+  // 4b. Nobody (even workspace owner Ada) can delete or privatize the ONLY remaining workspace view ('all')
+  const delLastWs = await asUser(ada.id, () =>
+    http.call('POST', '/api/db/saved-views', { path: '/docs', remove: ['all'] }),
+  )
+  assert.equal(delLastWs.status, 400)
+  assert.match(String(delLastWs.body.error), /至少保留一个空间视图/)
+  assert.throws(
+    () => asUser(ada.id, () => collab.setRecordAccessMode(ada.id, '/views', 'docs::all', 'private')),
+    /至少保留一个空间视图/,
+  )
 
   await asUser(ada.id, () => collab.shareWithEmail(ada.id, '/views', 'docs::v_done', bob.email, 'viewer', 'internal'))
   const bobAfterShare = await asUser(bob.id, () => http.call('GET', '/api/db/saved-views?path=/docs'))

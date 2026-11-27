@@ -977,7 +977,7 @@ export const DataSidebar = memo(function DataSidebar({
   }
 
   function viewRowDelete(path: string, view: SavedView, listed: SavedView[]) {
-    if (view.ephemeral || !canRemoveCollectionView(listed)) return undefined
+    if (view.ephemeral || !canRemoveCollectionView(listed, view)) return undefined
     if (view.viewRole && view.viewRole !== 'owner' && view.viewRole !== 'manager') return undefined
     return () => onDeleteView(view, path)
   }

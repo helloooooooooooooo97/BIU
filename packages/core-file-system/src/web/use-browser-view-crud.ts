@@ -489,8 +489,8 @@ export function createBrowserViewCrud(opts: BrowserViewCrudOptions) {
     if (!canDeleteSavedView(view)) return
     const stored = loadViews(path)
     const currentVisible = path === collectionPath ? viewsRef.current : stored
-    if (!canRemoveCollectionView(currentVisible)) {
-      setViewsSaveError('至少保留一个视图')
+    if (!canRemoveCollectionView(currentVisible, view)) {
+      setViewsSaveError(view.shareScope === 'workspace' ? '至少保留一个空间视图' : '至少保留一个视图')
       return
     }
     const removedId = view.id

@@ -321,7 +321,7 @@ export function ViewOrderMenu({
                     onDelete={onDelete}
                     onToggleLock={onToggleLock}
                     onOpenShare={onOpenShare}
-                    canRemove={canRemove && canDeleteSavedView(view)}
+                    canRemove={canRemove && canDeleteSavedView(view) && canRemoveCollectionView(views, view)}
                     grip={
                       <span className="fsdb-query-grip is-locked" aria-hidden>
                         <DndGrip />
@@ -367,7 +367,7 @@ export function ViewOrderMenu({
                     onDelete={onDelete}
                     onToggleLock={onToggleLock}
                     onOpenShare={onOpenShare}
-                    canRemove={canRemove && canDeleteSavedView(view)}
+                    canRemove={canRemove && canDeleteSavedView(view) && canRemoveCollectionView(views, view)}
                   />
                 ))}
               </SortableContext>
