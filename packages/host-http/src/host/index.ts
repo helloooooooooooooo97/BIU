@@ -930,25 +930,36 @@ export class HttpService extends Service {
           return
         }
         if (accountId && token) this.ctx.emit('account/request', { accountId, token })
-        const identityRoute = url.pathname === '/api/account/me' || url.pathname === '/api/runtime'
+        const accountControlRoute =
+          url.pathname === '/api/runtime' ||
+          url.pathname === '/api/account/me' ||
+          url.pathname === '/api/account/active' ||
+          url.pathname === '/api/account/workspaces' ||
+          url.pathname === '/api/account/logout' ||
+          url.pathname === '/api/account/cloud' ||
+          url.pathname === '/api/account/cloud/endpoint' ||
+          url.pathname.startsWith('/api/account/invites/')
+        let effectiveWorkspace = requestedWorkspace
         if (
-          !identityRoute &&
           accountId &&
-          requestedWorkspace &&
+          effectiveWorkspace &&
           accountStore?.isMember &&
-          !accountStore.isMember(accountId, requestedWorkspace)
+          !accountStore.isMember(accountId, effectiveWorkspace)
         ) {
-          context.send(403, { error: '不在这个空间' })
-          return
+          if (!accountControlRoute) {
+            context.send(403, { error: '不在这个空间' })
+            return
+          }
+          effectiveWorkspace = ''
         }
         if (getRuntimePolicy().authzMode === 'rbac' && match.pluginId) {
-          const allowed = accountStore?.canAccessPlugin?.(accountId, requestedWorkspace, match.pluginId)
+          const allowed = accountStore?.canAccessPlugin?.(accountId, effectiveWorkspace, match.pluginId)
           if (!allowed) {
             context.send(404, { error: 'not found' })
             return
           }
         }
-        await runWithAccount(accountId, () => runWithRequestWorkspace(requestedWorkspace, () => match.handler(context)))
+        await runWithAccount(accountId, () => runWithRequestWorkspace(effectiveWorkspace, () => match.handler(context)))
       } catch (error) {
         if (error instanceof PayloadTooLargeError) {
           if (!res.headersSent) context.send(413, { error: error.message, maxBytes: error.maxBytes })

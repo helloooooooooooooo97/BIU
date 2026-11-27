@@ -51,4 +51,12 @@ describe('access realtime broadcast wiring', () => {
       /db\.notifyViewCatalog\(path\)/,
     )
   })
+
+  it('POST /api/account/active does not broadcast unscoped database events across tabs/browsers', () => {
+    const activePostBlock = accountHostSrc.slice(
+      accountHostSrc.indexOf("authedRoute('POST', '/api/account/active'"),
+      accountHostSrc.indexOf('const authLimiter'),
+    )
+    assert.doesNotMatch(activePostBlock, /broadcast\(\s*'database'/)
+  })
 })

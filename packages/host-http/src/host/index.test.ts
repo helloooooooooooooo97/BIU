@@ -595,3 +595,55 @@ test('unmatched GET /api/* returns 404 directly without proxying to SHARE_PROXY_
     else process.env.SHARE_PROXY_UI = previousProxy
   }
 })
+
+test('account control routes recover from stale x-biu-workspace-id while tenant routes still 403', async () => {
+  const base = await mkdtemp(join(tmpdir(), 'cordis-http-stale-ws-'))
+  const publicDir = join(base, 'public')
+  await mkdir(publicDir, { recursive: true })
+  await writeFile(join(publicDir, 'index.html'), '<html></html>')
+  const ctx = new Context()
+  class FakeAccount extends Service {
+    store = {
+      accountByToken: (token: string) => (token === 'ada-token' ? { id: 'ada' } : null),
+      isMember: (accountId: string, workspaceId: string) =>
+        accountId === 'ada' && (workspaceId === 'ws-a' || workspaceId === 'ws-b'),
+      activeWorkspaceId: () => currentRequestWorkspaceId() || 'ws-b',
+    }
+    constructor(inner: Context) {
+      super(inner, 'account')
+    }
+  }
+  const ready = new Promise<number>((resolve) => ctx.on('http/ready', ({ port }) => resolve(port)))
+  await ctx.plugin(FakeAccount)
+  const fiber = await ctx.plugin(http, { port: 0, host: '127.0.0.1', publicDir, sharePort: 0 })
+  const port = await ready
+  ctx.http.route('GET', '/api/account/active', (route) => {
+    route.send(200, { workspaceId: currentRequestWorkspaceId() || 'ws-b' })
+  })
+  ctx.http.route('GET', '/api/db/records', (route) => {
+    route.send(200, { workspaceId: currentRequestWorkspaceId() })
+  })
+  try {
+    // 1. 合法标签页头按各自空间隔离返回
+    const tabA = await fetch(`http://127.0.0.1:${port}/api/account/active`, {
+      headers: { Authorization: 'Bearer ada-token', 'x-biu-workspace-id': 'ws-a' },
+    })
+    assert.equal(tabA.status, 200)
+    assert.equal((await tabA.json()).workspaceId, 'ws-a')
+
+    // 2. 失效/被移除的旧空间头：账号控制接口自动清空无效头并回退默认空间
+    const staleActive = await fetch(`http://127.0.0.1:${port}/api/account/active`, {
+      headers: { Authorization: 'Bearer ada-token', 'x-biu-workspace-id': 'ws-deleted' },
+    })
+    assert.equal(staleActive.status, 200)
+    assert.equal((await staleActive.json()).workspaceId, 'ws-b')
+
+    // 3. 租户业务数据接口仍严格拒绝非成员空间头（403）
+    const staleDb = await fetch(`http://127.0.0.1:${port}/api/db/records`, {
+      headers: { Authorization: 'Bearer ada-token', 'x-biu-workspace-id': 'ws-deleted' },
+    })
+    assert.equal(staleDb.status, 403)
+  } finally {
+    await fiber.dispose()
+  }
+})

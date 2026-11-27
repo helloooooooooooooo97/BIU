@@ -543,7 +543,6 @@ export function apply(ctx: Context, config: AccountConfig = {}) {
   authedRoute('POST', '/api/account/active', async (route, me) => {
     const body = (await route.json()) as { workspaceId?: string }
     const workspaceId = account.store.setActive(me.id, String(body.workspaceId ?? ''))
-    ctx.http.broadcast('database', { ts: Date.now() })
     route.send(200, { workspaceId, location: account.workspaceLocation(workspaceId) })
   })
 
