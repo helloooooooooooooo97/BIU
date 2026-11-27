@@ -1,5 +1,5 @@
 import type { CollectionSchema, DbRecord } from '@biu/type-file-system'
-import { apiFetch } from '@biu/biu-ui/api-client'
+import { apiFetch, invalidateApiInflight } from '@biu/biu-ui/api-client'
 import { registerWorkspaceCache } from './workspace-client-store.ts'
 
 export class HttpError extends Error {
@@ -84,6 +84,7 @@ export function invalidateListReads() {
   getInflight.clear()
   listInflight.clear()
   listFetching.clear()
+  invalidateApiInflight()
 }
 
 registerWorkspaceCache('db-client-inflight', () => {

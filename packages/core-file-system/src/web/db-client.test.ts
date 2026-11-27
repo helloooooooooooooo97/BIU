@@ -1,5 +1,6 @@
 import { test } from 'vitest'
 import assert from 'node:assert/strict'
+import { apiJson } from '@biu/biu-ui/api-client'
 import { invalidateListReads, listCollection, readJson } from './db-client.ts'
 
 test('listCollection shares identical in-flight requests', async () => {
@@ -200,4 +201,28 @@ test('431 responses identify an oversized request instead of a JSON parsing fail
     })
     assert.equal(calls, 1)
   } finally { globalThis.fetch = original }
+})
+
+test('invalidateListReads also clears apiJson brief GET hold cache', async () => {
+  let calls = 0
+  const original = globalThis.fetch
+  globalThis.fetch = (async () => {
+    calls += 1
+    return new Response(JSON.stringify({ v: calls }), {
+      status: 200,
+      headers: { 'content-type': 'application/json' },
+    })
+  }) as typeof fetch
+  try {
+    invalidateListReads()
+    const first = await apiJson<{ v: number }>('/api/db/stat?path=/sync-hold-test')
+    invalidateListReads()
+    const second = await apiJson<{ v: number }>('/api/db/stat?path=/sync-hold-test')
+    assert.equal(calls, 2)
+    assert.equal(first.v, 1)
+    assert.equal(second.v, 2)
+  } finally {
+    invalidateListReads()
+    globalThis.fetch = original
+  }
 })

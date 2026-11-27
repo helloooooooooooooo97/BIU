@@ -12,6 +12,7 @@ import { peekRecord, subscribeCrumbs } from './view-storage.ts'
 import { showRecordInInspector } from './inspector-db-route.ts'
 import { OPEN_TAG_EVENT } from './fsdb-events.ts'
 import { TAGS_COLLECTION_PATH } from './database-path.ts'
+import { registerWorkspaceCache } from './workspace-client-store.ts'
 
 export { OPEN_TAG_EVENT }
 
@@ -20,6 +21,7 @@ export const TAGS_KEY = 'fsdb.tags'
 let memory: CollectionSchemaPack[] | null = null
 let filledMemory: Record<string, Record<string, number>> = {}
 let revision = 0
+let workspaceGen = 0
 const listeners = new Set<() => void>()
 
 function emit() {
@@ -84,6 +86,14 @@ export function subscribeTags(_collectionPath: string | undefined, fn: () => voi
 }
 
 let tagsByIdCache: { source: CollectionSchemaPack[]; map: Map<string, CollectionSchemaPack> } | null = null
+
+registerWorkspaceCache('tag-catalog', () => {
+  workspaceGen += 1
+  memory = null
+  filledMemory = {}
+  tagsByIdCache = null
+  emit()
+})
 
 /** Same Map until the catalog array is replaced. Cell paint must not rebuild it per tag. */
 export function tagsById() {
@@ -173,9 +183,11 @@ export async function createTag(title: string): Promise<CollectionSchemaPack> {
 }
 
 export async function pullTags(_collectionPath?: string, opts?: { filled?: boolean }) {
+  const startGen = workspaceGen
   try {
-    const res = await fetch(opts?.filled ? '/api/db/tags?filled=1' : '/api/db/tags')
+    const res = await apiFetch(opts?.filled ? '/api/db/tags?filled=1' : '/api/db/tags')
     const body = (await res.json()) as { tags?: unknown[]; filled?: unknown }
+    if (workspaceGen !== startGen) return loadTags()
     const listed = body.tags
     if (!res.ok || !Array.isArray(listed)) return loadTags()
     const tags = parseTags(listed)

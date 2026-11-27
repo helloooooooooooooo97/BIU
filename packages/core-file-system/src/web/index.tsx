@@ -40,6 +40,8 @@ import { DatabaseInspectorBrowse, DatabaseInspectorTab, bindInspectorSnapshot, c
 import { applyDatabaseChannelPayload } from './inspector-db-route.ts'
 import { InspectorFollowToggle } from './inspector-follow.tsx'
 import { DatabaseUiService, getDatabaseUi } from './database-ui.ts'
+import { invalidateListCacheForFsdbChange } from './browser-list-cache.ts'
+import { invalidateListReads } from './db-client.ts'
 
 registerShellDataBridge({
   hydratePagePrefs,
@@ -610,7 +612,11 @@ export function apply(ctx: Context) {
       if (parsed?.asset) emitAssetChanged(parsed.asset)
       if (!parsed) return
       const change = fsdbChangeDetail(parsed)
-      if (change) emitFsdbChange(change)
+      if (change) {
+        invalidateListReads()
+        invalidateListCacheForFsdbChange(change)
+        emitFsdbChange(change)
+      }
       if (!channelNeedsCollectionSync(parsed)) return
       window.clearTimeout(debounce)
       debounce = window.setTimeout(() => void sync(), 40)

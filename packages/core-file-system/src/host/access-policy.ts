@@ -447,11 +447,13 @@ export class DatabaseAccessPolicy {
     this.ownerCache.delete(key)
     this.ownershipCache.delete(key)
     this.externalCollaboratorCache.delete(key)
+    this.recordShareCache.delete(key)
   }
 
   markPublicView(collection: string, recordId: string) {
     try {
       this.host.shares.upsert({ kind: 'record', collection, recordId, password: null, allowCopy: false })
+      this.clearShareCaches()
     } catch {
       /* 分享库还没打开时，列表仍按协作者计算 */
     }
