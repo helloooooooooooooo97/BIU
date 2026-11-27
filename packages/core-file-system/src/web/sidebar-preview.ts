@@ -8,7 +8,6 @@ import { viewForPath } from './view-storage.ts'
 
 export const SIDEBAR_PREVIEW_PAGE = 20
 export const SIDEBAR_PREVIEW_MAX = 100
-export const VIEW_TOTAL_IDLE_MS = 2800
 export const VIEW_PREVIEW_IDLE_MS = 800
 
 let paintedListReady = false
@@ -204,16 +203,6 @@ function isCurrentView(opts: {
   return opts.path === opts.collectionPath && opts.view.id === opts.activeViewId
 }
 
-/** 当前表的活动视图由 list 自己写入，其余视图按需拉总数。 */
-export function shouldFetchViewTotal(opts: {
-  path: string
-  view: Pick<SavedView, 'id'>
-  collectionPath: string
-  activeViewId?: string | null
-}) {
-  return !isCurrentView(opts)
-}
-
 /** 当前表已经拉过这一页，侧栏展开不再另开一次 list。 */
 export function shouldFetchViewPreview(opts: {
   path: string
@@ -222,28 +211,6 @@ export function shouldFetchViewPreview(opts: {
   activeViewId?: string | null
 }) {
   return !isCurrentView(opts)
-}
-
-export function orderViewTotalJobs<T extends { path: string }>(jobs: T[], collectionPath: string) {
-  return jobs
-    .map((job, index) => ({ job, index }))
-    .sort((a, b) => {
-      const diff = Number(a.job.path !== collectionPath) - Number(b.job.path !== collectionPath)
-      return diff !== 0 ? diff : a.index - b.index
-    })
-    .map((item) => item.job)
-}
-
-export async function fetchViewTotal(
-  path: string,
-  view: Pick<SavedView, 'id' | 'sortField' | 'sortDir' | 'filters' | 'query'>,
-) {
-  const key = viewTotalKey(path, view)
-  const cached = totalCache.get(key)
-  if (cached != null) return cached
-  const page = await fetchViewPreview(path, view, 0, 1)
-  rememberPreviewTotal(key, page.total)
-  return page.total
 }
 
 export async function writeRecordEmoji(path: string, recordId: string, emoji: string) {

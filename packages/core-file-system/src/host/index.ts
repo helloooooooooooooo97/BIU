@@ -63,6 +63,8 @@ import { RecordViewsStore, wrapCollectionRecordViews } from './record-views.ts'
 import { TagStore } from './tags-store.ts'
 import { SharesStore } from './shares-store.ts'
 import { isIndexCollection, isSystemCollection } from '../paths.ts'
+import { matchActionWhen } from '../shared/fields.ts'
+export { matchActionWhen }
 import { dataCollection, isDataOverviewSource, overviewRecord } from './data-collection.ts'
 import { type SharedViewDef } from '../share-view-match.ts'
 import { FileSystemAssets, collectAssetNames, assetNamesFromMarkdown, assetNamesFromHtml } from './assets-store.ts'
@@ -314,20 +316,6 @@ function pickListedFields(row: DbRecord, keys: string[]): DbRecord {
     if (Object.prototype.hasOwnProperty.call(row, key)) next[key] = row[key]
   }
   return next
-}
-
-export function matchActionWhen(record: DbRecord, when?: Record<string, unknown>) {
-  if (!when) return true
-  for (const [key, expected] of Object.entries(when)) {
-    const actual = record[key]
-    if (expected === true || expected === false) {
-      const flag = actual === true || actual === 'true'
-      if (flag !== expected) return false
-      continue
-    }
-    if (String(actual ?? '') !== String(expected)) return false
-  }
-  return true
 }
 
 function publicCollection(item: CollectionSpec): CollectionInfo {

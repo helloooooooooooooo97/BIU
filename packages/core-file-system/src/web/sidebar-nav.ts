@@ -127,12 +127,6 @@ export function recordCrumbLabel(label: string | undefined, id: string) {
   return text
 }
 
-const SCOPE_CRUMB_LABEL: Record<DataScope, string> = {
-  workspace: '空间数据',
-  personal: '我的数据',
-  shared: '我的数据',
-}
-
 export function buildCrumbs(input: {
   collection: string
   collectionLabel: string

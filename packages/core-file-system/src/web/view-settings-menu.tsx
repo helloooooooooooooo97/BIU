@@ -1,6 +1,5 @@
 import { useState, type ReactElement } from 'react'
 import { LockOpenIcon, PlusIcon } from '@heroicons/react/16/solid'
-import { apiFetch } from '@biu/biu-ui/api-client'
 import type { CollectionRowViewType, CollectionViewType } from '@biu/type-file-system/ui'
 import { WORKSPACE_MEMBERS_COLLECTION_PATH, normalizeCollectionPath } from '../paths.ts'
 import type { FilterGroup, SortRule } from '../query-logic.ts'
@@ -18,7 +17,6 @@ import {
 import { canEditSavedView, canManageSavedView, PAGE_SIZES, type GroupConfig, type SavedView } from './saved-view.ts'
 import type { TableSandboxItem } from '../shared/table-sandbox-model.ts'
 import { SandboxKindIcon } from './sandbox-kind-icon.tsx'
-import { registerWorkspaceCache } from './workspace-client-store.ts'
 
 export type ViewSettingsTab = 'view' | 'columns' | 'filter' | 'sort' | 'group'
 
@@ -29,42 +27,6 @@ const TABS: Array<{ id: ViewSettingsTab; label: string }> = [
   { id: 'sort', label: '排序' },
   { id: 'group', label: '分组' },
 ]
-
-type ViewerIdentity = { accountId: string; isAdmin: boolean }
-
-let cachedViewerIdentity: ViewerIdentity | null = null
-let viewerIdentityPromise: Promise<ViewerIdentity> | null = null
-
-registerWorkspaceCache('view-settings-viewer', () => {
-  cachedViewerIdentity = null
-  viewerIdentityPromise = null
-})
-
-export async function loadViewerIdentity(): Promise<ViewerIdentity> {
-  if (cachedViewerIdentity) return cachedViewerIdentity
-  if (viewerIdentityPromise) return viewerIdentityPromise
-  viewerIdentityPromise = apiFetch('/api/account/me')
-    .then(async (res) => {
-      if (!res.ok) return { accountId: '', isAdmin: false }
-      const data = (await res.json()) as {
-        id?: string
-        account?: { id?: string } | null
-        workspace?: { role?: string } | null
-      }
-      const role = String(data.workspace?.role ?? '')
-      const next = {
-        accountId: String(data.id ?? data.account?.id ?? '').trim(),
-        isAdmin: role === 'owner' || role === 'admin',
-      }
-      cachedViewerIdentity = next
-      return next
-    })
-    .catch(() => ({ accountId: '', isAdmin: false }))
-    .finally(() => {
-      viewerIdentityPromise = null
-    })
-  return viewerIdentityPromise
-}
 
 export function ViewSettingsMenu({
   tab,

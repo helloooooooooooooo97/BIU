@@ -13,7 +13,7 @@ function recordViewFileUrl(collectionPath: string, recordId: string, name: strin
   return `/api/db/file/${key}?path=${encodeURIComponent(path)}`
 }
 
-function assetEtag(raw: string) {
+export function assetEtag(raw: string) {
   return raw.replace(/^W\//, '').replaceAll('"', '')
 }
 

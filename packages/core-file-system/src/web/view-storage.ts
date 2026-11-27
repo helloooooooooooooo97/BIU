@@ -91,7 +91,6 @@ export type PendingViewOp = {
 }
 
 let workspaceGen = 0
-let viewsVersion = 0
 let nextPendingOpId = 1
 const viewListeners = new Set<() => void>()
 const serverViews = new Map<string, SavedView[]>()
@@ -99,7 +98,6 @@ const pendingOps = new Map<string, PendingViewOp[]>()
 const writeSeqByPath = new Map<string, number>()
 
 function emitViewsStoreChange() {
-  viewsVersion += 1
   for (const fn of viewListeners) fn()
 }
 
@@ -108,18 +106,6 @@ export function subscribeViews(listener: () => void): () => void {
   return () => {
     viewListeners.delete(listener)
   }
-}
-
-export function getViewsVersion(): number {
-  return viewsVersion
-}
-
-export function getViewsWorkspaceGen(): number {
-  return workspaceGen
-}
-
-export function hasPendingViewOps(collectionPath: string): boolean {
-  return (pendingOps.get(collectionPath)?.length ?? 0) > 0
 }
 
 function mergePatchOntoView(base: SavedView | undefined, patch: SavedViewFieldPatch): SavedView {

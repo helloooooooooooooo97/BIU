@@ -78,13 +78,6 @@ export function isRecordTreeCollection(path: string) {
   return normalized === PAGES_COLLECTION_PATH || normalized === TASKS_COLLECTION_PATH
 }
 
-const SYSTEM_COLLECTION_ORDER = [
-  WORKSPACE_MEMBERS_COLLECTION_PATH,
-  VIEWS_COLLECTION_PATH,
-  NOTICES_COLLECTION_PATH,
-  TRASH_COLLECTION_PATH,
-] as const
-
 /** 侧栏「核心数据」：代理、页面、标签、插件。 */
 const CORE_COLLECTION_ORDER = [
   AGENTS_COLLECTION_PATH,
