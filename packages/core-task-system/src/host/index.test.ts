@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { Context } from 'cordis'
 import { isAllocatedRecordId } from '@biu/type-file-system'
-import { buildDeliverText, coerceAssigneeArg, computeBlocked, computeBlockedBy, computeNextTriggerAt, computeTurnUsage, defaultTrigger, depsSatisfied, deriveExecution, deriveExecutionFromReports, MAX_REPORT_PROMPTS, normalizeTrigger, parseCron, reportBackToCreator, resolveTaskDeliverAssignee, shouldPromptProgress, sumReportUsage, TasksService } from './index.ts'
+import { buildDeliverText, coerceAssigneeArg, computeBlocked, computeBlockedBy, computeNextTriggerAt, computeTurnUsage, defaultTrigger, depsSatisfied, deriveExecutionFromReports, MAX_REPORT_PROMPTS, normalizeTrigger, parseCron, reportBackToCreator, resolveTaskDeliverAssignee, shouldPromptProgress, sumReportUsage, TasksService } from './index.ts'
 
 test('tasks sqlite crud and status move', async () => {
   const dir = await mkdtemp(join(tmpdir(), 'tasks-'))
@@ -105,28 +105,6 @@ test('coerceAssigneeArg accepts actor object, sessionId string, and person name'
   assert.deepEqual(person, { kind: 'user', name: 'Alice' })
 
   assert.equal(await coerceAssigneeArg(host, null), null)
-})
-
-test('deriveExecution only uses session turn events, not agents.isBusy', () => {
-  assert.equal(deriveExecution(undefined).status, 'idle')
-  assert.equal(deriveExecution([]).status, 'idle')
-
-  const running = deriveExecution([
-    { type: 'turn/start', turn: 1, ts: 1 },
-    { type: 'assistant/chunk', text: 'hi', ts: 2 },
-  ])
-  assert.equal(running.status, 'running')
-  assert.equal(running.turn, 1)
-  assert.equal(running.assistantText, 'hi')
-
-  const idle = deriveExecution([
-    { type: 'turn/start', turn: 2, ts: 1 },
-    { type: 'assistant/message', text: 'done', ts: 2 },
-    { type: 'turn/end', turn: 2, reason: 'complete', ts: 3 },
-  ])
-  assert.equal(idle.status, 'idle')
-  assert.equal(idle.reason, 'complete')
-  assert.equal(idle.assistantText, 'done')
 })
 
 test('deriveExecutionFromReports uses latest report status', () => {

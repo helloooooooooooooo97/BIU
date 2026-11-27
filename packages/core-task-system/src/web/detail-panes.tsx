@@ -178,7 +178,7 @@ function formatDueInput(ts: number) {
   const d = String(date.getDate()).padStart(2, '0')
   return `${y}-${m}-${d}`
 }
-function formatTokens(n: number) {
+export function formatTokens(n: number) {
   if (!n) return '0'
   if (n < 1000) return String(n)
   if (n < 1_000_000) return `${(n / 1000).toFixed(n < 10_000 ? 1 : 0)}k`

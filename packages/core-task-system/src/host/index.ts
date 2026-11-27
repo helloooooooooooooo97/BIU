@@ -908,50 +908,6 @@ function mapRow(row: Record<string, unknown>, listed = false): TaskRow {
 }
 
 /**
- * 从 assignee session 事件流推导执行情况。
- * 只看 turn/start…turn/end；不查询 agents.isBusy（任务层不耦合 agent 运行时）。
- * 已分配但尚无 turn → idle（空窗期由任务自身 status/doing 表达）。
- */
-export function deriveExecution(events: SessionEventLite[] | undefined): TaskExecution {
-  if (!events?.length) {
-    return { status: 'idle', turn: null, assistantText: '', updatedAt: 0 }
-  }
-  let turn: number | null = null
-  let openTurn = false
-  let reason: string | undefined
-  let assistantText = ''
-  const chunks: string[] = []
-  for (const event of events) {
-    if (event.type === 'turn/start') {
-      turn = typeof event.turn === 'number' ? event.turn : turn
-      openTurn = true
-      reason = undefined
-      assistantText = ''
-      chunks.length = 0
-    } else if (event.type === 'turn/end') {
-      turn = typeof event.turn === 'number' ? event.turn : turn
-      reason = typeof event.reason === 'string' ? event.reason : undefined
-      openTurn = false
-    } else if (event.type === 'assistant/message' && typeof event.text === 'string' && event.text.trim()) {
-      assistantText = event.text
-      chunks.length = 0
-    } else if (event.type === 'assistant/chunk' && typeof event.text === 'string') {
-      chunks.push(event.text)
-    }
-  }
-  if (!assistantText && chunks.length) assistantText = chunks.join('')
-  if (assistantText.length > 240) assistantText = `${assistantText.slice(0, 240)}…`
-  const newest = events.at(-1)
-  return {
-    status: openTurn ? 'running' : 'idle',
-    ...(reason ? { reason } : {}),
-    turn,
-    assistantText,
-    updatedAt: typeof newest?.ts === 'number' ? newest.ts : 0,
-  }
-}
-
-/**
  * 从 agent 通过 task_report 提交的报告历史派生执行状态。
  * 任务当前状态 = 最新一次 report 的 status：
  *  - 最新为 done  -> idle + reason 'complete'（已完成）
@@ -971,13 +927,6 @@ export function deriveExecutionFromReports(reports: TaskReport[] | undefined): T
     assistantText: typeof last.note === 'string' && last.note ? last.note.slice(0, 240) : '',
     updatedAt: last.ts,
   }
-}
-
-const ZERO_USAGE: TaskUsage = {
-  inputTokens: 0,
-  outputTokens: 0,
-  cacheReadTokens: 0,
-  totalTokens: 0,
 }
 
 /** 把一组 usage 相加（input/output/cacheRead/total 各自累加）。 */
@@ -1605,8 +1554,6 @@ export function apply(ctx: Context) {
       tasks.update(row.id, {
         trigger: { state: 'idle' },
       })
-      // 周期 cron：更新 lastRun，使下轮定时不重叠
-      if (tr.cron) tasks.update(row.id, { trigger: { state: 'idle' } })
     }
   }
 
