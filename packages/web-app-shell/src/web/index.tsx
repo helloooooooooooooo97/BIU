@@ -50,6 +50,7 @@ import {
 } from '@biu/web-slots/app-modules'
 const ChatSidebar = lazy(() => import('./chat-sidebar.tsx').then((m) => ({ default: m.ChatSidebar })))
 import { ShellSidebarFrame } from './shell-sidebar-frame.tsx'
+import { ShellStoreDialog, type StoreCategory } from './shell-store-dialog.tsx'
 import { ChatSessionTitle } from './chat-session-title.tsx'
 import { BrandCornerMascot, DanceStage } from '@biu/public-mascot'
 import { SessionInspector } from './session-inspector.tsx'
@@ -310,6 +311,8 @@ function Shell(props: SlotProps) {
   const focusCallId = useSessionView((state) => state.focusCallId)
   const routeView = useSessionView((state) => state.view)
   const [settingsOpen, setSettingsOpen] = useState(false)
+  const [storeOpen, setStoreOpen] = useState(false)
+  const [storeTab, setStoreTab] = useState<StoreCategory>('mcp')
   const [searchOpen, setSearchOpen] = useState(false)
   const [settingsTab, setSettingsTab] = useState<string>('account')
   const [workspaceLocation, setWorkspaceLocation] = useState<'device' | 'cloud'>('device')
@@ -408,7 +411,14 @@ function Shell(props: SlotProps) {
   )
   const openSettings = useCallback((tab?: string) => {
     if (tab) setSettingsTab(tab)
+    setStoreOpen(false)
     setSettingsOpen(true)
+  }, [])
+  const openStore = useCallback((tab?: StoreCategory) => {
+    if (tab) setStoreTab(tab)
+    setSettingsOpen(false)
+    setSearchOpen(false)
+    setStoreOpen(true)
   }, [])
   useEffect(() => {
     void hydrateWorkspaceProfile()
@@ -592,7 +602,7 @@ function Shell(props: SlotProps) {
   useEffect(() => {
     if (!leftDrawerOpen && !inspectorOverlay) return
     const onKey = (event: KeyboardEvent) => {
-      if (event.key !== 'Escape' || settingsOpen || searchOpen || configOpen) return
+      if (event.key !== 'Escape' || settingsOpen || storeOpen || searchOpen || configOpen) return
       if (leftDrawerOpenRef.current) {
         event.preventDefault()
         setLeftDrawerOpen(false)
@@ -605,7 +615,7 @@ function Shell(props: SlotProps) {
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [leftDrawerOpen, inspectorOverlay, settingsOpen, searchOpen, configOpen, closeInspectorOverlay])
+  }, [leftDrawerOpen, inspectorOverlay, settingsOpen, storeOpen, searchOpen, configOpen, closeInspectorOverlay])
   const dragPaintRaf = useRef(0)
   const dragPaintPending = useRef<{ sidebar?: number; inspector?: number }>({})
   const applyPendingColumnDrag = useCallback((patch?: { sidebar?: number; inspector?: number }) => {
@@ -967,6 +977,8 @@ function Shell(props: SlotProps) {
           activeId={activeModule}
           agentHref={agentHref}
           onSettings={openSettings}
+          onStore={() => openStore()}
+          storeOpen={storeOpen}
           onSearch={openSearch}
           searchOpen={searchOpen}
         >
@@ -1130,6 +1142,12 @@ function Shell(props: SlotProps) {
           document.body,
         )
         : null}
+      <ShellStoreDialog
+        open={storeOpen}
+        tab={storeTab}
+        onTabChange={setStoreTab}
+        onClose={() => setStoreOpen(false)}
+      />
       {searchOpen
         ? createPortal(
           <Suspense fallback={null}>

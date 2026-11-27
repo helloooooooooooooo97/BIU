@@ -27,6 +27,8 @@ export type ShellSidebarFrameProps = {
   activeId?: string
   agentHref?: string
   onSettings?: (tab?: string) => void
+  onStore?: () => void
+  storeOpen?: boolean
   onSearch?: () => void
   searchOpen?: boolean
   children: ReactNode
@@ -46,6 +48,8 @@ export const ShellSidebarFrame = memo(function ShellSidebarFrame({
   activeId,
   agentHref,
   onSettings,
+  onStore,
+  storeOpen = false,
   onSearch,
   searchOpen = false,
   children,
@@ -229,6 +233,8 @@ export const ShellSidebarFrame = memo(function ShellSidebarFrame({
             activeId={activeId}
             agentHref={agentHref}
             onSettings={() => onSettings()}
+            onStore={onStore}
+            storeOpen={storeOpen}
             onSearch={onSearch}
             searchOpen={searchOpen}
           />
