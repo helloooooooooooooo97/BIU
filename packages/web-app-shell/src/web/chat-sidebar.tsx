@@ -556,6 +556,21 @@ export const ChatSidebar = memo(function ChatSidebar({
                     <span className="min-w-0 flex-1 truncate tracking-normal">{section.label}</span>
                   </button>
                   <ChatCount count={count} />
+                  {section.kind === 'project' ? (
+                    <button
+                      type="button"
+                      className="grid size-6 shrink-0 cursor-pointer place-items-center rounded-md border-0 bg-transparent p-0 text-(--biu-color-text-muted) hover:bg-(--biu-color-bg-hover) hover:text-(--biu-color-text)"
+                      title="添加 Agent"
+                      aria-label="添加 Agent"
+                      data-testid="sidebar-create-agent"
+                      onClick={(event) => {
+                        event.stopPropagation()
+                        createChat()
+                      }}
+                    >
+                      <PlusIcon className="size-4 shrink-0" />
+                    </button>
+                  ) : null}
                 </div>
 
                 <SidebarFold open={!sectionCollapsed}>

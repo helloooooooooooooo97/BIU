@@ -35,18 +35,17 @@ test('groupSessionsByProject groups by path and puts bare chats in Ungrouped', (
   assert.equal(groups.at(-1)?.kind, 'ungrouped')
 })
 
-test('project sidebar keeps an empty ungrouped row so a chat can be added without a project', () => {
+test('project sidebar omits empty ungrouped row when no ungrouped agents exist', () => {
   const onlyProjects = groupSessionsByProject([
     item({ id: 'a', updatedAt: 2, project: { name: 'alpha', path: '/tmp/alpha', boundAt: 1 } }),
   ])
-  assert.equal(onlyProjects.at(-1)?.key, UNGROUPED_PROJECT_KEY)
-  assert.equal(onlyProjects.at(-1)?.label, '未分组')
-  assert.deepEqual(onlyProjects.at(-1)?.sessions, [])
+  assert.deepEqual(
+    onlyProjects.map((group) => group.key),
+    ['/tmp/alpha'],
+  )
 
   const none = groupSessionsByProject([])
-  assert.equal(none.length, 1)
-  assert.equal(none[0]?.key, UNGROUPED_PROJECT_KEY)
-  assert.deepEqual(none[0]?.sessions, [])
+  assert.deepEqual(none, [])
 })
 
 test('sidebar order follows the latest user or assistant message, not later tool saves', () => {
@@ -104,10 +103,10 @@ test('buildSidebarSections puts pinned rows in their own section above projects'
     ['a'],
   )
   assert.equal(sections[0]?.label, '收藏')
-  // 收藏行仍然留在项目分组里，分组自己不重复出现「收藏」
+  // 收藏行仍然留在项目分组里，无未分组会话时不出现空的「未分组」
   assert.deepEqual(
     sections[1]?.groups?.map((group) => group.key),
-    ['/x', UNGROUPED_PROJECT_KEY],
+    ['/x'],
   )
 })
 

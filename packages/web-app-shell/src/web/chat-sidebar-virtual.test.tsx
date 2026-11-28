@@ -141,3 +141,45 @@ test('resolveSidebarGroupProjectPath maps legacy host paths into /workspace in c
     undefined,
   )
 })
+
+test('projects header renders a plus button to create an agent and hides empty ungrouped group', async () => {
+  const created: Array<Record<string, unknown>> = []
+  const sessions: SessionListItem[] = [
+    {
+      id: 'sess-proj',
+      title: '项目助手',
+      eventCount: 1,
+      updatedAt: 100,
+      project: { name: 'hello', path: '/workspace/hello', boundAt: 1 },
+    },
+  ]
+  const state = { sessions, sessionId: 'sess-proj', busySessions: {} as Record<string, true> }
+  const useSessionView = ((select: (s: typeof state) => unknown) => select(state)) as never
+  const sessionView = {
+    get: () => state,
+    newSession: async (opts?: Record<string, unknown>) => {
+      created.push(opts ?? {})
+      return 'sess-new'
+    },
+    load: async () => undefined,
+    deleteSession: async () => undefined,
+    setSessionPinned: async () => undefined,
+  } as unknown as SessionViewService
+
+  const view = render(
+    <MemoryRouter>
+      <ChatSidebar routeSessionId="sess-proj" useSessionView={useSessionView} sessionView={sessionView} />
+    </MemoryRouter>,
+  )
+
+  // 未分组里没有 agent 时不展示「未分组」
+  assert.equal(view.queryByText('未分组'), null)
+  assert.ok(view.queryByText('hello'))
+
+  // 项目标题右侧展示 + 号按钮并触发新建 Agent
+  const plusBtn = view.getByTestId('sidebar-create-agent')
+  await act(async () => {
+    fireEvent.click(plusBtn)
+  })
+  assert.deepEqual(created, [{}])
+})
