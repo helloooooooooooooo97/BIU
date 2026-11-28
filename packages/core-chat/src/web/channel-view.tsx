@@ -595,7 +595,7 @@ export const ChannelStage = memo(function ChannelStage({
                             title=""
                           />
                         </button>
-                        <div className="chat-reply-block group min-w-0 max-w-[85%] flex-1">
+                        <div className="chat-reply-block group !w-3/4 max-w-[calc(100%-38px)] min-w-0">
                           <div className="chat-reply-body !px-0">
                             <div className="flex flex-wrap items-center gap-2 text-(length:--biu-chat-ui-font-size) leading-none text-(--biu-color-text-muted)">
                               <button
@@ -692,7 +692,7 @@ export const ChannelStage = memo(function ChannelStage({
 
                   const cardNode = (
                     <div
-                      className={`chat-user-card group !w-fit max-w-[78%] min-w-[140px]${isEphemeral ? ' opacity-95' : ''}`}
+                      className={`chat-user-card group !w-3/4 max-w-[calc(100%-38px)] min-w-0${isEphemeral ? ' opacity-95' : ''}`}
                     >
                       <div className="chat-user-card-body text-(--biu-color-text)">
                         {msg.replyPreview ? (
