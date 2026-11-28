@@ -670,4 +670,104 @@ describe('Slack-style Group Channels: RBAC, Mention Dispatch, Per-Invoker Queue,
       rmSync(dir, { recursive: true, force: true })
     }
   })
+
+  it('prunes soft-deleted and hard-deleted agents from channel_members while preserving message history', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'biu-channels-prune-'))
+    const db = openAndMigrateBiu(join(dir, 'biu.sqlite'))
+    const store = new CollabStore(db)
+    const alice = store.register('Alice', Date.now(), 'pass123456', 'alice@example.com')
+    const bob = store.register('Bob', Date.now(), 'pass123456', 'bob@example.com')
+    const ws = store.createWorkspace(alice.id, 'Prune WS')
+    store.addMemberByEmail(alice.id, ws.id, 'bob@example.com')
+
+    const agents = new Map<string, { id: string; title: string }>([
+      ['ag-soft', { id: 'ag-soft', title: '软删助手' }],
+      ['ag-hard', { id: 'ag-hard', title: '硬删助手' }],
+      ['ag-keep', { id: 'ag-keep', title: '留存助手' }],
+    ])
+    for (const id of agents.keys()) {
+      runWithAccount(alice.id, () =>
+        runWithRequestWorkspace(ws.id, () => store.attach(ws.id, '/agents', id, Date.now(), { accessMode: 'private' })),
+      )
+    }
+
+    const dbChangeListeners = new Set<() => void>()
+    const broadcasts: Array<{ type: string; payload: unknown }> = []
+    const httpMock = {
+      broadcastAccount: (_acc: string, type: string, payload: unknown) => {
+        broadcasts.push({ type, payload })
+      },
+      broadcast: (type: string, payload: unknown) => {
+        broadcasts.push({ type, payload })
+      },
+    }
+    const fakeCtx = {
+      get: (key: string) => (key === 'account' ? { store } : undefined),
+      on: (event: string, fn: () => void) => {
+        if (event === 'database/change') {
+          dbChangeListeners.add(fn)
+          return () => dbChangeListeners.delete(fn)
+        }
+        return () => undefined
+      },
+      sessions: {
+        peekSummary: (id: string) => {
+          const item = agents.get(id)
+          return item ? { id: item.id, title: item.title, config: { systemPrompt: '' } } : null
+        },
+      },
+      http: httpMock,
+      effect: () => undefined,
+    } as unknown as Context
+
+    const svc = new ChannelService(
+      fakeCtx,
+      () => ({ chat: async () => ({ content: '收到，历史消息应保留', toolCalls: [] }) }),
+      { db },
+    )
+    const asUser = <T>(acc: string, fn: () => T) => runWithAccount(acc, () => runWithRequestWorkspace(ws.id, fn))
+
+    try {
+      const created = asUser(alice.id, () =>
+        svc.createChannel({
+          name: '清理测试群',
+          memberAccountIds: [bob.id],
+          agentIds: ['ag-soft', 'ag-hard', 'ag-keep'],
+        }),
+      )
+      // 让 ag-soft 发一条历史消息
+      asUser(alice.id, () =>
+        svc.sendMessage(created.channel.id, {
+          text: '@软删助手 说句话',
+          mentions: [{ kind: 'agent', id: 'ag-soft', label: '软删助手' }],
+        }),
+      )
+      await waitFor(() =>
+        asUser(alice.id, () =>
+          svc.getChannelDetail(created.channel.id).messages.some((m) => m.senderType === 'agent' && m.senderId === 'ag-soft'),
+        ),
+      )
+
+      // 1. 软删除 ag-soft（移入回收站）并触发 database/change
+      db.prepare(`INSERT INTO record_meta (collection, record_id, deleted_at) VALUES ('/agents', ?, ?)`).run('ag-soft', Date.now())
+      broadcasts.length = 0
+      for (const fn of dbChangeListeners) fn()
+
+      const afterSoft = asUser(alice.id, () => svc.getChannelDetail(created.channel.id))
+      const softAgentIds = afterSoft.members.filter((m) => m.memberType === 'agent').map((m) => m.memberId)
+      assert.deepEqual(softAgentIds.sort(), ['ag-hard', 'ag-keep'])
+      assert.ok(broadcasts.some((b) => b.type === 'channel/members'))
+      assert.ok(afterSoft.messages.some((m) => m.senderType === 'agent' && m.senderId === 'ag-soft'))
+
+      // 2. 硬删除 ag-hard（session 被彻底移除），读取成员列表时自动兜底清理
+      agents.delete('ag-hard')
+      const afterHard = asUser(alice.id, () => svc.getChannelDetail(created.channel.id))
+      const hardAgentIds = afterHard.members.filter((m) => m.memberType === 'agent').map((m) => m.memberId)
+      assert.deepEqual(hardAgentIds, ['ag-keep'])
+    } finally {
+      svc.dispose()
+      db.close()
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
 })

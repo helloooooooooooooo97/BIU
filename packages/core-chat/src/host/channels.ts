@@ -269,6 +269,7 @@ export class ChannelService {
   ) {
     this.dbOverride = opts?.db ?? null
     this.wireApprovals()
+    this.wireDatabaseChanges()
   }
 
   dispose() {
@@ -354,6 +355,86 @@ export class ChannelService {
       })
       this.disposeCallbacks.push(offDecide)
     }
+  }
+
+  private wireDatabaseChanges() {
+    const on = (this.ctx as unknown as { on?: (event: string, fn: () => void) => () => void }).on
+    if (typeof on !== 'function') return
+    const off = on.call(this.ctx, 'database/change', () => {
+      try {
+        this.pruneDeletedAgents()
+      } catch {
+        /* ignore */
+      }
+    })
+    if (typeof off === 'function') this.disposeCallbacks.push(off)
+  }
+
+  private isAgentDeleted(agentId: string): boolean {
+    const cleanId = String(agentId ?? '').trim()
+    if (!cleanId) return true
+    try {
+      const row = this.db()
+        .prepare(`SELECT deleted_at FROM record_meta WHERE collection = '/agents' AND record_id = ? LIMIT 1`)
+        .get(cleanId) as { deleted_at?: number | null } | undefined
+      if (row && row.deleted_at != null) return true
+    } catch {
+      /* record_meta may not exist in minimal test db */
+    }
+    if (typeof this.ctx.sessions?.peekSummary === 'function') {
+      if (!this.ctx.sessions.peekSummary(cleanId)) return true
+    }
+    return false
+  }
+
+  /**
+   * 清理已删除（移入回收站或彻底删除）的 Agent 群成员：
+   * - 保留其在 channel_messages 中的历史消息；
+   * - 中止其在该群中正在执行或排队的任务；
+   * - 从 channel_members 移除并向群内广播最新成员列表。
+   */
+  pruneDeletedAgents(channelId?: string): string[] {
+    const rows = (channelId
+      ? this.db()
+          .prepare(`SELECT channel_id, member_id FROM channel_members WHERE channel_id = ? AND member_type = 'agent'`)
+          .all(channelId)
+      : this.db()
+          .prepare(`SELECT channel_id, member_id FROM channel_members WHERE member_type = 'agent'`)
+          .all()) as Array<{ channel_id: string; member_id: string }>
+    if (!rows.length) return []
+
+    const removedByChannel = new Map<string, string[]>()
+    for (const row of rows) {
+      if (!this.isAgentDeleted(row.member_id)) continue
+      const list = removedByChannel.get(row.channel_id) ?? []
+      list.push(row.member_id)
+      removedByChannel.set(row.channel_id, list)
+    }
+    if (!removedByChannel.size) return []
+
+    const prunedIds: string[] = []
+    for (const [chId, agentIds] of removedByChannel.entries()) {
+      for (const agentId of agentIds) {
+        const key = this.queueKey(chId, agentId)
+        const state = this.queues.get(key)
+        if (state) {
+          state.active?.abort.abort()
+          for (const job of state.queue) job.abort.abort()
+          this.queues.delete(key)
+        }
+        this.db()
+          .prepare(`DELETE FROM channel_members WHERE channel_id = ? AND member_type = 'agent' AND member_id = ?`)
+          .run(chId, agentId)
+        prunedIds.push(agentId)
+      }
+      const chRow = this.db()
+        .prepare(`SELECT workspace_id FROM channels WHERE id = ?`)
+        .get(chId) as { workspace_id?: string } | undefined
+      const workspaceId = chRow?.workspace_id || ''
+      const members = this.listMembers(chId, 'local', workspaceId, true)
+      this.broadcastToChannel(chId, workspaceId, 'channel/members', { channelId: chId, members })
+    }
+    return prunedIds
   }
 
   private schemaReady = new WeakSet<DatabaseSync>()
@@ -886,7 +967,13 @@ export class ChannelService {
     return members
   }
 
-  listMembers(channelId: string, viewerAccountId = this.currentActorIds().accountId, workspaceId?: string): ChannelMemberView[] {
+  listMembers(
+    channelId: string,
+    viewerAccountId = this.currentActorIds().accountId,
+    workspaceId?: string,
+    skipPrune = false,
+  ): ChannelMemberView[] {
+    if (!skipPrune) this.pruneDeletedAgents(channelId)
     const channelWorkspaceId =
       workspaceId ??
       ((this.db().prepare(`SELECT workspace_id FROM channels WHERE id = ?`).get(channelId) as { workspace_id?: string } | undefined)
