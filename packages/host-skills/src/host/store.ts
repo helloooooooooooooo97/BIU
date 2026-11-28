@@ -1,4 +1,5 @@
 import type { CollectionUpdateOptions } from '@biu/type-file-system'
+import { randomBytes } from 'node:crypto'
 import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, realpathSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { isAbsolute, join, posix, resolve, sep } from 'node:path'
 import { tmpdir } from 'node:os'
@@ -264,10 +265,29 @@ export function packSkillImport(files: SkillImportFile[]) {
   }
 }
 
+export type SkillsStoreOptions = {
+  isIdTaken?: (id: string) => boolean
+  canReuseDraft?: (id: string) => boolean
+}
+
 export class SkillsStore {
   private listed: SkillRecord[] | null = null
 
-  constructor(private root = skillRoot(), private workspaceId?: string) {}
+  constructor(
+    private root = skillRoot(),
+    private workspaceId?: string,
+    private options?: SkillsStoreOptions,
+  ) {}
+
+  private isExternallyTaken(id: string): boolean {
+    return Boolean(this.options?.isIdTaken?.(id))
+  }
+
+  private canReuseBlankDraft(id: string): boolean {
+    if (this.isExternallyTaken(id)) return false
+    if (this.options?.canReuseDraft) return this.options.canReuseDraft(id)
+    return true
+  }
 
   private editorCollectionPath() {
     return this.workspaceId ? `/skills/${this.workspaceId}` : '/skills'
@@ -399,11 +419,23 @@ export class SkillsStore {
 
   private allocateId(base: string) {
     const existingIds = new Set(this.list().map((item) => item.id))
+    const taken = (id: string) => existingIds.has(id) || this.isExternallyTaken(id)
     const root = trySkillId(base) || 'new-skill'
-    if (!existingIds.has(root)) return root
+    if (this.workspaceId) {
+      // 云端多工作区下，resource_policies / record_meta 以 (collection, record_id) 唯一定位；
+      // 默认草稿（new-skill）或已被其他空间占用的 slug 必须带随机后缀，避免跨空间撞 ID 报 409。
+      if (root !== 'new-skill' && !taken(root)) return root
+      const prefix = root.slice(0, 55).replace(/-+$/g, '') || 'skill'
+      for (let attempt = 0; attempt < 64; attempt++) {
+        const id = `${prefix}-${randomBytes(4).toString('hex')}`
+        if (ID_PATTERN.test(id) && !taken(id)) return id
+      }
+      throw new Error('could not allocate skill id')
+    }
+    if (!taken(root)) return root
     for (let n = 2; n < 1000; n++) {
       const id = `${root}-${n}`.slice(0, 64)
-      if (ID_PATTERN.test(id) && !existingIds.has(id)) return id
+      if (ID_PATTERN.test(id) && !taken(id)) return id
     }
     throw new Error('could not allocate skill id')
   }
@@ -411,6 +443,7 @@ export class SkillsStore {
   private blankDraft() {
     return this.list().find((item) => {
       if (item.name !== '新技能' || item.description.trim() || item.notes.trim()) return false
+      if (!this.canReuseBlankDraft(item.id)) return false
       return this.listFiles(item.id).length === 0
     })
   }
@@ -436,7 +469,11 @@ export class SkillsStore {
       const existing = this.blankDraft()
       if (existing) return existing
     }
-    const id = requested || this.allocateId(slugify(name) || 'new-skill')
+    const id = requested
+      ? this.isExternallyTaken(requested) && !this.get(requested)
+        ? this.allocateId(requested)
+        : requested
+      : this.allocateId(slugify(name) || 'new-skill')
     if (this.get(id)) throw new Error(`skill already exists: ${id}`)
     const now = Date.now()
     const created = this.put({

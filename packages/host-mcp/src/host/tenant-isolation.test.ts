@@ -144,3 +144,60 @@ test('MCP supports 3-state sharing while isolating enabled state per account', a
   assert.equal(carolRow.shareScope, '空间')
   assert.equal(carolRow.enabled, false)
 })
+
+test('MCP blank drafts across workspaces allocate globally unique ids without 409 collision', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'biu-mcp-multi-ws-'))
+  tempDirs.push(dir)
+  process.env.BIU_ONLINE = '1'
+  process.env.BIU_HOME = dir
+  process.env.BIU_DATA_DIR = dir
+
+  const ctx = new Context()
+  const db = new DatabaseService(ctx)
+  const collab = new CollabStore(openAndMigrateBiu(join(dir, 'biu.sqlite')))
+  class AccountBridge extends Service {
+    store = collab
+    authorization = collab.authorization
+    workspaceLocation = () => 'cloud' as const
+    constructor(inner: Context) {
+      super(inner, 'account')
+    }
+  }
+  await ctx.plugin(AccountBridge)
+
+  const mcp = new McpService(ctx)
+  db.register(mcpCollection(mcp))
+
+  const ada = collab.register('', Date.now(), 'secret1', 'mcp-ws-ada@example.com')
+  const bob = collab.register('', Date.now(), 'secret1', 'mcp-ws-bob@example.com')
+  const wsA = collab.createWorkspace(ada.id, 'MCP WS A')
+  const wsB = collab.createWorkspace(bob.id, 'MCP WS B')
+  collab.setActive(ada.id, wsA.id)
+  collab.setActive(bob.id, wsB.id)
+
+  const asCtx = <T>(workspaceId: string, accountId: string, fn: () => T) =>
+    runWithRequestWorkspace(workspaceId, () => runWithAccount(accountId, fn))
+
+  const draftA = await asCtx(wsA.id, ada.id, () => db.create('/mcp', [{}]))
+  const draftB = await asCtx(wsB.id, bob.id, () => db.create('/mcp', [{}]))
+  const idA = String(draftA.items[0]!.value.id)
+  const idB = String(draftB.items[0]!.value.id)
+  assert.match(idA, /^new-server-[0-9a-f]{8}$/)
+  assert.match(idB, /^new-server-[0-9a-f]{8}$/)
+  assert.notEqual(idA, idB)
+
+  // Creating a named server colliding with another workspace fails cleanly and rolls back the temp draft
+  await asCtx(wsA.id, ada.id, () =>
+    db.create('/mcp', [{ title: 'shared-mcp', transport: 'http', url: 'https://a.example.com/mcp', enabled: false }]),
+  )
+  await assert.rejects(() =>
+    asCtx(wsB.id, bob.id, () =>
+      db.create('/mcp', [{ title: 'shared-mcp', transport: 'http', url: 'https://b.example.com/mcp', enabled: false }]),
+    ),
+  )
+  const wsBRows = (await asCtx(wsB.id, bob.id, () => db.list('/mcp'))) as { items: Array<{ id: string }> }
+  assert.deepEqual(
+    wsBRows.items.map((r) => r.id).filter((id) => id !== 'echo'),
+    [idB],
+  )
+})

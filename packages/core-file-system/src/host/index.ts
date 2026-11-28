@@ -2172,19 +2172,6 @@ export class DatabaseService extends Service implements Database {
     }
     const created = await spec.create(payloads)
     for (const [index, record] of created.entries()) {
-      await this.stampActor(spec.path, record.id)
-      const sourceIndex = selected[index]?.index ?? index
-      const banner = banners[sourceIndex]
-      if (banner !== undefined) this.tags.writeRecordBanner(spec.path, record.id, banner)
-      const input = payloads[index] ?? records[sourceIndex] ?? record
-      if ('emoji' in input) {
-        this.tags.writeRecordMeta(spec.path, record.id, {
-          emoji: String(input.emoji ?? ''),
-        })
-      }
-      if (schema.fields.tag) {
-        this.persistRecordTag(spec, record.id, input.tag ?? record.tag, record)
-      }
       const parentField = spec.schema.parentField
       const parentRecordId = parentField ? String(record[parentField] ?? '').trim() : ''
       if (spec.path !== WORKSPACE_MEMBERS_COLLECTION_PATH && spec.path !== COMMENTS_COLLECTION_PATH) {
@@ -2200,6 +2187,19 @@ export class DatabaseService extends Service implements Database {
         })
         if (shared) this.markPublicView(spec.path, record.id)
         if (local || device) this.markDeviceRecord(spec.path, record.id)
+      }
+      await this.stampActor(spec.path, record.id)
+      const sourceIndex = selected[index]?.index ?? index
+      const banner = banners[sourceIndex]
+      if (banner !== undefined) this.tags.writeRecordBanner(spec.path, record.id, banner)
+      const input = payloads[index] ?? records[sourceIndex] ?? record
+      if ('emoji' in input) {
+        this.tags.writeRecordMeta(spec.path, record.id, {
+          emoji: String(input.emoji ?? ''),
+        })
+      }
+      if (schema.fields.tag) {
+        this.persistRecordTag(spec, record.id, input.tag ?? record.tag, record)
       }
       const initialBody = initialBodies[sourceIndex]
       if (initialBody !== undefined && bodyKey) {
