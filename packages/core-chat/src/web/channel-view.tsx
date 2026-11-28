@@ -569,41 +569,33 @@ export const ChannelStage = memo(function ChannelStage({
                   const accountAvatar =
                     msg.senderType === 'account' ? resolveAvatar(msg.senderId, msg.senderAvatar) : undefined
 
-                  // 1. Agent 正常公开回复：左侧头像 + 右侧 .chat-reply-block（与 1v1 样式统一）
+                  // 1. Agent 正常公开回复：头像收进元数据行，左侧 3/4 宽 .chat-reply-block
                   if (isAgent && !isEphemeral) {
                     return (
                       <div
                         key={msg.id}
-                        className="flex w-full items-start justify-start gap-2.5"
+                        className="flex w-full items-start justify-start"
                         data-testid="channel-message"
                         data-sender-type="agent"
                         data-self="false"
                       >
-                        <button
-                          type="button"
-                          className="mt-0.5 shrink-0 cursor-pointer border-0 bg-transparent p-0"
-                          title={`查看 ${msg.senderName}`}
-                          aria-label={`查看 ${msg.senderName}`}
-                          data-testid="channel-msg-avatar-left"
-                          onClick={() => handleAgentClick(msg.senderId)}
-                        >
-                          <SidebarMascot
-                            size={28}
-                            sessionId={msg.senderId}
-                            identity={resolveSessionMascot(msg.senderId, msg.senderMascot)}
-                            animate={false}
-                            title=""
-                          />
-                        </button>
-                        <div className="chat-reply-block group !w-3/4 max-w-[calc(100%-38px)] min-w-0">
+                        <div className="chat-reply-block group !w-3/4 min-w-0">
                           <div className="chat-reply-body !px-0">
                             <div className="flex flex-wrap items-center gap-2 text-(length:--biu-chat-ui-font-size) leading-none text-(--biu-color-text-muted)">
                               <button
                                 type="button"
                                 className="inline-flex cursor-pointer items-center gap-1.5 border-0 bg-transparent p-0 text-(--biu-color-text) hover:underline"
                                 title="查看 Agent 个人 / 名片"
+                                data-testid="channel-msg-avatar"
                                 onClick={() => handleAgentClick(msg.senderId)}
                               >
+                                <SidebarMascot
+                                  size={16}
+                                  sessionId={msg.senderId}
+                                  identity={resolveSessionMascot(msg.senderId, msg.senderMascot)}
+                                  animate={false}
+                                  title=""
+                                />
                                 <span className="font-medium">{msg.senderName}</span>
                               </button>
                               {msg.replyPreview ? (
@@ -661,38 +653,10 @@ export const ChannelStage = memo(function ChannelStage({
                     )
                   }
 
-                  // 2. 人类消息（自己在右、头像在右；他人在左、头像在左）& Ephemeral/系统消息（左侧）
-                  const avatarNode =
-                    isAgent || isSystemAgent ? (
-                      <button
-                        type="button"
-                        className="mt-0.5 shrink-0 cursor-pointer border-0 bg-transparent p-0"
-                        title={`查看 ${msg.senderName}`}
-                        aria-label={`查看 ${msg.senderName}`}
-                        data-testid={isSelf ? 'channel-msg-avatar-right' : 'channel-msg-avatar-left'}
-                        onClick={() => handleAgentClick(msg.senderId)}
-                      >
-                        <SidebarMascot
-                          size={28}
-                          sessionId={msg.senderId}
-                          identity={resolveSessionMascot(msg.senderId, msg.senderMascot)}
-                          animate={false}
-                          title=""
-                        />
-                      </button>
-                    ) : (
-                      <span
-                        className="mt-0.5 inline-flex shrink-0"
-                        title={msg.senderName}
-                        data-testid={isSelf ? 'channel-msg-avatar-right' : 'channel-msg-avatar-left'}
-                      >
-                        <MemberAvatar avatar={accountAvatar} seed={msg.senderId} size={28} />
-                      </span>
-                    )
-
+                  // 2. 人类消息（自己在右、他人在左）& Ephemeral/系统消息（左侧）；头像直接展示在底部统计条中
                   const cardNode = (
                     <div
-                      className={`chat-user-card group !w-3/4 max-w-[calc(100%-38px)] min-w-0${isEphemeral ? ' opacity-95' : ''}`}
+                      className={`chat-user-card group !w-3/4 min-w-0${isEphemeral ? ' opacity-95' : ''}`}
                     >
                       <div className="chat-user-card-body text-(--biu-color-text)">
                         {msg.replyPreview ? (
@@ -749,12 +713,28 @@ export const ChannelStage = memo(function ChannelStage({
                             <button
                               type="button"
                               className="inline-flex min-w-0 cursor-pointer items-center gap-1.5 border-0 bg-transparent p-0 text-(--biu-color-text-muted) hover:text-(--biu-color-text)"
+                              title={`查看 ${msg.senderName}`}
+                              data-testid="channel-msg-avatar"
                               onClick={() => handleAgentClick(msg.senderId)}
                             >
+                              <SidebarMascot
+                                size={16}
+                                sessionId={msg.senderId}
+                                identity={resolveSessionMascot(msg.senderId, msg.senderMascot)}
+                                animate={false}
+                                title=""
+                              />
                               <span className="truncate font-medium">{msg.senderName}</span>
                             </button>
                           ) : (
-                            <span className="truncate font-medium">{msg.senderName}</span>
+                            <span
+                              className="inline-flex min-w-0 items-center gap-1.5"
+                              title={msg.senderName}
+                              data-testid="channel-msg-avatar"
+                            >
+                              <MemberAvatar avatar={accountAvatar} seed={msg.senderId} size={16} />
+                              <span className="truncate font-medium">{msg.senderName}</span>
+                            </span>
                           )}
 
                           {isEphemeral ? (
@@ -810,19 +790,9 @@ export const ChannelStage = memo(function ChannelStage({
                       data-testid={isEphemeral ? 'channel-ephemeral-msg' : 'channel-message'}
                       data-sender-type={msg.senderType}
                       data-self={isSelf ? 'true' : 'false'}
-                      className={`flex w-full items-start gap-2.5 ${isSelf ? 'justify-end' : 'justify-start'}`}
+                      className={`flex w-full items-start ${isSelf ? 'justify-end' : 'justify-start'}`}
                     >
-                      {isSelf ? (
-                        <>
-                          {cardNode}
-                          {avatarNode}
-                        </>
-                      ) : (
-                        <>
-                          {avatarNode}
-                          {cardNode}
-                        </>
-                      )}
+                      {cardNode}
                     </div>
                   )
                 })}

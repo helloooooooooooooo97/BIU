@@ -367,19 +367,21 @@ test('ChannelStage reuses 1v1 chat card/composer/float styles and syncs workspac
     assert.ok(imgs.includes(aliceAvatar), 'self avatar in message must match workspace avatar')
     assert.equal(view.container.querySelector('[data-ai-avatar="mesh"]'), null)
 
-    // 我发的消息在右侧且头像在右边；他人发的消息在左侧且头像在左边；左右消息卡片统一占 3/4 宽
+    // 我发的消息在右侧、他人发的消息在左侧；左右消息卡片统一占 3/4 宽，头像直接展示在底部统计条内而非气泡框外
     const rows = [...view.container.querySelectorAll('[data-testid="channel-message"]')]
     assert.equal(rows.length, 2)
     const otherRow = rows[0]!
     const selfRow = rows[1]!
     assert.equal(otherRow.getAttribute('data-self'), 'false')
     assert.ok(otherRow.className.includes('justify-start'))
-    assert.equal(otherRow.firstElementChild?.getAttribute('data-testid'), 'channel-msg-avatar-left')
+    assert.equal(otherRow.children.length, 1)
     assert.ok(otherRow.querySelector('.chat-user-card')?.className.includes('!w-3/4'))
+    assert.ok(otherRow.querySelector('.user-turn-bar [data-testid="channel-msg-avatar"]'))
     assert.equal(selfRow.getAttribute('data-self'), 'true')
     assert.ok(selfRow.className.includes('justify-end'))
-    assert.equal(selfRow.lastElementChild?.getAttribute('data-testid'), 'channel-msg-avatar-right')
+    assert.equal(selfRow.children.length, 1)
     assert.ok(selfRow.querySelector('.chat-user-card')?.className.includes('!w-3/4'))
+    assert.ok(selfRow.querySelector('.user-turn-bar [data-testid="channel-msg-avatar"]'))
   })
 
   // 打开「群成员与 Agent」弹窗：必须使用统一 .biu-float-overlay / .scfg-float 且头像一致
