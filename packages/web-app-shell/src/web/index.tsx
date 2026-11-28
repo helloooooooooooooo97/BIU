@@ -528,6 +528,9 @@ function Shell(props: SlotProps) {
   const inspectorVisible = inspectorOpen
   // 侧栏高亮跟 URL，不跟 store：点一下立刻亮，不等 load 完成
   const routeSessionId = appRoute.kind === 'session' ? appRoute.sessionId : null
+  const routeChannelId = appRoute.kind === 'channel' ? appRoute.channelId : null
+  const channelSidebarEntries = useSlotEntries(slots, 'chat-sidebar-channels')
+  const channelStageEntries = useSlotEntries(slots, 'channel-stage')
   const agentHref = sessionId ? sessionAppPath(sessionId) : '/'
   const showChatSidebar = activeModule === 'agent'
   const visitedChatSidebar = useRef(false)
@@ -753,10 +756,13 @@ function Shell(props: SlotProps) {
   // 单向：URL → sessionView。插件还没挂上时不要把 /database 当成首页。
   useEffect(() => {
     const waitingOnNav =
-      !navReady && location.pathname !== '/' && !location.pathname.startsWith('/agents/')
+      !navReady &&
+      location.pathname !== '/' &&
+      !location.pathname.startsWith('/agents/') &&
+      !location.pathname.startsWith('/channels/')
     if (waitingOnNav) return
     const route = parseAppPath(location.pathname, pluginModules)
-    if (route.kind === 'auth') return
+    if (route.kind === 'auth' || route.kind === 'channel') return
     void sessionView.applyRoute(route).catch(() => undefined)
   }, [location.pathname, navReady, sessionView, appModules.version()])
 
@@ -983,9 +989,28 @@ function Shell(props: SlotProps) {
                 <Suspense fallback={null}>
                   <ChatSidebar
                     routeSessionId={routeSessionId}
+                    routeChannelId={routeChannelId}
                     useSessionView={useSessionView}
                     sessionView={sessionView}
                     iconRail={sidebarNarrow && !leftDrawerOpen}
+                    channelsHeader={
+                      channelSidebarEntries.length > 0 ? (
+                        <>
+                          {channelSidebarEntries.map((entry) => {
+                            const extra = entry.props ? entry.props() : {}
+                            return (
+                              <entry.Component
+                                key={entry.id}
+                                {...extra}
+                                routeChannelId={routeChannelId}
+                                iconRail={sidebarNarrow && !leftDrawerOpen}
+                                renderSlot={props.renderSlot}
+                              />
+                            )
+                          })}
+                        </>
+                      ) : null
+                    }
                   />
                 </Suspense>
               ) : null}
@@ -1012,12 +1037,34 @@ function Shell(props: SlotProps) {
           aria-hidden={activeModule !== 'agent'}
           inert={activeModule !== 'agent' || undefined}
         >
-          {chatHeader}
-          <AgentMainPanels
-            renderSlot={props.renderSlot}
-            header={overlayHeader}
-            showCenter={activeModule === 'agent'}
-          />
+          {routeChannelId && channelStageEntries.length > 0 ? (
+            <>
+              {channelStageEntries.map((entry) => {
+                const extra = entry.props ? entry.props() : {}
+                return (
+                  <entry.Component
+                    key={entry.id}
+                    {...extra}
+                    channelId={routeChannelId}
+                    leftHidden={leftHidden}
+                    expandSidebar={expandSidebar}
+                    inspectorOpen={inspectorOpen}
+                    toggleInspector={toggleInspector}
+                    renderSlot={props.renderSlot}
+                  />
+                )
+              })}
+            </>
+          ) : (
+            <>
+              {chatHeader}
+              <AgentMainPanels
+                renderSlot={props.renderSlot}
+                header={overlayHeader}
+                showCenter={activeModule === 'agent'}
+              />
+            </>
+          )}
         </div>
         <PluginModuleStage
           slots={slots}

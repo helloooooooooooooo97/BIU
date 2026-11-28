@@ -28,6 +28,8 @@ export {
   isKnownAppPath,
   isSessionAppPath,
   sessionAppPath,
+  isChannelAppPath,
+  channelAppPath,
   buildAppPath,
   routeFromState,
   parseDatabaseRest,

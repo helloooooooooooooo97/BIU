@@ -10,10 +10,11 @@ export type InspectorPanelExtra = {
 
 /** 右侧检查器跟当前 Session：页面附加块不进这一栏，但 Session 可以加数据库。 */
 export function inspectorPanelMatches(extra: InspectorPanelExtra, sessionId: string | null): boolean {
-  if (!sessionId) return false
   const kinds = Array.isArray(extra.centerKinds)
     ? extra.centerKinds.filter((item): item is InspectorCenterKind => typeof item === 'string')
     : []
+  if (kinds.includes('channel') && extra.requiresSession === false) return true
+  if (!sessionId) return false
   if (kinds.length) return kinds.includes('session')
   if (extra.common) return false
   return Boolean(extra.requiresSession)

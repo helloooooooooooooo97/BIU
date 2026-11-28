@@ -369,6 +369,7 @@ test('chat page paths skip the overlay', () => {
   assert.equal(isChatPagePath('/'), true)
   assert.equal(isChatPagePath('/agents/abc'), true)
   assert.equal(isChatPagePath('/agents/abc/debug'), true)
+  assert.equal(isChatPagePath('/channels/ch-1'), true)
   assert.equal(isChatPagePath('/s/abc'), false)
   assert.equal(isChatPagePath('/database'), false)
   assert.equal(isChatPagePath('/tasks'), false)

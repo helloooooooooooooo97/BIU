@@ -1,12 +1,13 @@
 import { createElement, lazy, Suspense, type ComponentType } from 'react'
 import type { Context } from 'cordis'
-import { ChatBubbleLeftRightIcon, SignalIcon, MapIcon } from '@heroicons/react/16/solid'
+import { ChatBubbleLeftRightIcon, CpuChipIcon, SignalIcon, MapIcon } from '@heroicons/react/16/solid'
 import { bindSessionView, type SessionViewService } from '@biu/web-session-view'
 import type { SlotProps } from '@biu/web-slots'
 import { ChatSelectBubble } from './chat-select-bubble.tsx'
 import { bindProjectView, type ProjectViewService } from '@biu/web-slots/project-view'
 import type { PickService } from '@biu/core-pick/web'
 import type { DatabaseUi } from '@biu/type-file-system/ui'
+import { bindChannelRealtime } from './channel-store.ts'
 
 export const name = 'chat-ui'
 export const inject = ['slots', 'sessionView', 'projectView']
@@ -30,6 +31,15 @@ const ChatComposer = lazySlot(async () => ({ default: (await import('./composer.
 const ChatConfigBanner = lazySlot(async () => ({ default: (await import('./config-banner.tsx')).ChatConfigBanner }))
 const ApprovalsRail = lazySlot(async () => ({ default: (await import('./approvals.tsx')).ApprovalsRail }))
 const ChatLiveHud = lazySlot(async () => ({ default: (await import('./live-hud.tsx')).ChatLiveHud }))
+const ChannelSidebarSections = lazySlot<SlotProps>(async () => ({
+  default: (await import('./channel-sidebar.tsx')).ChannelSidebarSections as unknown as ComponentType<SlotProps>,
+}))
+const ChannelStage = lazySlot<SlotProps>(async () => ({
+  default: (await import('./channel-view.tsx')).ChannelStage as unknown as ComponentType<SlotProps>,
+}))
+const ChannelRunInspector = lazySlot<SlotProps>(async () => ({
+  default: (await import('./channel-run-inspector.tsx')).ChannelRunInspector as unknown as ComponentType<SlotProps>,
+}))
 
 function StageChatMessageOutline(props: SlotProps) {
   return createElement(ChatMessageOutline, {
@@ -67,6 +77,25 @@ export function apply(ctx: Context) {
     projectView: project,
   }
   const props = () => slotProps
+  ctx.effect(() => {
+    const snap = ctx.get('snapshot') as { onMessage?: (type: string, handler: (payload: unknown) => void) => () => void } | undefined
+    return bindChannelRealtime(snap)
+  }, 'chat-ui.channels-realtime')
+
+  ctx.slots.place('chat-sidebar-channels', ChannelSidebarSections, { key: 'chat-channels-sidebar', order: 1, props })
+  ctx.slots.place('channel-stage', ChannelStage, { key: 'chat-channel-stage', order: 1, props })
+  ctx.slots.place('inspector-panels', ChannelRunInspector, {
+    key: 'chat-channel-run',
+    order: 3,
+    props: () => ({
+      ...slotProps,
+      tabId: 'channel-run',
+      tabLabel: '执行详情',
+      tabIcon: CpuChipIcon,
+      requiresSession: false,
+      centerKinds: ['session', 'channel'],
+    }),
+  })
   ctx.slots.place('root-overlays', ChatSelectBubble, { key: 'chat-select-bubble', order: 12 })
   ctx.slots.place('stage', ChatThread, { key: 'chat-thread', order: 1, props })
   ctx.slots.place('stage-aside', StageChatMessageOutline, { key: 'chat-outline', order: 1, props })
@@ -108,6 +137,7 @@ export function apply(ctx: Context) {
   ctx.inject(['databaseUi'], (inner) => {
     const ui = inner.get('databaseUi') as DatabaseUi
     let sessions: { dispose: () => void } | undefined
+    let members: { dispose: () => void } | undefined
     let chatView: { dispose: () => void } | undefined
     let chatTools: { dispose: () => void } | undefined
     void import('./sessions-chrome.tsx').then((mod) => {
@@ -121,9 +151,13 @@ export function apply(ctx: Context) {
       })
       chatTools = ui.registerDetailTools('/agents', mod.AGENTS_DETAIL_TOOLS)
     })
+    void import('./members-chrome.tsx').then((mod) => {
+      members = ui.decorate('/workspace-members', mod.membersChrome())
+    })
     return () => {
       chatTools?.dispose()
       chatView?.dispose()
+      members?.dispose()
       sessions?.dispose()
     }
   })

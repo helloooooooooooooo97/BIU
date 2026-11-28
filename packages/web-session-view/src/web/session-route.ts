@@ -13,13 +13,14 @@ import { matchRegisteredModule, type AppModule } from '@biu/web-slots/app-module
 
 export type RouteView = 'chat' | 'debug'
 
-export type InspectorCenterKind = 'session' | 'collection-view' | 'record' | 'task' | 'module'
+export type InspectorCenterKind = 'session' | 'channel' | 'collection-view' | 'record' | 'task' | 'module'
 
 export type AppRoute =
   | { kind: 'home' }
   | { kind: 'auth'; mode: 'login' | 'register' }
   | { kind: 'share'; token: string; recordId?: string }
   | { kind: 'session'; sessionId: string; view: RouteView }
+  | { kind: 'channel'; channelId: string }
   | { kind: 'module'; moduleId: string; path: string }
   | { kind: 'collection-view'; moduleId: string; path: string; collection: string; viewId?: string }
   | { kind: 'record'; moduleId: string; path: string; collection: string; recordId: string; viewId?: string }
@@ -28,14 +29,32 @@ const DATABASE_FLAT = /^\/(?:c\/)?([^/]+)(?:\/(?:view|v)\/([^/]+)|\/(?:record|r)
 const DATABASE_NESTED_RECORD =
   /^\/(?:c\/)?([^/]+)\/(?:view|v)\/([^/]+)\/(?:record|r)\/([^/]+)$/
 const SESSION_APP = /^\/agents\/([^/]+)(?:\/(chat|debug|trajectory))?$/
+const CHANNEL_APP = /^\/channels\/([^/]+)$/
 
 export function sessionAppPath(sessionId: string, view: RouteView = 'chat') {
   const base = `/agents/${encodeURIComponent(sessionId)}`
   return view === 'debug' ? `${base}/debug` : base
 }
 
+export function channelAppPath(channelId: string) {
+  return `/channels/${encodeURIComponent(channelId)}`
+}
+
 export function isSessionAppPath(pathname: string) {
   return SESSION_APP.test(normalizePath(pathname))
+}
+
+export function isChannelAppPath(pathname: string) {
+  return CHANNEL_APP.test(normalizePath(pathname))
+}
+
+function parseChannelApp(path: string): Extract<AppRoute, { kind: 'channel' }> | null {
+  const match = path.match(CHANNEL_APP)
+  if (!match?.[1]) return null
+  return {
+    kind: 'channel',
+    channelId: decodeURIComponent(match[1]),
+  }
 }
 
 function parseSessionApp(path: string): Extract<AppRoute, { kind: 'session' }> | null {
@@ -108,6 +127,8 @@ export function parseAppPath(pathname: string, plugins: AppModule[] = []): AppRo
   if (path === '/register' || path === '/signup') return { kind: 'auth', mode: 'register' }
   const session = parseSessionApp(path)
   if (session) return session
+  const channel = parseChannelApp(path)
+  if (channel) return channel
   const hit = matchRegisteredModule(path, plugins)
   if (hit) {
     const nested = parseDatabaseRest(path, hit)
@@ -131,12 +152,13 @@ export function isKnownAppPath(pathname: string, plugins: AppModule[] = []): boo
   if (path === '/' || path === '/login' || path === '/register' || path === '/signup') return true
   if (/^\/share\/[^/]+(?:\/r\/[^/]+)?$/.test(path)) return true
   if (matchRegisteredModule(path, plugins)) return true
-  return isSessionAppPath(path)
+  return isSessionAppPath(path) || isChannelAppPath(path)
 }
 
 export function buildAppPath(route: AppRoute): string {
   if (route.kind === 'home') return '/'
   if (route.kind === 'auth') return route.mode === 'register' ? '/register' : '/login'
+  if (route.kind === 'channel') return channelAppPath(route.channelId)
   if (route.kind === 'share') {
     const base = `/share/${encodeURIComponent(route.token)}`
     return route.recordId ? `${base}/r/${encodeURIComponent(route.recordId)}` : base
