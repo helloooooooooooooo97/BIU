@@ -16,6 +16,9 @@ export class NoticesService extends Service {
       inner.http.route('POST', '/api/db/notices/clear', (route: { send: (status: number, body: unknown) => void }) => {
         route.send(200, { ok: true, cleared: this.clear() })
       })
+      inner.http.route('POST', '/api/db/notices/read-all', (route: { send: (status: number, body: unknown) => void }) => {
+        route.send(200, { ok: true, marked: this.markAllRead() })
+      })
     })
   }
 
@@ -52,6 +55,12 @@ export class NoticesService extends Service {
     return n
   }
 
+  markAllRead() {
+    const n = this.store.markAllRead()
+    if (n) this.bump()
+    return n
+  }
+
   clear() {
     const n = this.store.clear()
     if (n) this.bump()
@@ -63,8 +72,17 @@ export class NoticesService extends Service {
     const workspaceId = (targetWorkspaceId ?? scope.workspaceId).trim()
     const accountId = (targetAccountId ?? scope.accountId).trim()
     const http = this.ctx.get('http') as
-      | { broadcast?: (type: string, payload: unknown, workspaceId?: string, accountId?: string) => void }
+      | {
+          broadcast?: (type: string, payload: unknown, workspaceId?: string, accountId?: string) => void
+          broadcastAccount?: (accountId: string, type: string, payload: unknown) => void
+        }
       | undefined
+    const noticeEvent = { ts: Date.now(), ...(workspaceId ? { workspaceId } : {}) }
+    if (accountId && http?.broadcastAccount) {
+      http.broadcastAccount(accountId, 'notices/change', noticeEvent)
+    } else {
+      http?.broadcast?.('notices/change', noticeEvent, workspaceId || undefined, accountId || undefined)
+    }
     http?.broadcast?.(DATABASE_CHANNEL, databaseChannelPayload('notices'), workspaceId || undefined, accountId || undefined)
   }
 }

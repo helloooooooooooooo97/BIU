@@ -611,6 +611,9 @@ export function apply(ctx: Context) {
     fromSnap()
     const offSnap = snapshot.subscribe?.(fromSnap)
     let debounce = 0
+    const offNotices = snapshot.onMessage('notices/change', () => {
+      window.dispatchEvent(new CustomEvent('biu:notices-change'))
+    })
     const off = snapshot.onMessage(DATABASE_CHANNEL, (payload) => {
       const parsed = parseDatabaseChannel(payload)
       const sessionId = (
@@ -618,6 +621,9 @@ export function apply(ctx: Context) {
       )?.get?.()?.sessionId
       applyDatabaseChannelPayload(payload, sessionId)
       if (parsed?.asset) emitAssetChanged(parsed.asset)
+      if (parsed?.scope === 'notices') {
+        window.dispatchEvent(new CustomEvent('biu:notices-change'))
+      }
       if (!parsed) return
       const change = fsdbChangeDetail(parsed)
       if (change) {
@@ -633,6 +639,7 @@ export function apply(ctx: Context) {
     return () => {
       window.clearTimeout(debounce)
       offSnap?.()
+      offNotices()
       off()
     }
   })

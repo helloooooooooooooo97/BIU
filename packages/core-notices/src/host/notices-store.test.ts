@@ -51,6 +51,27 @@ test('notices store clear drops every row', () => {
   assert.equal(store.clear(), 0)
 })
 
+test('notices store markAllRead preserves history and re-pushed unread floats to top', () => {
+  const store = new NoticesStore().open(':memory:')
+  const first = store.push({ kind: 'channel', title: '群 A 提及', sourceKey: 'channel-mention:a' })!
+  first.createdAt = 1000
+  first.updatedAt = 1000
+  const second = store.push({ kind: 'channel', title: '群 B 提及', sourceKey: 'channel-mention:b' })!
+  second.createdAt = 2000
+  second.updatedAt = 2000
+  assert.equal(store.list()[0]?.id, second.id)
+
+  // 群 A 再次被 @，合并更新后按 updatedAt 浮到顶部
+  store.push({ kind: 'channel', title: '群 A 新提及', sourceKey: 'channel-mention:a' })
+  assert.equal(store.list()[0]?.id, first.id)
+
+  // markAllRead 仅标为已读，不删除历史记录
+  assert.equal(store.markAllRead(), 2)
+  assert.equal(store.list().length, 2)
+  assert.equal(store.list().every((row) => row.read), true)
+  assert.equal(store.markAllRead(), 0)
+})
+
 test('notices service does not write on turn/end', async () => {
   const { readFileSync } = await import('node:fs')
   const { resolve } = await import('node:path')
