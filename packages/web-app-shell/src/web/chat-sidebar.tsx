@@ -124,6 +124,30 @@ function useCloudSessionCreators(isCloud: boolean) {
   return { myAccountId, membersById }
 }
 
+function formatSessionTime(ts?: number, now = Date.now()): string {
+  if (!ts || !Number.isFinite(ts) || ts <= 0) return ''
+  const d = new Date(ts)
+  const cur = new Date(now)
+  const pad = (n: number) => String(n).padStart(2, '0')
+  if (
+    d.getFullYear() === cur.getFullYear() &&
+    d.getMonth() === cur.getMonth() &&
+    d.getDate() === cur.getDate()
+  ) {
+    return `${pad(d.getHours())}:${pad(d.getMinutes())}`
+  }
+  const yest = new Date(cur.getFullYear(), cur.getMonth(), cur.getDate() - 1)
+  if (
+    d.getFullYear() === yest.getFullYear() &&
+    d.getMonth() === yest.getMonth() &&
+    d.getDate() === yest.getDate()
+  ) {
+    return '昨天'
+  }
+  if (d.getFullYear() === cur.getFullYear()) return `${pad(d.getMonth() + 1)}/${pad(d.getDate())}`
+  return `${d.getFullYear()}/${pad(d.getMonth() + 1)}/${pad(d.getDate())}`
+}
+
 const SessionRow = memo(function SessionRow({
   item,
   active,
@@ -144,18 +168,29 @@ const SessionRow = memo(function SessionRow({
   onOpen?: (item: SessionListItem) => void
 }) {
   const pinned = Boolean(item.pinned)
+  const timeLabel = formatSessionTime(item.updatedAt)
   const label = (
     <span className="sidebar-label min-w-0 flex-1 truncate font-medium">{item.title}</span>
   )
+  const timeNode = timeLabel ? (
+    <span
+      className="shrink-0 text-[11px] leading-none text-(--biu-color-text-subtle) tabular-nums"
+      data-testid="sidebar-session-time"
+    >
+      {timeLabel}
+    </span>
+  ) : null
   const main = onOpen ? (
     <button type="button" {...sessionRowMainProps} data-dock-tip={item.title} onClick={() => onOpen(item)}>
       <SessionRowMascot item={item} busy={busy} dancing={dancing} />
       {label}
+      {timeNode}
     </button>
   ) : (
     <Link to={sessionAppPath(item.id)} {...sessionRowMainProps} data-dock-tip={item.title}>
       <SessionRowMascot item={item} busy={busy} dancing={dancing} />
       {label}
+      {timeNode}
     </Link>
   )
   const creatorTrail = creator ? (
