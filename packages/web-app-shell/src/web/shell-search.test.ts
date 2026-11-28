@@ -34,7 +34,7 @@ test('search opens inspector collections, not chat or database routes', () => {
   assert.equal(searchCollection('tag'), '/tags')
   assert.deepEqual(
     SEARCH_SCOPES.map((item) => item.label),
-    ['视图', '代理', '成员', '页面', '插件', '标签'],
+    ['视图', '代理', '成员', '聊天记录', '页面', '插件', '标签'],
   )
 })
 

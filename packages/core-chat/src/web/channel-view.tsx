@@ -1,10 +1,14 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState, type ClipboardEvent, type DragEvent, type FormEvent } from 'react'
 import { createPortal } from 'react-dom'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import {
   ArrowDownIcon,
+  ArrowRightStartOnRectangleIcon,
   ArrowUpIcon,
   ArrowUturnLeftIcon,
+  BellIcon,
+  BellSlashIcon,
+  BookmarkIcon,
   BookmarkSquareIcon,
   CheckIcon,
   ChevronDoubleLeftIcon,
@@ -13,14 +17,17 @@ import {
   ClockIcon,
   DocumentIcon,
   EyeIcon,
+  FaceSmileIcon,
   HashtagIcon,
   LockClosedIcon,
+  MagnifyingGlassIcon,
   PaperClipIcon,
   PencilSquareIcon,
   PlusIcon,
   ShieldCheckIcon,
   SparklesIcon,
   Square2StackIcon,
+  StarIcon,
   TrashIcon,
   UserGroupIcon,
   UserPlusIcon,
@@ -33,13 +40,16 @@ import { onAppEvents } from '@biu/biu-ui/app-events'
 import { ChatDockStack, ChatStage as BiuChatStage } from '@biu/biu-ui/chat-pane'
 import { useWorkspaceProfile } from '@biu/biu-ui/use-workspace-profile'
 import { SidebarMascot, resolveSessionMascot } from '@biu/public-mascot'
-import { bindSessionView, sessionAppPath, type SessionViewService } from '@biu/web-session-view'
+import { bindSessionView, channelAppPath, sessionAppPath, type SessionViewService } from '@biu/web-session-view'
 import type {
   ChannelAgentContextMode,
   ChannelAttachment,
   ChannelMemberView,
   ChannelMention,
   ChannelMessageView,
+  ChannelSavedMessageView,
+  ChannelSearchHit,
+  ChannelSummary,
 } from '../shared/channel-types.ts'
 import { MarkdownBody } from './markdown.tsx'
 import {
@@ -48,20 +58,32 @@ import {
   cancelChannelRun,
   decideChannelApproval,
   editChannelMessage,
+  leaveChannel,
   loadChannelDetail,
+  loadChannelMessagesAround,
+  loadChannelPins,
   loadOlderChannelMessages,
+  loadSavedChannelMessages,
   markChannelRead,
+  notifyChannelTyping,
   openChannelRunTrace,
   recallChannelMessage,
   removeChannelMember,
   renameChannel,
+  searchChannelMessages,
   sendChannelMessage,
   setActiveChannelId,
   syncChannelToAgent,
+  toggleChannelPinMessage,
+  toggleChannelReaction,
+  toggleChannelSaveMessage,
   updateChannelAgentContextMode,
+  updateChannelPreferences,
   uploadChannelAttachment,
   useChannelStore,
 } from './channel-store.ts'
+
+const QUICK_REACTION_EMOJIS = ['👍', '👀', '✅', '🎉', '❤️', '😂', '🔥', '🤔'] as const
 
 type MentionOption = {
   kind: 'everyone' | 'agent' | 'account'
@@ -284,7 +306,9 @@ export const ChannelStage = memo(function ChannelStage({
   sessionView?: SessionViewService
 }) {
   const navigate = useNavigate()
+  const [searchParams, setSearchParams] = useSearchParams()
   const detail = useChannelStore((s) => s.details[channelId])
+  const typingUsersRaw = useChannelStore((s) => s.typingByChannel[channelId])
   const workspaceProfile = useWorkspaceProfile()
   const { resolveAvatar, isOnline } = useLiveWorkspaceAvatars()
   const [loading, setLoading] = useState(false)
@@ -301,6 +325,18 @@ export const ChannelStage = memo(function ChannelStage({
   const [sending, setSending] = useState(false)
   const [error, setError] = useState('')
   const [membersModalOpen, setMembersModalOpen] = useState(false)
+  const [pinsModalOpen, setPinsModalOpen] = useState(false)
+  const [pinnedMessages, setPinnedMessages] = useState<ChannelMessageView[]>([])
+  const [savedModalOpen, setSavedModalOpen] = useState(false)
+  const [savedMessages, setSavedMessages] = useState<ChannelSavedMessageView[]>([])
+  const [searchOpen, setSearchOpen] = useState(false)
+  const [searchQuery, setSearchQuery] = useState('')
+  const [searchSenderId, setSearchSenderId] = useState('')
+  const [searchHits, setSearchHits] = useState<ChannelSearchHit[]>([])
+  const [searching, setSearching] = useState(false)
+  const [highlightedMsgId, setHighlightedMsgId] = useState<string | null>(null)
+  const [reactPickerMsgId, setReactPickerMsgId] = useState<string | null>(null)
+  const [typingTick, setTypingTick] = useState(0)
   const [agentCard, setAgentCard] = useState<ChannelMemberView | null>(null)
   const [mentionQuery, setMentionQuery] = useState<string | null>(null)
   const [mentionIdx, setMentionIdx] = useState(0)
@@ -322,6 +358,7 @@ export const ChannelStage = memo(function ChannelStage({
   const prevMsgCountRef = useRef(0)
   const prevLastMsgIdRef = useRef('')
   const unreadAnchorCapturedRef = useRef('')
+  const lastTypingSentRef = useRef(0)
 
   useEffect(() => {
     setActiveChannelId(channelId)
@@ -347,6 +384,88 @@ export const ChannelStage = memo(function ChannelStage({
   const activities = detail?.activities ?? []
   const channel = detail?.channel
   const myAccountId = detail?.myAccountId || workspaceProfile.accountId || ''
+
+  const activeTypingUsers = useMemo(() => {
+    void typingTick
+    const now = Date.now()
+    return (typingUsersRaw ?? []).filter((t) => now - t.ts < 4500 && t.accountId !== myAccountId)
+  }, [myAccountId, typingTick, typingUsersRaw])
+
+  useEffect(() => {
+    if (!activeTypingUsers.length) return
+    const timer = window.setTimeout(() => setTypingTick((n) => n + 1), 1500)
+    return () => window.clearTimeout(timer)
+  }, [activeTypingUsers])
+
+  const jumpToMessage = useCallback(
+    async (targetMsgId: string) => {
+      if (!targetMsgId) return
+      const exists = messages.some((m) => m.id === targetMsgId)
+      if (!exists) {
+        await loadChannelMessagesAround(channelId, targetMsgId)
+      }
+      setHighlightedMsgId(targetMsgId)
+      requestAnimationFrame(() => {
+        const node = scrollRef.current?.querySelector<HTMLElement>(`[data-msg-id="${CSS.escape ? CSS.escape(targetMsgId) : targetMsgId}"]`)
+        if (typeof node?.scrollIntoView === 'function') {
+          node.scrollIntoView({ behavior: 'smooth', block: 'center' })
+        }
+      })
+      window.setTimeout(() => {
+        setHighlightedMsgId((cur) => (cur === targetMsgId ? null : cur))
+      }, 2400)
+    },
+    [channelId, messages],
+  )
+
+  const targetMsgParam = searchParams.get('msg')
+  useEffect(() => {
+    if (!targetMsgParam || !detail || detail.channel.id !== channelId) return
+    void jumpToMessage(targetMsgParam)
+    const next = new URLSearchParams(searchParams)
+    next.delete('msg')
+    setSearchParams(next, { replace: true })
+  }, [channelId, detail, jumpToMessage, searchParams, setSearchParams, targetMsgParam])
+
+  useEffect(() => {
+    if (!searchOpen) return
+    const q = searchQuery.trim()
+    if (!q) {
+      setSearchHits([])
+      setSearching(false)
+      return
+    }
+    let cancelled = false
+    setSearching(true)
+    const timer = window.setTimeout(() => {
+      void searchChannelMessages({
+        q,
+        channelId,
+        ...(searchSenderId ? { senderId: searchSenderId } : {}),
+        limit: 25,
+      })
+        .then((hits) => {
+          if (!cancelled) setSearchHits(hits)
+        })
+        .finally(() => {
+          if (!cancelled) setSearching(false)
+        })
+    }, 150)
+    return () => {
+      cancelled = true
+      window.clearTimeout(timer)
+    }
+  }, [channelId, searchOpen, searchQuery, searchSenderId])
+
+  const openPinsModal = useCallback(() => {
+    setPinsModalOpen(true)
+    void loadChannelPins(channelId).then(setPinnedMessages)
+  }, [channelId])
+
+  const openSavedModal = useCallback(() => {
+    setSavedModalOpen(true)
+    void loadSavedChannelMessages().then(setSavedMessages)
+  }, [])
 
   // 进入频道后捕获一次未读游标用于渲染「以下是新消息」分割线，并上报已读
   useEffect(() => {
@@ -576,6 +695,10 @@ export const ChannelStage = memo(function ChannelStage({
 
   const handleTextChange = (next: string) => {
     setText(next)
+    if (next.trim() && Date.now() - lastTypingSentRef.current > 2500) {
+      lastTypingSentRef.current = Date.now()
+      void notifyChannelTyping(channelId)
+    }
     const caret = inputRef.current?.selectionStart ?? next.length
     const before = next.slice(0, caret)
     const match = before.match(/(?:^|\s)@([^\s@]*)$/)
@@ -809,8 +932,41 @@ export const ChannelStage = memo(function ChannelStage({
         <div className="chat-view-header-right">
           <button
             type="button"
+            className={`inline-flex h-[var(--biu-size-control-md)] cursor-pointer items-center gap-1 rounded-[6px] border-0 bg-transparent px-2 text-[12px] font-medium transition-colors hover:bg-(--biu-color-bg-hover) hover:text-(--biu-color-text)${searchOpen ? ' bg-(--biu-color-bg-hover) text-(--biu-color-text)' : ' text-(--biu-color-text-muted)'}`}
+            title="搜索本聊天记录"
+            aria-label="搜索聊天记录"
+            data-testid="channel-search-toggle"
+            onClick={() => setSearchOpen((v) => !v)}
+          >
+            <MagnifyingGlassIcon className="size-3.5 shrink-0" />
+          </button>
+          <button
+            type="button"
+            className="inline-flex h-[var(--biu-size-control-md)] cursor-pointer items-center gap-1 rounded-[6px] border-0 bg-transparent px-2 text-[12px] font-medium text-(--biu-color-text-muted) transition-colors hover:bg-(--biu-color-bg-hover) hover:text-(--biu-color-text)"
+            title="查看置顶消息"
+            aria-label="查看置顶消息"
+            data-testid="channel-pins-btn"
+            onClick={openPinsModal}
+          >
+            <BookmarkIcon className="size-3.5 shrink-0" />
+            {messages.filter((m) => m.pinnedAt && !m.deletedAt).length > 0 ? (
+              <span className="tabular-nums">{messages.filter((m) => m.pinnedAt && !m.deletedAt).length}</span>
+            ) : null}
+          </button>
+          <button
+            type="button"
+            className="inline-flex h-[var(--biu-size-control-md)] cursor-pointer items-center gap-1 rounded-[6px] border-0 bg-transparent px-2 text-[12px] font-medium text-(--biu-color-text-muted) transition-colors hover:bg-(--biu-color-bg-hover) hover:text-(--biu-color-text)"
+            title="我的消息收藏"
+            aria-label="我的消息收藏"
+            data-testid="channel-saved-btn"
+            onClick={openSavedModal}
+          >
+            <StarIcon className="size-3.5 shrink-0" />
+          </button>
+          <button
+            type="button"
             className="inline-flex h-[var(--biu-size-control-md)] cursor-pointer items-center gap-1.5 rounded-[6px] border-0 bg-transparent px-2 text-[12px] font-medium text-(--biu-color-text-muted) transition-colors hover:bg-(--biu-color-bg-hover) hover:text-(--biu-color-text)"
-            title="管理群成员与 Agent"
+            title="管理群成员、偏好与 Agent"
             data-testid="channel-manage-members"
             onClick={() => setMembersModalOpen(true)}
           >
@@ -836,6 +992,85 @@ export const ChannelStage = memo(function ChannelStage({
           ) : null}
         </div>
       </header>
+
+      {/* 群内聊天记录搜索条 */}
+      {searchOpen ? (
+        <div
+          className="border-b border-(--biu-color-border-subtle) bg-(--biu-color-bg-subtle) px-4 py-2"
+          data-testid="channel-search-panel"
+        >
+          <div className="mx-auto flex max-w-[var(--biu-chat-max-w,760px)] flex-wrap items-center gap-2">
+            <div className="relative flex min-w-[200px] flex-1 items-center">
+              <MagnifyingGlassIcon className="pointer-events-none absolute left-2.5 size-3.5 text-(--biu-color-text-subtle)" />
+              <input
+                type="search"
+                value={searchQuery}
+                autoFocus
+                placeholder="搜索本聊天记录或附件文件名…"
+                aria-label="搜索聊天记录"
+                data-testid="channel-search-input"
+                className="h-8 w-full rounded-md border border-(--biu-color-border) bg-(--biu-color-bg) pr-2 pl-8 text-[12.5px] text-(--biu-color-text) outline-none focus:border-(--biu-color-icon-active)"
+                onChange={(e) => setSearchQuery(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Escape') setSearchOpen(false)
+                }}
+              />
+            </div>
+            <select
+              value={searchSenderId}
+              aria-label="按发送人筛选"
+              data-testid="channel-search-sender"
+              className="h-8 rounded-md border border-(--biu-color-border) bg-(--biu-color-bg) px-2 text-[12px] text-(--biu-color-text)"
+              onChange={(e) => setSearchSenderId(e.target.value)}
+            >
+              <option value="">全部发送人</option>
+              {members.map((m) => (
+                <option key={`${m.memberType}:${m.memberId}`} value={m.memberId}>
+                  {m.name}
+                </option>
+              ))}
+            </select>
+            <button
+              type="button"
+              className="inline-flex size-7 cursor-pointer items-center justify-center rounded-md border-0 bg-transparent text-(--biu-color-text-muted) hover:bg-(--biu-color-bg-hover)"
+              title="关闭搜索"
+              onClick={() => setSearchOpen(false)}
+            >
+              <XMarkIcon className="size-4" />
+            </button>
+          </div>
+          {searchQuery.trim() ? (
+            <div className="mx-auto mt-2 max-h-56 max-w-[var(--biu-chat-max-w,760px)] overflow-y-auto rounded-md border border-(--biu-color-border-subtle) bg-(--biu-color-bg)">
+              {searching ? (
+                <div className="px-3 py-2 text-[12px] text-(--biu-color-text-subtle)">搜索中…</div>
+              ) : searchHits.length === 0 ? (
+                <div className="px-3 py-2 text-[12px] text-(--biu-color-text-subtle)">未找到匹配消息</div>
+              ) : (
+                searchHits.map((hit) => (
+                  <button
+                    key={hit.id}
+                    type="button"
+                    data-testid={`channel-search-hit-${hit.id}`}
+                    className="flex w-full cursor-pointer items-start justify-between gap-2 border-0 border-b border-(--biu-color-border-subtle) bg-transparent px-3 py-2 text-left text-[12.5px] last:border-b-0 hover:bg-(--biu-color-bg-hover)"
+                    onClick={() => {
+                      void jumpToMessage(hit.id)
+                      setSearchOpen(false)
+                    }}
+                  >
+                    <div className="min-w-0 flex-1">
+                      <span className="font-medium text-(--biu-color-text)">{hit.senderName}</span>
+                      <span className="ml-2 text-(--biu-color-text-muted)">{hit.text.slice(0, 120)}</span>
+                    </div>
+                    <span className="shrink-0 text-[11px] text-(--biu-color-text-subtle) tabular-nums">
+                      {formatSentAt(hit.createdAt)}
+                    </span>
+                  </button>
+                ))
+              )}
+            </div>
+          ) : null}
+        </div>
+      ) : null}
 
       {/* 主对话舞台：与 AgentMainPanels 完全相同的居中舞台 + 底部悬浮胶囊输入栏 */}
       <div
@@ -925,11 +1160,23 @@ export const ChannelStage = memo(function ChannelStage({
                     const msgAttachments = msg.attachments ?? []
 
                     // 所有群聊消息统一使用 .chat-user-card + 底部 .user-turn-bar
+                    const isHighlighted = highlightedMsgId === msg.id
+                    const reactions = msg.reactions ?? []
                     const cardNode = (
                       <div
-                        className={`chat-user-card group !w-3/4 min-w-0${isEphemeral ? ' opacity-95' : ''}`}
+                        data-msg-id={msg.id}
+                        className={`chat-user-card group !w-3/4 min-w-0 transition-shadow${isEphemeral ? ' opacity-95' : ''}${isHighlighted ? ' ring-2 ring-amber-400/80' : ''}`}
                       >
                         <div className="chat-user-card-body text-(--biu-color-text)">
+                          {msg.pinnedAt && !isRecalled ? (
+                            <div
+                              className="mb-1.5 inline-flex items-center gap-1 rounded bg-amber-500/10 px-1.5 py-0.5 text-[11px] font-medium text-amber-500"
+                              data-testid={`channel-msg-pinned-badge-${msg.id}`}
+                            >
+                              <BookmarkIcon className="size-3" />
+                              <span>已置顶{msg.pinnedByName ? ` · ${msg.pinnedByName}` : ''}</span>
+                            </div>
+                          ) : null}
                           {msg.replyPreview && !isRecalled ? (
                             <div className="mb-1.5 flex items-center gap-1.5 border-l-2 border-(--biu-color-border) pl-2 text-(length:--biu-chat-ui-font-size) text-(--biu-color-text-subtle)">
                               <ArrowUturnLeftIcon className="size-3 shrink-0" />
@@ -1040,6 +1287,49 @@ export const ChannelStage = memo(function ChannelStage({
                                   )}
                                 </div>
                               ) : null}
+
+                              {reactions.length > 0 ? (
+                                <div className="mt-2 flex flex-wrap items-center gap-1.5" data-testid={`channel-msg-reactions-${msg.id}`}>
+                                  {reactions.map((r) => (
+                                    <button
+                                      key={r.emoji}
+                                      type="button"
+                                      title={r.accountNames.join('、')}
+                                      data-testid={`channel-msg-reaction-${msg.id}-${r.emoji}`}
+                                      className={`inline-flex cursor-pointer items-center gap-1 rounded-full border px-2 py-0.5 text-[12px] leading-none transition-colors ${
+                                        r.reactedByMe
+                                          ? 'border-(--biu-color-icon-active) bg-(--biu-color-bg-hover) font-medium text-(--biu-color-text)'
+                                          : 'border-(--biu-color-border-subtle) bg-(--biu-color-bg-subtle) text-(--biu-color-text-muted) hover:bg-(--biu-color-bg-hover)'
+                                      }`}
+                                      onClick={() => void toggleChannelReaction(channelId, msg.id, r.emoji)}
+                                    >
+                                      <span>{r.emoji}</span>
+                                      <span className="tabular-nums">{r.count}</span>
+                                    </button>
+                                  ))}
+                                </div>
+                              ) : null}
+
+                              {reactPickerMsgId === msg.id ? (
+                                <div
+                                  className="mt-2 inline-flex flex-wrap items-center gap-1 rounded-lg border border-(--biu-color-border) bg-(--biu-color-bg) p-1 shadow-md"
+                                  data-testid={`channel-msg-react-picker-${msg.id}`}
+                                >
+                                  {QUICK_REACTION_EMOJIS.map((em) => (
+                                    <button
+                                      key={em}
+                                      type="button"
+                                      className="grid size-7 cursor-pointer place-items-center rounded border-0 bg-transparent text-[15px] hover:bg-(--biu-color-bg-hover)"
+                                      onClick={() => {
+                                        setReactPickerMsgId(null)
+                                        void toggleChannelReaction(channelId, msg.id, em)
+                                      }}
+                                    >
+                                      {em}
+                                    </button>
+                                  ))}
+                                </div>
+                              ) : null}
                             </>
                           )}
 
@@ -1145,6 +1435,15 @@ export const ChannelStage = memo(function ChannelStage({
                                 <button
                                   type="button"
                                   className="inline-flex shrink-0 cursor-pointer items-center gap-1 rounded-md border border-transparent bg-transparent px-1.5 py-0.5 text-(length:--biu-chat-ui-font-size) leading-none text-(--biu-color-text-subtle) opacity-0 transition-opacity hover:bg-(--biu-color-bg-hover) hover:text-(--biu-color-text) group-hover:opacity-100"
+                                  title="添加表情回应"
+                                  data-testid={`channel-msg-react-${msg.id}`}
+                                  onClick={() => setReactPickerMsgId((cur) => (cur === msg.id ? null : msg.id))}
+                                >
+                                  <FaceSmileIcon className="size-3" />
+                                </button>
+                                <button
+                                  type="button"
+                                  className="inline-flex shrink-0 cursor-pointer items-center gap-1 rounded-md border border-transparent bg-transparent px-1.5 py-0.5 text-(length:--biu-chat-ui-font-size) leading-none text-(--biu-color-text-subtle) opacity-0 transition-opacity hover:bg-(--biu-color-bg-hover) hover:text-(--biu-color-text) group-hover:opacity-100"
                                   onClick={() => {
                                     setReplyTo(msg)
                                     inputRef.current?.focus()
@@ -1152,6 +1451,24 @@ export const ChannelStage = memo(function ChannelStage({
                                 >
                                   <ArrowUturnLeftIcon className="size-3" />
                                   <span>回复</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  className={`inline-flex shrink-0 cursor-pointer items-center gap-1 rounded-md border border-transparent bg-transparent px-1.5 py-0.5 text-(length:--biu-chat-ui-font-size) leading-none transition-opacity hover:bg-(--biu-color-bg-hover) hover:text-(--biu-color-text) ${msg.pinnedAt ? 'text-amber-500 opacity-100' : 'text-(--biu-color-text-subtle) opacity-0 group-hover:opacity-100'}`}
+                                  title={msg.pinnedAt ? '取消置顶' : '置顶此消息'}
+                                  data-testid={`channel-msg-pin-${msg.id}`}
+                                  onClick={() => void toggleChannelPinMessage(channelId, msg.id)}
+                                >
+                                  <BookmarkIcon className="size-3" />
+                                </button>
+                                <button
+                                  type="button"
+                                  className={`inline-flex shrink-0 cursor-pointer items-center gap-1 rounded-md border border-transparent bg-transparent px-1.5 py-0.5 text-(length:--biu-chat-ui-font-size) leading-none transition-opacity hover:bg-(--biu-color-bg-hover) hover:text-(--biu-color-text) ${msg.savedByMe ? 'text-amber-400 opacity-100' : 'text-(--biu-color-text-subtle) opacity-0 group-hover:opacity-100'}`}
+                                  title={msg.savedByMe ? '取消收藏' : '收藏此消息'}
+                                  data-testid={`channel-msg-save-${msg.id}`}
+                                  onClick={() => void toggleChannelSaveMessage(channelId, msg.id)}
+                                >
+                                  <StarIcon className="size-3" />
                                 </button>
                                 {canEdit ? (
                                   <button
@@ -1309,6 +1626,15 @@ export const ChannelStage = memo(function ChannelStage({
                           ) : null}
                         </div>
                       ))}
+                    </div>
+                  ) : null}
+
+                  {activeTypingUsers.length > 0 ? (
+                    <div
+                      className="px-2 text-[12px] text-(--biu-color-text-subtle)"
+                      data-testid="channel-typing-indicator"
+                    >
+                      {activeTypingUsers.map((u) => u.accountName).join('、')} 正在输入…
                     </div>
                   ) : null}
 
@@ -1546,15 +1872,157 @@ export const ChannelStage = memo(function ChannelStage({
           )
         : null}
 
+      {/* 置顶消息弹窗 */}
+      {pinsModalOpen
+        ? createPortal(
+            <div className="biu-float-overlay" onClick={() => setPinsModalOpen(false)} data-testid="channel-pins-modal">
+              <div
+                className="biu-float scfg-float !w-[min(520px,calc(100vw-32px))]"
+                role="dialog"
+                aria-modal="true"
+                aria-label="置顶消息"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="biu-float-head scfg-head">
+                  <h2 className="biu-float-title scfg-title">置顶消息</h2>
+                  <button type="button" className="biu-float-close" aria-label="关闭" onClick={() => setPinsModalOpen(false)}>
+                    <XMarkIcon className="size-4 shrink-0" />
+                  </button>
+                </div>
+                <div className="scfg-body">
+                  {pinnedMessages.length === 0 ? (
+                    <div className="scfg-hint">当前聊天暂无置顶消息</div>
+                  ) : (
+                    <div className="space-y-2">
+                      {pinnedMessages.map((pm) => (
+                        <div
+                          key={pm.id}
+                          className="rounded-lg border border-(--biu-color-border-subtle) bg-(--biu-color-bg-subtle) p-3"
+                        >
+                          <div className="mb-1 flex items-center justify-between gap-2 text-[12px] text-(--biu-color-text-muted)">
+                            <span className="font-medium text-(--biu-color-text)">{pm.senderName}</span>
+                            <div className="flex items-center gap-2">
+                              <button
+                                type="button"
+                                className="cursor-pointer border-0 bg-transparent p-0 text-[12px] text-(--biu-color-text-muted) hover:text-(--biu-color-text) hover:underline"
+                                onClick={() => {
+                                  setPinsModalOpen(false)
+                                  void jumpToMessage(pm.id)
+                                }}
+                              >
+                                定位消息
+                              </button>
+                              <button
+                                type="button"
+                                className="cursor-pointer border-0 bg-transparent p-0 text-[12px] text-(--biu-color-danger) hover:underline"
+                                onClick={() => {
+                                  void toggleChannelPinMessage(channelId, pm.id).then(() =>
+                                    setPinnedMessages((prev) => prev.filter((x) => x.id !== pm.id)),
+                                  )
+                                }}
+                              >
+                                取消置顶
+                              </button>
+                            </div>
+                          </div>
+                          <div className="text-[13px] text-(--biu-color-text)">{pm.text || '[附件消息]'}</div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>,
+            document.body,
+          )
+        : null}
+
+      {/* 我的收藏消息弹窗 */}
+      {savedModalOpen
+        ? createPortal(
+            <div className="biu-float-overlay" onClick={() => setSavedModalOpen(false)} data-testid="channel-saved-modal">
+              <div
+                className="biu-float scfg-float !w-[min(520px,calc(100vw-32px))]"
+                role="dialog"
+                aria-modal="true"
+                aria-label="我的消息收藏"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="biu-float-head scfg-head">
+                  <h2 className="biu-float-title scfg-title">我的消息收藏</h2>
+                  <button type="button" className="biu-float-close" aria-label="关闭" onClick={() => setSavedModalOpen(false)}>
+                    <XMarkIcon className="size-4 shrink-0" />
+                  </button>
+                </div>
+                <div className="scfg-body">
+                  {savedMessages.length === 0 ? (
+                    <div className="scfg-hint">暂无收藏的消息</div>
+                  ) : (
+                    <div className="space-y-2">
+                      {savedMessages.map((item) => (
+                        <div
+                          key={item.message.id}
+                          className="rounded-lg border border-(--biu-color-border-subtle) bg-(--biu-color-bg-subtle) p-3"
+                        >
+                          <div className="mb-1 flex items-center justify-between gap-2 text-[12px] text-(--biu-color-text-muted)">
+                            <span>
+                              <span className="font-medium text-(--biu-color-text)">{item.message.senderName}</span>
+                              <span className="ml-1.5">· #{item.channelName}</span>
+                            </span>
+                            <div className="flex items-center gap-2">
+                              <button
+                                type="button"
+                                className="cursor-pointer border-0 bg-transparent p-0 text-[12px] text-(--biu-color-text-muted) hover:text-(--biu-color-text) hover:underline"
+                                onClick={() => {
+                                  setSavedModalOpen(false)
+                                  if (item.channelId === channelId) {
+                                    void jumpToMessage(item.message.id)
+                                  } else {
+                                    navigate(`${channelAppPath(item.channelId)}?msg=${encodeURIComponent(item.message.id)}`)
+                                  }
+                                }}
+                              >
+                                前往查看
+                              </button>
+                              <button
+                                type="button"
+                                className="cursor-pointer border-0 bg-transparent p-0 text-[12px] text-(--biu-color-danger) hover:underline"
+                                onClick={() => {
+                                  void toggleChannelSaveMessage(item.channelId, item.message.id).then(() =>
+                                    setSavedMessages((prev) => prev.filter((x) => x.message.id !== item.message.id)),
+                                  )
+                                }}
+                              >
+                                移出收藏
+                              </button>
+                            </div>
+                          </div>
+                          <div className="text-[13px] text-(--biu-color-text)">{item.message.text || '[附件消息]'}</div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>,
+            document.body,
+          )
+        : null}
+
       {/* 群成员与 Agent 管理弹窗：统一使用 .biu-float-overlay + .biu-float.scfg-float */}
       {membersModalOpen && detail ? (
         <ChannelMembersModal
           channelId={channelId}
+          channel={detail.channel}
           members={members}
           myAccountId={detail.myAccountId}
           canManageMembers={detail.canManageMembers}
           useSessionView={useSessionView}
           resolveAvatar={resolveAvatar}
+          onLeft={() => {
+            setMembersModalOpen(false)
+            navigate('/')
+          }}
           onClose={() => setMembersModalOpen(false)}
         />
       ) : null}
@@ -1625,19 +2093,23 @@ export const ChannelStage = memo(function ChannelStage({
 
 function ChannelMembersModal({
   channelId,
+  channel,
   members,
   myAccountId,
   canManageMembers,
   useSessionView,
   resolveAvatar,
+  onLeft,
   onClose,
 }: {
   channelId: string
+  channel: ChannelSummary
   members: ChannelMemberView[]
   myAccountId: string
   canManageMembers: boolean
   useSessionView?: ReturnType<typeof bindSessionView>
   resolveAvatar: (accountId?: string, serverAvatar?: string) => string | undefined
+  onLeft: () => void
   onClose: () => void
 }) {
   const allSessions = useSessionView ? useSessionView((s) => s.sessions) : []
@@ -1645,6 +2117,8 @@ function ChannelMembersModal({
   const [error, setError] = useState('')
   const [syncNotice, setSyncNotice] = useState('')
   const [busyAgentId, setBusyAgentId] = useState<string | null>(null)
+  const [savingPref, setSavingPref] = useState(false)
+  const canLeaveGroup = channel.kind !== 'dm' && channel.createdBy !== myAccountId && myAccountId !== 'local'
 
   useEffect(() => {
     const params = new URLSearchParams({ path: '/workspace-members', limit: '200', columns: 'title,email,avatar' })
@@ -1748,6 +2222,66 @@ function ChannelMembersModal({
           ) : null}
 
           <div className="scfg-sections">
+            {/* 聊天偏好：置顶、免打扰、退出聊天 */}
+            <div className="scfg-section">
+              <div className="scfg-tools-head">
+                <span className="scfg-label">聊天偏好</span>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <Button
+                  variant={channel.pinned ? 'default' : 'secondary'}
+                  className="h-7 px-2.5 text-[12px]"
+                  disabled={savingPref}
+                  data-testid="channel-pref-pin"
+                  onClick={() => {
+                    setSavingPref(true)
+                    setError('')
+                    void updateChannelPreferences(channelId, { pinned: !channel.pinned })
+                      .catch((err) => setError(err instanceof Error ? err.message : String(err)))
+                      .finally(() => setSavingPref(false))
+                  }}
+                >
+                  <BookmarkIcon className="size-3.5" />
+                  <span>{channel.pinned ? '已置顶聊天' : '置顶聊天'}</span>
+                </Button>
+                <Button
+                  variant={channel.muted ? 'default' : 'secondary'}
+                  className="h-7 px-2.5 text-[12px]"
+                  disabled={savingPref}
+                  data-testid="channel-pref-mute"
+                  onClick={() => {
+                    setSavingPref(true)
+                    setError('')
+                    void updateChannelPreferences(channelId, { muted: !channel.muted })
+                      .catch((err) => setError(err instanceof Error ? err.message : String(err)))
+                      .finally(() => setSavingPref(false))
+                  }}
+                >
+                  {channel.muted ? <BellSlashIcon className="size-3.5" /> : <BellIcon className="size-3.5" />}
+                  <span>{channel.muted ? '已免打扰' : '消息免打扰'}</span>
+                </Button>
+                {canLeaveGroup ? (
+                  <Button
+                    variant="destructive"
+                    className="ml-auto h-7 px-2.5 text-[12px]"
+                    disabled={savingPref}
+                    data-testid="channel-leave-btn"
+                    onClick={() => {
+                      setSavingPref(true)
+                      setError('')
+                      void leaveChannel(channelId)
+                        .then(() => onLeft())
+                        .catch((err) => setError(err instanceof Error ? err.message : String(err)))
+                        .finally(() => setSavingPref(false))
+                    }}
+                  >
+                    <ArrowRightStartOnRectangleIcon className="size-3.5" />
+                    <span>退出聊天</span>
+                  </Button>
+                ) : null}
+              </div>
+            </div>
+
             {/* 当前在群 Agent */}
             <div className="scfg-section">
               <div className="scfg-tools-head">

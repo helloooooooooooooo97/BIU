@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom'
 import {
   ArchiveBoxArrowDownIcon,
   ArrowPathIcon,
+  ChatBubbleLeftRightIcon,
   CursorArrowRaysIcon,
   DocumentIcon,
   MagnifyingGlassIcon,
@@ -29,7 +30,7 @@ import type { CollectionActionInfo, DbRecord } from '@biu/type-file-system'
 import { getDatabaseUi, loadTags } from './data-bridge.ts'
 import { setChatOverlay, requestComposerFocus } from './chat-overlay.ts'
 
-export type SearchKind = 'view' | 'session' | 'member' | 'page' | 'plugin' | 'tag'
+export type SearchKind = 'view' | 'session' | 'member' | 'message' | 'page' | 'plugin' | 'tag'
 
 export const SEARCH_SCOPES: Array<{
   id: SearchKind
@@ -39,6 +40,7 @@ export const SEARCH_SCOPES: Array<{
   { id: 'view', label: '视图', path: '/views' },
   { id: 'session', label: '代理', path: null },
   { id: 'member', label: '成员', path: '/workspace-members' },
+  { id: 'message', label: '聊天记录', path: null },
   { id: 'page', label: '页面', path: '/pages' },
   { id: 'plugin', label: '插件', path: '/plugins' },
   { id: 'tag', label: '标签', path: '/tags' },
@@ -411,6 +413,7 @@ function KindGlyph({ kind, compact }: { kind: SearchKind | 'all'; compact?: bool
   if (kind === 'view') return <TableCellsIcon className={className} />
   if (kind === 'session') return <CursorArrowRaysIcon className={className} />
   if (kind === 'member') return <UsersIcon className={className} />
+  if (kind === 'message') return <ChatBubbleLeftRightIcon className={className} />
   if (kind === 'page') return <DocumentIcon className={className} />
   if (kind === 'plugin') return <PuzzlePieceIcon className={className} />
   return <TagIcon className={className} />
@@ -495,9 +498,13 @@ export function ShellSearchPanel({
     const keyOf = (kind: SearchKind) => `${kind}\0${needle}`
     const listed = SEARCH_SCOPES.map((item) => ({
       id: item.id,
-      path: item.id === 'session' ? '/agents' : item.path,
+      path: item.id === 'session' ? '/agents' : item.id === 'message' ? '__channel_messages__' : item.path,
     })).filter((item): item is { id: SearchKind; path: string } => Boolean(item.path))
-    const remote = listed.filter((item) => scope === 'all' || item.id === scope)
+    const remote = listed.filter((item) => {
+      if (scope !== 'all' && item.id !== scope) return false
+      if (item.id === 'message' && !needle) return false
+      return true
+    })
     const allRemote = listed
     if (reloadSeq) cacheRef.current.clear()
     const fromCache = allRemote.flatMap((item) => cacheRef.current.get(keyOf(item.id)) ?? [])
@@ -518,6 +525,30 @@ export function ShellSearchPanel({
       void Promise.all(
         missing.map(async (item) => {
           try {
+            if (item.id === 'message') {
+              const res = await apiFetch(
+                `/api/channels/search?q=${encodeURIComponent(needle)}&limit=${PER_KIND}`,
+                { signal: ac.signal },
+              )
+              if (!res.ok) return [] as SearchHit[]
+              const body = (await res.json()) as {
+                hits?: Array<{
+                  id: string
+                  channelId: string
+                  channelName: string
+                  senderName: string
+                  text: string
+                  createdAt: number
+                }>
+              }
+              return (Array.isArray(body.hits) ? body.hits : []).map((h) => ({
+                kind: 'message' as const,
+                id: h.id,
+                title: `${h.senderName} · #${h.channelName}: ${h.text.slice(0, 80)}`,
+                updatedAt: h.createdAt,
+                record: h as unknown as Record<string, unknown>,
+              }))
+            }
             const listedKind = await listKind(item.path, needle, ac.signal)
             schemaActionsRef.current.set(item.id, listedKind.actions)
             return listedKind.items.map((row) => hitFromRow(item.id, row, listedKind.actions))
@@ -543,7 +574,7 @@ export function ShellSearchPanel({
 
   const grouped = useMemo(() => {
     const remote = hits.filter((item) => scope === 'all' || item.kind === scope)
-    const order: SearchKind[] = ['view', 'session', 'member', 'page', 'plugin', 'tag']
+    const order: SearchKind[] = ['view', 'session', 'member', 'message', 'page', 'plugin', 'tag']
     return order
       .map((kind) => {
         const fromRemote = remote.filter((item) => item.kind === kind)
@@ -570,6 +601,15 @@ export function ShellSearchPanel({
   }, [active, flat.length])
 
   const openHit = (hit: SearchHit, side: 'right' | 'left') => {
+    if (hit.kind === 'message') {
+      const chId = String(hit.record?.channelId ?? '').trim()
+      onClose()
+      if (chId) {
+        setChatOverlay(false)
+        navigate(`${channelAppPath(chId)}?msg=${encodeURIComponent(hit.id)}`)
+      }
+      return
+    }
     if (hit.kind === 'member') {
       onClose()
       void apiFetch('/api/channels/dm', {

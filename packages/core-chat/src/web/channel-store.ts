@@ -11,10 +11,19 @@ import type {
   ChannelMemberView,
   ChannelMention,
   ChannelMessageView,
+  ChannelReactionSummary,
   ChannelRunDetail,
   ChannelRunEvent,
+  ChannelSavedMessageView,
+  ChannelSearchHit,
   ChannelSummary,
 } from '../shared/channel-types.ts'
+
+export type ChannelTypingUser = {
+  accountId: string
+  accountName: string
+  ts: number
+}
 
 export type ChannelStoreState = {
   channels: ChannelSummary[]
@@ -23,6 +32,7 @@ export type ChannelStoreState = {
   details: Record<string, ChannelDetailPayload>
   inspected: { channelId: string; runId: string } | null
   runs: Record<string, ChannelRunDetail>
+  typingByChannel: Record<string, ChannelTypingUser[]>
 }
 
 let state: ChannelStoreState = {
@@ -32,6 +42,7 @@ let state: ChannelStoreState = {
   details: {},
   inspected: null,
   runs: {},
+  typingByChannel: {},
 }
 
 const listeners = new Set<() => void>()
@@ -72,6 +83,7 @@ export function resetChannelStore() {
     details: {},
     inspected: null,
     runs: {},
+    typingByChannel: {},
   }
   emit()
 }
@@ -448,6 +460,203 @@ export async function loadOlderChannelMessages(
   return { added: older.length, hasMore }
 }
 
+export async function loadChannelMessagesAround(channelId: string, messageId: string): Promise<boolean> {
+  if (!channelId || !messageId) return false
+  const res = await apiFetch(
+    `/api/channels/${encodeURIComponent(channelId)}/messages?aroundMsgId=${encodeURIComponent(messageId)}&limit=60`,
+  )
+  if (!res.ok) return false
+  const body = (await res.json()) as { messages?: ChannelMessageView[]; hasMore?: boolean }
+  const loaded = Array.isArray(body.messages) ? body.messages : []
+  if (loaded.length === 0) return false
+  setState((prev) => {
+    const detail = prev.details[channelId]
+    if (!detail) return prev
+    const byId = new Map(detail.messages.map((m) => [m.id, m]))
+    for (const m of loaded) byId.set(m.id, m)
+    const merged = [...byId.values()].sort((a, b) => a.seq - b.seq)
+    return {
+      ...prev,
+      details: {
+        ...prev.details,
+        [channelId]: {
+          ...detail,
+          messages: merged,
+          hasMoreMessages: Boolean(body.hasMore),
+        },
+      },
+    }
+  })
+  return true
+}
+
+function applyReactionsToMessage(channelId: string, messageId: string, reactions: ChannelReactionSummary[]) {
+  setState((prev) => {
+    const detail = prev.details[channelId]
+    if (!detail) return prev
+    const myId = detail.myAccountId
+    const hydrated = reactions.map((r) => ({
+      ...r,
+      reactedByMe: Array.isArray(r.accountIds) ? r.accountIds.includes(myId) : r.reactedByMe,
+    }))
+    return {
+      ...prev,
+      details: {
+        ...prev.details,
+        [channelId]: {
+          ...detail,
+          messages: detail.messages.map((m) => (m.id === messageId ? { ...m, reactions: hydrated } : m)),
+        },
+      },
+    }
+  })
+}
+
+export async function toggleChannelReaction(
+  channelId: string,
+  messageId: string,
+  emoji: string,
+): Promise<ChannelReactionSummary[]> {
+  const res = await apiFetch(
+    `/api/channels/${encodeURIComponent(channelId)}/messages/${encodeURIComponent(messageId)}/reactions`,
+    {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ emoji }),
+    },
+  )
+  const body = (await res.json()) as { reactions?: ChannelReactionSummary[]; error?: string }
+  if (!res.ok) throw new Error(body.error || '操作表情失败')
+  const reactions = Array.isArray(body.reactions) ? body.reactions : []
+  applyReactionsToMessage(channelId, messageId, reactions)
+  return reactions
+}
+
+export async function toggleChannelPinMessage(channelId: string, messageId: string): Promise<ChannelMessageView> {
+  const res = await apiFetch(
+    `/api/channels/${encodeURIComponent(channelId)}/messages/${encodeURIComponent(messageId)}/pin`,
+    { method: 'POST' },
+  )
+  const body = (await res.json()) as { message?: ChannelMessageView; error?: string }
+  if (!res.ok || !body.message) throw new Error(body.error || '置顶操作失败')
+  upsertChannelMessage(body.message, true)
+  return body.message
+}
+
+export async function loadChannelPins(channelId: string): Promise<ChannelMessageView[]> {
+  const res = await apiFetch(`/api/channels/${encodeURIComponent(channelId)}/pins`)
+  if (!res.ok) return []
+  const body = (await res.json()) as { messages?: ChannelMessageView[] }
+  return Array.isArray(body.messages) ? body.messages : []
+}
+
+export async function toggleChannelSaveMessage(
+  channelId: string,
+  messageId: string,
+): Promise<{ saved: boolean; messageId: string }> {
+  const res = await apiFetch(
+    `/api/channels/${encodeURIComponent(channelId)}/messages/${encodeURIComponent(messageId)}/save`,
+    { method: 'POST' },
+  )
+  const body = (await res.json()) as { saved?: boolean; messageId?: string; error?: string }
+  if (!res.ok) throw new Error(body.error || '收藏操作失败')
+  const saved = Boolean(body.saved)
+  setState((prev) => {
+    const detail = prev.details[channelId]
+    if (!detail) return prev
+    return {
+      ...prev,
+      details: {
+        ...prev.details,
+        [channelId]: {
+          ...detail,
+          messages: detail.messages.map((m) => (m.id === messageId ? { ...m, savedByMe: saved } : m)),
+        },
+      },
+    }
+  })
+  return { saved, messageId }
+}
+
+export async function loadSavedChannelMessages(): Promise<ChannelSavedMessageView[]> {
+  const res = await apiFetch('/api/channels/saved')
+  if (!res.ok) return []
+  const body = (await res.json()) as { items?: ChannelSavedMessageView[] }
+  return Array.isArray(body.items) ? body.items : []
+}
+
+export async function searchChannelMessages(opts: {
+  q: string
+  channelId?: string
+  senderId?: string
+  limit?: number
+}): Promise<ChannelSearchHit[]> {
+  const q = opts.q.trim()
+  if (!q) return []
+  const params = new URLSearchParams({ q })
+  if (opts.channelId) params.set('channelId', opts.channelId)
+  if (opts.senderId) params.set('senderId', opts.senderId)
+  if (opts.limit) params.set('limit', String(opts.limit))
+  const res = await apiFetch(`/api/channels/search?${params.toString()}`)
+  if (!res.ok) return []
+  const body = (await res.json()) as { hits?: ChannelSearchHit[] }
+  return Array.isArray(body.hits) ? body.hits : []
+}
+
+export async function updateChannelPreferences(
+  channelId: string,
+  patch: { muted?: boolean; pinned?: boolean },
+): Promise<ChannelSummary> {
+  const res = await apiFetch(`/api/channels/${encodeURIComponent(channelId)}/preferences`, {
+    method: 'PATCH',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(patch),
+  })
+  const body = (await res.json()) as { channel?: ChannelSummary; error?: string }
+  if (!res.ok || !body.channel) throw new Error(body.error || '更新偏好失败')
+  setState((prev) => {
+    const channels = sortChannels(
+      prev.channels.some((c) => c.id === body.channel!.id)
+        ? prev.channels.map((c) => (c.id === body.channel!.id ? body.channel! : c))
+        : [body.channel!, ...prev.channels],
+    )
+    const detail = prev.details[channelId]
+    return {
+      ...prev,
+      channels,
+      ...(detail ? { details: { ...prev.details, [channelId]: { ...detail, channel: body.channel! } } } : {}),
+    }
+  })
+  return body.channel
+}
+
+export async function leaveChannel(channelId: string): Promise<void> {
+  const res = await apiFetch(`/api/channels/${encodeURIComponent(channelId)}/leave`, { method: 'POST' })
+  if (!res.ok) {
+    const body = (await res.json().catch(() => ({}))) as { error?: string }
+    throw new Error(body.error || '退出聊天失败')
+  }
+  setState((prev) => {
+    const nextDetails = { ...prev.details }
+    delete nextDetails[channelId]
+    return {
+      ...prev,
+      channels: prev.channels.filter((c) => c.id !== channelId),
+      details: nextDetails,
+      inspected: prev.inspected?.channelId === channelId ? null : prev.inspected,
+    }
+  })
+}
+
+export async function notifyChannelTyping(channelId: string): Promise<void> {
+  if (!channelId) return
+  try {
+    await apiFetch(`/api/channels/${encodeURIComponent(channelId)}/typing`, { method: 'POST' })
+  } catch {
+    /* ignore */
+  }
+}
+
 export async function loadChannelRun(channelId: string, runId: string): Promise<ChannelRunDetail | null> {
   try {
     const res = await apiFetch(`/api/channels/${encodeURIComponent(channelId)}/runs/${encodeURIComponent(runId)}`)
@@ -570,7 +779,42 @@ export function bindChannelRealtime(snapshot?: { onMessage?: (type: string, hand
     offs.push(
       snapshot.onMessage('channel/message', (payload) => {
         const msg = (payload as { message?: ChannelMessageView } | null)?.message
-        if (msg?.id) upsertChannelMessage(msg)
+        if (msg?.id) {
+          upsertChannelMessage(msg)
+          if (msg.senderType === 'account') {
+            setState((prev) => {
+              const list = prev.typingByChannel[msg.channelId]
+              if (!list?.length) return prev
+              const next = list.filter((t) => t.accountId !== msg.senderId)
+              return { ...prev, typingByChannel: { ...prev.typingByChannel, [msg.channelId]: next } }
+            })
+          }
+        }
+      }),
+    )
+    offs.push(
+      snapshot.onMessage('channel/reactions', (payload) => {
+        const data = payload as { channelId?: string; messageId?: string; reactions?: ChannelReactionSummary[] } | null
+        if (data?.channelId && data.messageId && Array.isArray(data.reactions)) {
+          applyReactionsToMessage(data.channelId, data.messageId, data.reactions)
+        }
+      }),
+    )
+    offs.push(
+      snapshot.onMessage('channel/typing', (payload) => {
+        const data = payload as { channelId?: string; accountId?: string; accountName?: string; ts?: number } | null
+        if (!data?.channelId || !data.accountId) return
+        const ts = Number(data.ts) || Date.now()
+        setState((prev) => {
+          const cur = (prev.typingByChannel[data.channelId!] ?? []).filter((t) => Date.now() - t.ts < 4500 && t.accountId !== data.accountId)
+          return {
+            ...prev,
+            typingByChannel: {
+              ...prev.typingByChannel,
+              [data.channelId!]: [...cur, { accountId: data.accountId!, accountName: data.accountName || data.accountId!, ts }],
+            },
+          }
+        })
       }),
     )
     offs.push(

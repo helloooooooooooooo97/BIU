@@ -539,12 +539,33 @@ CREATE TABLE IF NOT EXISTS channel_messages (
   trace_id TEXT NOT NULL DEFAULT '',
   ephemeral_to TEXT NOT NULL DEFAULT '',
   meta_json TEXT NOT NULL DEFAULT '{}',
+  pinned_at INTEGER NOT NULL DEFAULT 0,
+  pinned_by TEXT NOT NULL DEFAULT '',
   edited_at INTEGER NOT NULL DEFAULT 0,
   deleted_at INTEGER NOT NULL DEFAULT 0,
   created_at INTEGER NOT NULL
 );
 CREATE UNIQUE INDEX IF NOT EXISTS channel_messages_channel_seq ON channel_messages(channel_id, seq);
 CREATE INDEX IF NOT EXISTS channel_messages_ephemeral ON channel_messages(channel_id, ephemeral_to, seq);
+
+CREATE TABLE IF NOT EXISTS channel_message_reactions (
+  channel_id TEXT NOT NULL,
+  message_id TEXT NOT NULL,
+  account_id TEXT NOT NULL,
+  emoji TEXT NOT NULL,
+  created_at INTEGER NOT NULL,
+  PRIMARY KEY (message_id, account_id, emoji)
+);
+CREATE INDEX IF NOT EXISTS channel_reactions_channel ON channel_message_reactions(channel_id, message_id);
+
+CREATE TABLE IF NOT EXISTS channel_saved_messages (
+  account_id TEXT NOT NULL,
+  channel_id TEXT NOT NULL,
+  message_id TEXT NOT NULL,
+  created_at INTEGER NOT NULL,
+  PRIMARY KEY (account_id, message_id)
+);
+CREATE INDEX IF NOT EXISTS channel_saved_account ON channel_saved_messages(account_id, created_at DESC);
 
 CREATE TABLE IF NOT EXISTS channel_agent_runs (
   id TEXT PRIMARY KEY,
