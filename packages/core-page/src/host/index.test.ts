@@ -303,7 +303,7 @@ test('pagesCollection can add a child page', async () => {
   const index = new PageBlocksIndex(store, { hotWindowMs: 60_000, hotLimit: 0, warmLimit: 0 })
   const pages = page.pagesCollection(store, index)
   const addChild = pages.actions?.find((item) => item.id === 'add-child')
-  assert.equal(addChild?.label, '添加子页面')
+  assert.equal(addChild?.label, '添加')
   assert.deepEqual(addChild?.placement, ['row', 'detail'])
   const trash = pages.actions?.find((item) => item.id === 'delete')
   assert.equal(trash?.label, '删除')

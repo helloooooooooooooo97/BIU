@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { render } from '@testing-library/react'
-import { actionIcon, DefaultCell, fieldDraftValue } from './fsdb-cells.tsx'
+import { ActionCell, actionIcon, DefaultCell, fieldDraftValue } from './fsdb-cells.tsx'
 
 test('Skill sync actions use distinct directional icons', () => {
   const pull = render(actionIcon('sync-from-directory'))
@@ -188,4 +188,17 @@ test('fieldDraftValue preserves Unix ms timestamp for datetime fields so CellDat
   assert.equal(fieldDraftValue({ type: 'datetime' }, 1795156084000), '1795156084000')
   assert.equal(fieldDraftValue({ type: 'datetime' }, null), '')
   assert.equal(fieldDraftValue({ type: 'datetime' }, '2026-11-20 10:57:14'), '2026-11-20 10:57:14')
+})
+
+test('ActionCell renders rounded tag pill button with icon and text label', () => {
+  let ran = false
+  const { container } = render(
+    <ActionCell field={{ type: 'action', label: '添加', action: 'add-child' }} fieldKey="add" onRun={() => { ran = true }} />,
+  )
+  const btn = container.querySelector('button.fsdb-action-btn') as HTMLButtonElement
+  assert.ok(btn)
+  assert.ok(btn.querySelector('svg'))
+  assert.equal(btn.querySelector('span')?.textContent, '添加')
+  btn.click()
+  assert.equal(ran, true)
 })
