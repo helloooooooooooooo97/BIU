@@ -4,6 +4,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import {
   HashtagIcon,
   LockClosedIcon,
+  MagnifyingGlassIcon,
   PlusIcon,
   UserGroupIcon,
   XMarkIcon,
@@ -23,7 +24,7 @@ import {
 } from '@biu/web-session-view'
 import { SIDEBAR_ROW_MAIN_CLASS, SidebarRow } from '@biu/web-session-view/sidebar-row'
 import { TrashGlyph } from '@biu/web-session-view/trash-glyph'
-import type { ChannelAccessMode } from '../shared/channel-types.ts'
+import { buildDefaultChannelName, type ChannelAccessMode } from '../shared/channel-types.ts'
 import {
   createChannel,
   deleteChannel,
@@ -126,6 +127,10 @@ export const ChannelSidebarSections = memo(function ChannelSidebarSections({
     () => members.filter((m) => !myAccountId || m.id !== myAccountId),
     [members, myAccountId],
   )
+  const selfName = useMemo(
+    () => (myAccountId ? members.find((m) => m.id === myAccountId)?.name ?? '' : ''),
+    [members, myAccountId],
+  )
 
   const handleDeleteChannel = useCallback(
     async (channelId: string) => {
@@ -193,6 +198,7 @@ export const ChannelSidebarSections = memo(function ChannelSidebarSections({
           <CreateChannelDialog
             members={peerMembers}
             myAccountId={myAccountId}
+            selfName={selfName}
             useSessionView={useSessionView}
             onClose={() => setCreateOpen(false)}
             onCreated={(id) => {
@@ -287,6 +293,7 @@ export const ChannelSidebarSections = memo(function ChannelSidebarSections({
         <CreateChannelDialog
           members={peerMembers}
           myAccountId={myAccountId}
+          selfName={selfName}
           useSessionView={useSessionView}
           onClose={() => setCreateOpen(false)}
           onCreated={(id) => {
@@ -303,12 +310,14 @@ export const ChannelSidebarSections = memo(function ChannelSidebarSections({
 function CreateChannelDialog({
   members,
   myAccountId,
+  selfName,
   useSessionView,
   onClose,
   onCreated,
 }: {
   members: WorkspaceMemberRow[]
   myAccountId: string
+  selfName: string
   useSessionView?: ReturnType<typeof bindSessionView>
   onClose: () => void
   onCreated: (channelId: string) => void
@@ -318,8 +327,7 @@ function CreateChannelDialog({
     () => allSessions.filter((s) => !myAccountId || !s.createdBy || s.createdBy === myAccountId),
     [allSessions, myAccountId],
   )
-  const [name, setName] = useState('')
-  const [topic, setTopic] = useState('')
+  const [search, setSearch] = useState('')
   const [accessMode, setAccessMode] = useState<ChannelAccessMode>('private')
   const [pickedMembers, setPickedMembers] = useState<string[]>([])
   const [pickedAgents, setPickedAgents] = useState<string[]>([])
@@ -330,14 +338,41 @@ function CreateChannelDialog({
     setList(list.includes(id) ? list.filter((x) => x !== id) : [...list, id])
   }
 
+  const needle = search.trim().toLowerCase()
+  const filteredMembers = useMemo(() => {
+    if (!needle) return members
+    return members.filter(
+      (m) => m.name.toLowerCase().includes(needle) || (m.email?.toLowerCase().includes(needle) ?? false),
+    )
+  }, [members, needle])
+
+  const filteredAgents = useMemo(() => {
+    const list = !needle
+      ? myAgents.slice(0, 50)
+      : myAgents.filter((a) => a.title.toLowerCase().includes(needle))
+    return list
+  }, [myAgents, needle])
+
+  const defaultName = useMemo(() => {
+    const pickedHumanNames = pickedMembers
+      .map((id) => members.find((m) => m.id === id)?.name ?? '')
+      .filter(Boolean)
+    const pickedAgentNames = pickedAgents
+      .map((id) => myAgents.find((a) => a.id === id)?.title ?? '')
+      .filter(Boolean)
+    const humanNames = selfName ? [selfName, ...pickedHumanNames] : pickedHumanNames
+    return buildDefaultChannelName(humanNames, pickedAgentNames)
+  }, [members, myAgents, pickedAgents, pickedMembers, selfName])
+
+  const hasSelection = pickedMembers.length + pickedAgents.length > 0
+
   const submit = async () => {
-    if (!name.trim() || submitting) return
+    if (!hasSelection || submitting) return
     setSubmitting(true)
     setError('')
     try {
       const detail = await createChannel({
-        name: name.trim(),
-        topic: topic.trim(),
+        name: defaultName,
         accessMode,
         memberAccountIds: pickedMembers,
         agentIds: pickedAgents,
@@ -385,52 +420,55 @@ function CreateChannelDialog({
 
           <div className="scfg-sections">
             <div className="scfg-section">
-              <label className="scfg-field">
-                <span className="scfg-label">聊天名称</span>
+              <div className="relative flex items-center">
+                <MagnifyingGlassIcon
+                  className="pointer-events-none absolute left-2.5 size-4 text-(--biu-color-icon)"
+                  aria-hidden
+                />
                 <input
                   type="text"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  placeholder="例如：产品研发、发布协作"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder="搜索空间成员或我的 Agent…"
                   autoFocus
-                  className="scfg-input"
+                  data-testid="create-channel-search"
+                  className="scfg-input !pl-8 !pr-8"
                   onKeyDown={(e) => {
-                    if (e.key === 'Enter') void submit()
+                    if (e.key === 'Escape' && search) {
+                      e.stopPropagation()
+                      setSearch('')
+                    }
                   }}
                 />
-              </label>
-
-              <label className="scfg-field">
-                <span className="scfg-label">主题（可选）</span>
-                <input
-                  type="text"
-                  value={topic}
-                  onChange={(e) => setTopic(e.target.value)}
-                  placeholder="描述这个聊天的协作目标"
-                  className="scfg-input"
-                />
-              </label>
-
-              <div className="scfg-field">
-                <span className="scfg-label">可见范围</span>
-                <div className="flex gap-2">
-                  <Button
-                    variant={accessMode === 'private' ? 'default' : 'secondary'}
-                    className="h-8 flex-1 text-[12px]"
-                    onClick={() => setAccessMode('private')}
+                {search ? (
+                  <button
+                    type="button"
+                    className="absolute right-2 grid size-5 cursor-pointer place-items-center rounded border-0 bg-transparent p-0 text-(--biu-color-text-subtle) hover:text-(--biu-color-text)"
+                    aria-label="清空搜索"
+                    onClick={() => setSearch('')}
                   >
-                    <LockClosedIcon className="size-3.5" />
-                    <span>私密邀请</span>
-                  </Button>
-                  <Button
-                    variant={accessMode === 'workspace' ? 'default' : 'secondary'}
-                    className="h-8 flex-1 text-[12px]"
-                    onClick={() => setAccessMode('workspace')}
-                  >
-                    <HashtagIcon className="size-3.5" />
-                    <span>空间公开</span>
-                  </Button>
-                </div>
+                    <XMarkIcon className="size-3.5" />
+                  </button>
+                ) : null}
+              </div>
+
+              <div className="flex gap-2">
+                <Button
+                  variant={accessMode === 'private' ? 'default' : 'secondary'}
+                  className="h-8 flex-1 text-[12px]"
+                  onClick={() => setAccessMode('private')}
+                >
+                  <LockClosedIcon className="size-3.5" />
+                  <span>私密邀请</span>
+                </Button>
+                <Button
+                  variant={accessMode === 'workspace' ? 'default' : 'secondary'}
+                  className="h-8 flex-1 text-[12px]"
+                  onClick={() => setAccessMode('workspace')}
+                >
+                  <HashtagIcon className="size-3.5" />
+                  <span>空间公开</span>
+                </Button>
               </div>
             </div>
 
@@ -440,26 +478,30 @@ function CreateChannelDialog({
                   <span className="scfg-label">邀请空间成员</span>
                   <span className="scfg-hint">已选 {pickedMembers.length} 人</span>
                 </div>
-                <ul className="scfg-tools-list max-h-36 overflow-y-auto">
-                  {members.map((m) => (
-                    <li key={m.id} className="scfg-tool-row is-active">
-                      <label className="flex min-w-0 flex-1 cursor-pointer items-center gap-2">
-                        <input
-                          type="checkbox"
-                          className="scfg-tool-check"
-                          checked={pickedMembers.includes(m.id)}
-                          onChange={() => toggleItem(pickedMembers, setPickedMembers, m.id)}
-                        />
-                        {m.avatar ? (
-                          <img src={m.avatar} alt="" className="size-4.5 shrink-0 rounded-full object-cover" />
-                        ) : (
-                          <AiAvatar seed={m.id} size={18} className="shrink-0 rounded-full" />
-                        )}
-                        <span className="scfg-tool-name !font-sans">{m.name}</span>
-                      </label>
-                    </li>
-                  ))}
-                </ul>
+                {filteredMembers.length === 0 ? (
+                  <div className="scfg-hint">没有匹配的空间成员</div>
+                ) : (
+                  <ul className="scfg-tools-list max-h-36 overflow-y-auto">
+                    {filteredMembers.map((m) => (
+                      <li key={m.id} className="scfg-tool-row is-active">
+                        <label className="flex min-w-0 flex-1 cursor-pointer items-center gap-2">
+                          <input
+                            type="checkbox"
+                            className="scfg-tool-check"
+                            checked={pickedMembers.includes(m.id)}
+                            onChange={() => toggleItem(pickedMembers, setPickedMembers, m.id)}
+                          />
+                          {m.avatar ? (
+                            <img src={m.avatar} alt="" className="size-4.5 shrink-0 rounded-full object-cover" />
+                          ) : (
+                            <AiAvatar seed={m.id} size={18} className="shrink-0 rounded-full" />
+                          )}
+                          <span className="scfg-tool-name !font-sans">{m.name}</span>
+                        </label>
+                      </li>
+                    ))}
+                  </ul>
+                )}
               </div>
             ) : null}
 
@@ -469,38 +511,55 @@ function CreateChannelDialog({
                   <span className="scfg-label">拉入我的 Agent</span>
                   <span className="scfg-hint">仅归属人可拉入 · 已选 {pickedAgents.length}</span>
                 </div>
-                <ul className="scfg-tools-list max-h-40 overflow-y-auto">
-                  {myAgents.slice(0, 30).map((agent) => (
-                    <li key={agent.id} className="scfg-tool-row is-active">
-                      <label className="flex min-w-0 flex-1 cursor-pointer items-center gap-2">
-                        <input
-                          type="checkbox"
-                          className="scfg-tool-check"
-                          checked={pickedAgents.includes(agent.id)}
-                          onChange={() => toggleItem(pickedAgents, setPickedAgents, agent.id)}
-                        />
-                        <SidebarMascot
-                          size={18}
-                          sessionId={agent.id}
-                          identity={resolveSessionMascot(agent.id, agent.mascot)}
-                          animate={false}
-                          title=""
-                        />
-                        <span className="scfg-tool-name !font-sans">{agent.title}</span>
-                      </label>
-                    </li>
-                  ))}
-                </ul>
+                {filteredAgents.length === 0 ? (
+                  <div className="scfg-hint">没有匹配的 Agent</div>
+                ) : (
+                  <ul className="scfg-tools-list max-h-44 overflow-y-auto">
+                    {filteredAgents.map((agent) => (
+                      <li key={agent.id} className="scfg-tool-row is-active">
+                        <label className="flex min-w-0 flex-1 cursor-pointer items-center gap-2">
+                          <input
+                            type="checkbox"
+                            className="scfg-tool-check"
+                            checked={pickedAgents.includes(agent.id)}
+                            onChange={() => toggleItem(pickedAgents, setPickedAgents, agent.id)}
+                          />
+                          <SidebarMascot
+                            size={18}
+                            sessionId={agent.id}
+                            identity={resolveSessionMascot(agent.id, agent.mascot)}
+                            animate={false}
+                            title=""
+                          />
+                          <span className="scfg-tool-name !font-sans">{agent.title}</span>
+                        </label>
+                      </li>
+                    ))}
+                  </ul>
+                )}
               </div>
             ) : null}
 
-            <div className="flex justify-end gap-2 pt-3">
-              <Button variant="secondary" onClick={onClose}>
-                取消
-              </Button>
-              <Button disabled={!name.trim() || submitting} onClick={() => void submit()}>
-                {submitting ? '创建中…' : '创建聊天'}
-              </Button>
+            <div className="flex items-center justify-between gap-3 pt-3">
+              <span
+                className="scfg-hint min-w-0 truncate"
+                data-testid="create-channel-default-name"
+                title={hasSelection ? `默认名称：${defaultName}（聊天后也会根据内容自动命名）` : undefined}
+              >
+                {hasSelection ? `默认名称：${defaultName}` : '请选择成员或 Agent'}
+              </span>
+              <div className="flex shrink-0 gap-2">
+                <Button variant="secondary" onClick={onClose}>
+                  取消
+                </Button>
+                <Button
+                  data-testid="create-channel-submit"
+                  disabled={!hasSelection || submitting}
+                  onClick={() => void submit()}
+                >
+                  {submitting ? '创建中…' : '创建聊天'}
+                </Button>
+              </div>
             </div>
           </div>
         </div>

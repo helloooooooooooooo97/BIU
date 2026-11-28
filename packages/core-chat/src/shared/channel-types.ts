@@ -1,6 +1,31 @@
 import type { SessionMascot } from '@biu/type-session'
 
 export type ChannelKind = 'channel' | 'dm'
+
+/** 按「人类成员优先在前，其次 Agent」拼接默认聊天名称。 */
+export function buildDefaultChannelName(
+  humanNames: string[],
+  agentNames: string[],
+  maxNames = 4,
+): string {
+  const dedupe = (items: string[]) => {
+    const out: string[] = []
+    const seen = new Set<string>()
+    for (const raw of items) {
+      const clean = String(raw ?? '').trim()
+      if (!clean || seen.has(clean)) continue
+      seen.add(clean)
+      out.push(clean)
+    }
+    return out
+  }
+  const ordered = [...dedupe(humanNames), ...dedupe(agentNames)]
+  if (ordered.length === 0) return '新聊天'
+  const head = ordered.slice(0, maxNames).join('、')
+  const suffix = ordered.length > maxNames ? ` 等${ordered.length}位` : ''
+  const joined = `${head}${suffix}`
+  return joined.length > 48 ? `${joined.slice(0, 47)}…` : joined
+}
 export type ChannelAccessMode = 'private' | 'workspace'
 export type ChannelMemberType = 'account' | 'agent'
 export type ChannelMemberRole = 'owner' | 'admin' | 'member'

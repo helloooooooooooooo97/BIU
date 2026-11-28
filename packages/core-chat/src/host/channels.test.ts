@@ -19,6 +19,7 @@ import {
   resolveMentionedAgents,
   type ChannelLlmResolver,
 } from './channels.ts'
+import { buildDefaultChannelName } from '../shared/channel-types.ts'
 import { inject as coreChatInject } from './index.ts'
 
 function waitFor(check: () => boolean, timeoutMs = 2500): Promise<void> {
@@ -588,6 +589,81 @@ describe('Slack-style Group Channels: RBAC, Mention Dispatch, Per-Invoker Queue,
       })
       const sysErr = asUser(alice.id, () => svc.listMessages(ch.channel.id)).find((m) => m.senderType === 'system')
       assert.deepEqual(sysErr?.senderMascot, { shape: 'capsule', color: '#14b8a6' })
+    } finally {
+      svc.dispose()
+      db.close()
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('defaults channel name to human-first member concatenation and auto-names from conversation content', async () => {
+    assert.equal(
+      buildDefaultChannelName(['lulu', '97'], ['赤板灵', '紫晶美']),
+      'lulu、97、赤板灵、紫晶美',
+    )
+    assert.equal(
+      buildDefaultChannelName(['lulu', '97', 'Bob'], ['赤板灵', '紫晶美']),
+      'lulu、97、Bob、赤板灵 等5位',
+    )
+
+    const dir = mkdtempSync(join(tmpdir(), 'biu-channels-autoname-'))
+    const db = openAndMigrateBiu(join(dir, 'biu.sqlite'))
+    const store = new CollabStore(db)
+    const alice = store.register('Alice', Date.now(), 'pass123456', 'alice@example.com')
+    const bob = store.register('Bob', Date.now(), 'pass123456', 'bob@example.com')
+    const ws = store.createWorkspace(alice.id, 'Naming WS')
+    store.addMemberByEmail(alice.id, ws.id, 'bob@example.com')
+    runWithAccount(alice.id, () =>
+      runWithRequestWorkspace(ws.id, () => {
+        store.attach(ws.id, '/agents', 'ag-red', Date.now(), { accessMode: 'private' })
+      }),
+    )
+
+    const fakeCtx = {
+      get: (key: string) => (key === 'account' ? { store } : undefined),
+      account: { store },
+      sessions: {
+        peekSummary: (id: string) => (id === 'ag-red' ? { id, title: '赤板灵', config: {} } : null),
+      },
+      tools: { schemas: () => [], invoke: async () => ({ ok: true }) },
+      http: { broadcast: () => undefined, broadcastAccount: () => undefined },
+      effect: () => undefined,
+    } as unknown as Context
+
+    const svc = new ChannelService(
+      fakeCtx,
+      () => ({
+        chat: async () => ({ content: '支付接口排查', toolCalls: [] }),
+      }),
+      { db },
+    )
+    const asUser = <T>(acc: string, fn: () => T) => runWithAccount(acc, () => runWithRequestWorkspace(ws.id, fn))
+
+    try {
+      // 不传 name 时，默认按「人类成员优先在前 + Agent」拼接
+      const created = asUser(alice.id, () =>
+        svc.createChannel({ memberAccountIds: [bob.id], agentIds: ['ag-red'] }),
+      )
+      assert.equal(created.channel.name, 'Alice、Bob、赤板灵')
+
+      // 发两条消息后，默认名聊天自动根据内容取名
+      asUser(alice.id, () => svc.sendMessage(created.channel.id, { text: '支付回调今天偶尔 502' }))
+      asUser(bob.id, () => svc.sendMessage(created.channel.id, { text: '我查下网关日志定位一下' }))
+
+      await waitFor(() => asUser(alice.id, () => svc.getChannelDetail(created.channel.id).channel.name) === '支付接口排查')
+
+      // 手动命名的聊天不会被自动覆盖
+      const manual = asUser(alice.id, () =>
+        svc.createChannel({ name: '固定群名', memberAccountIds: [bob.id] }),
+      )
+      asUser(alice.id, () => svc.sendMessage(manual.channel.id, { text: '第一条' }))
+      asUser(bob.id, () => svc.sendMessage(manual.channel.id, { text: '第二条' }))
+      await new Promise((r) => setTimeout(r, 80))
+      assert.equal(asUser(alice.id, () => svc.getChannelDetail(manual.channel.id).channel.name), '固定群名')
+
+      // 但主动触发 autoNameChannel 仍可根据内容生成标题
+      const renamed = await asUser(alice.id, () => svc.autoNameChannel(manual.channel.id))
+      assert.equal(renamed.name, '支付接口排查')
     } finally {
       svc.dispose()
       db.close()

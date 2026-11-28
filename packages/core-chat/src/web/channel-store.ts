@@ -108,7 +108,7 @@ export async function loadChannelDetail(channelId: string): Promise<ChannelDetai
 }
 
 export async function createChannel(input: {
-  name: string
+  name?: string
   topic?: string
   accessMode?: ChannelAccessMode
   memberAccountIds?: string[]
@@ -120,13 +120,52 @@ export async function createChannel(input: {
     body: JSON.stringify(input),
   })
   const body = (await res.json()) as ChannelDetailPayload & { error?: string }
-  if (!res.ok) throw new Error(body.error || '创建群聊失败')
+  if (!res.ok) throw new Error(body.error || '创建聊天失败')
   setState((prev) => ({
     ...prev,
     channels: [body.channel, ...prev.channels.filter((c) => c.id !== body.channel.id)],
     details: { ...prev.details, [body.channel.id]: body },
   }))
   return body
+}
+
+function applyChannelSummaryUpdate(channel: ChannelSummary) {
+  setState((prev) => {
+    const exists = prev.channels.some((c) => c.id === channel.id)
+    const channels = exists
+      ? prev.channels.map((c) => (c.id === channel.id ? channel : c))
+      : [channel, ...prev.channels]
+    const prevDetail = prev.details[channel.id]
+    return {
+      ...prev,
+      channels,
+      details: prevDetail
+        ? { ...prev.details, [channel.id]: { ...prevDetail, channel } }
+        : prev.details,
+    }
+  })
+}
+
+export async function renameChannel(channelId: string, name: string): Promise<ChannelSummary> {
+  const res = await apiFetch(`/api/channels/${encodeURIComponent(channelId)}`, {
+    method: 'PATCH',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ name }),
+  })
+  const body = (await res.json()) as { channel?: ChannelSummary; error?: string }
+  if (!res.ok || !body.channel) throw new Error(body.error || '重命名失败')
+  applyChannelSummaryUpdate(body.channel)
+  return body.channel
+}
+
+export async function autoNameChannel(channelId: string): Promise<ChannelSummary> {
+  const res = await apiFetch(`/api/channels/${encodeURIComponent(channelId)}/auto-name`, {
+    method: 'POST',
+  })
+  const body = (await res.json()) as { channel?: ChannelSummary; error?: string }
+  if (!res.ok || !body.channel) throw new Error(body.error || '自动命名失败')
+  applyChannelSummaryUpdate(body.channel)
+  return body.channel
 }
 
 export async function openOrCreateDm(targetAccountId: string): Promise<ChannelDetailPayload> {

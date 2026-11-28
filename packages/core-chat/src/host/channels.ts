@@ -18,21 +18,22 @@ import { getAccountPort } from '@biu/host-plugin-loader/ports'
 import { runWithSession } from '@biu/host-sessions/scope'
 import { runWithToolPolicy, type AgentToolMode } from '@biu/host-tools'
 import type { SessionMascot } from '@biu/type-session'
-import type {
-  ChannelAccessMode,
-  ChannelAgentActivity,
-  ChannelDetailPayload,
-  ChannelKind,
-  ChannelMemberRole,
-  ChannelMemberType,
-  ChannelMemberView,
-  ChannelMention,
-  ChannelMessageMeta,
-  ChannelMessageView,
-  ChannelRunDetail,
-  ChannelRunEvent,
-  ChannelRunStatus,
-  ChannelSummary,
+import {
+  buildDefaultChannelName,
+  type ChannelAccessMode,
+  type ChannelAgentActivity,
+  type ChannelDetailPayload,
+  type ChannelKind,
+  type ChannelMemberRole,
+  type ChannelMemberType,
+  type ChannelMemberView,
+  type ChannelMention,
+  type ChannelMessageMeta,
+  type ChannelMessageView,
+  type ChannelRunDetail,
+  type ChannelRunEvent,
+  type ChannelRunStatus,
+  type ChannelSummary,
 } from '../shared/channel-types.ts'
 
 export const MAX_CHANNEL_HANDOFF_HOPS = 3
@@ -258,6 +259,7 @@ export class ChannelService {
   private dbOverride: DatabaseSync | null
   private queues = new Map<string, AgentQueueState>()
   private runLookup = new Map<string, QueuedJob>()
+  private autoNamedAttempted = new Set<string>()
   private disposeCallbacks: Array<() => void> = []
 
   constructor(
@@ -604,16 +606,55 @@ export class ChannelService {
     return detail
   }
 
+  private defaultNameForChannel(channelId: string, workspaceId?: string): string {
+    const rows = this.db()
+      .prepare(
+        `SELECT member_type, member_id FROM channel_members
+         WHERE channel_id = ?
+         ORDER BY CASE WHEN role = 'owner' THEN 0 ELSE 1 END ASC, added_at ASC, rowid ASC`,
+      )
+      .all(channelId) as Array<{ member_type: string; member_id: string }>
+    const humans: string[] = []
+    const agents: string[] = []
+    for (const r of rows) {
+      if (r.member_type === 'account') humans.push(this.accountLabel(r.member_id, workspaceId))
+      else if (r.member_type === 'agent') agents.push(this.agentMeta(r.member_id).name)
+    }
+    return buildDefaultChannelName(humans, agents)
+  }
+
   createChannel(input: {
-    name: string
+    name?: string
     topic?: string
     accessMode?: ChannelAccessMode
     memberAccountIds?: string[]
     agentIds?: string[]
   }): ChannelDetailPayload {
     const { accountId, workspaceId } = this.currentActorIds()
-    const name = String(input.name ?? '').trim().slice(0, 80)
-    if (!name) throw new Error('群聊名称不能为空')
+    const cleanHumanIds: string[] = []
+    for (const memberId of input.memberAccountIds ?? []) {
+      const clean = String(memberId ?? '').trim()
+      if (!clean || clean === accountId || cleanHumanIds.includes(clean)) continue
+      cleanHumanIds.push(clean)
+    }
+    const cleanAgentIds: string[] = []
+    for (const agentId of input.agentIds ?? []) {
+      const clean = String(agentId ?? '').trim()
+      if (!clean || cleanAgentIds.includes(clean)) continue
+      const meta = this.agentMeta(clean)
+      // 仅允许拉入自己的 Agent（本地单人模式放行）
+      if (accountId !== 'local' && meta.ownerAccountId !== 'local' && meta.ownerAccountId !== accountId) {
+        continue
+      }
+      cleanAgentIds.push(clean)
+    }
+    const providedName = String(input.name ?? '').trim().slice(0, 80)
+    const name =
+      providedName ||
+      buildDefaultChannelName(
+        [this.accountLabel(accountId, workspaceId), ...cleanHumanIds.map((m) => this.accountLabel(m, workspaceId))],
+        cleanAgentIds.map((a) => this.agentMeta(a).name),
+      )
     const topic = String(input.topic ?? '').trim().slice(0, 240)
     const accessMode: ChannelAccessMode = input.accessMode === 'workspace' ? 'workspace' : 'private'
     const id = allocateRecordId()
@@ -630,26 +671,108 @@ export class ChannelService {
     )
     addMemberStmt.run(id, 'account', accountId, 'owner', accountId, now)
 
-    for (const memberId of input.memberAccountIds ?? []) {
-      const clean = String(memberId ?? '').trim()
-      if (!clean || clean === accountId) continue
+    for (const clean of cleanHumanIds) {
       addMemberStmt.run(id, 'account', clean, 'member', accountId, now)
     }
 
-    for (const agentId of input.agentIds ?? []) {
-      const clean = String(agentId ?? '').trim()
-      if (!clean) continue
-      const meta = this.agentMeta(clean)
-      // 仅允许拉入自己的 Agent（本地单人模式放行）
-      if (accountId !== 'local' && meta.ownerAccountId !== 'local' && meta.ownerAccountId !== accountId) {
-        continue
-      }
+    for (const clean of cleanAgentIds) {
       addMemberStmt.run(id, 'agent', clean, 'member', accountId, now)
     }
 
     const detail = this.getChannelDetail(id)
     this.broadcastToChannel(id, workspaceId, 'channel/updated', { channel: detail.channel })
     return detail
+  }
+
+  /** 根据聊天近期内容自动生成简洁标题（优先调用 LLM，无 Key 或异常时回退为首条有效消息摘要）。 */
+  async autoNameChannel(channelId: string): Promise<ChannelSummary> {
+    const { accountId } = this.currentActorIds()
+    const row = this.requireChannelRow(channelId, accountId)
+    if (row.kind === 'dm') return this.toSummary(row, accountId)
+    const msgs = this.db()
+      .prepare(
+        `SELECT sender_type, sender_id, text FROM channel_messages
+         WHERE channel_id = ? AND ephemeral_to = '' AND sender_type IN ('account', 'agent')
+         ORDER BY seq ASC LIMIT 12`,
+      )
+      .all(channelId) as Array<{ sender_type: string; sender_id: string; text: string }>
+    if (msgs.length === 0) {
+      const fallback = this.defaultNameForChannel(channelId, row.workspace_id)
+      return this.applyChannelAutoName(channelId, row, accountId, fallback)
+    }
+
+    const transcript = msgs
+      .map((m) => {
+        const who =
+          m.sender_type === 'agent'
+            ? this.agentMeta(m.sender_id).name
+            : this.accountLabel(m.sender_id, row.workspace_id)
+        return `${who}: ${m.text.slice(0, 200)}`
+      })
+      .join('\n')
+
+    const fallbackFromText = () => {
+      const first = msgs.find((m) => m.text.trim())?.text ?? ''
+      const stripped = first
+        .replace(/@[^\s@]+/g, ' ')
+        .replace(/[`*_#>\[\]()]/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim()
+      if (!stripped) return this.defaultNameForChannel(channelId, row.workspace_id)
+      return stripped.length > 16 ? `${stripped.slice(0, 16)}…` : stripped
+    }
+
+    let generated = ''
+    try {
+      const llm = this.resolveLlmClient('', accountId, accountId)
+      const res = await llm.chat(
+        [
+          {
+            role: 'system',
+            content:
+              '你是聊天命名助手。请根据聊天记录生成一个简短准确的中文标题（4到12个字），不要加引号、书名号或多余解释，只输出标题本身。',
+          },
+          { role: 'user', content: transcript },
+        ],
+        [],
+      )
+      const raw = String(res?.content ?? '')
+        .split(/\r?\n/)[0]
+        ?.replace(/^[\s"'「」『』《》【】#*-]+|[\s"'「」『』《》【】。，,.!?！？]+$/g, '')
+        .trim()
+      if (raw && !raw.startsWith('未配置 API Key')) {
+        generated = raw.slice(0, 24)
+      }
+    } catch {
+      /* fallback below */
+    }
+
+    const nextName = generated || fallbackFromText()
+    return this.applyChannelAutoName(channelId, row, accountId, nextName)
+  }
+
+  private applyChannelAutoName(channelId: string, row: ChannelRow, accountId: string, nextName: string): ChannelSummary {
+    const clean = nextName.trim().slice(0, 80)
+    if (!clean || clean === row.name) return this.toSummary(row, accountId)
+    const now = Date.now()
+    this.db().prepare(`UPDATE channels SET name = ?, updated_at = ? WHERE id = ?`).run(clean, now, channelId)
+    const updated = this.toSummary(this.requireChannelRow(channelId, accountId), accountId)
+    this.broadcastToChannel(channelId, row.workspace_id, 'channel/updated', { channel: updated })
+    return updated
+  }
+
+  private maybeScheduleAutoName(channelId: string, row: ChannelRow, accountId: string) {
+    if (row.kind === 'dm' || this.autoNamedAttempted.has(channelId)) return
+    const countRow = this.db()
+      .prepare(`SELECT COUNT(*) AS cnt FROM channel_messages WHERE channel_id = ? AND ephemeral_to = '' AND sender_type IN ('account', 'agent')`)
+      .get(channelId) as { cnt?: number } | undefined
+    if (Number(countRow?.cnt ?? 0) < 2) return
+    const expectedDefault = this.defaultNameForChannel(channelId, row.workspace_id)
+    if (row.name !== expectedDefault) return
+    this.autoNamedAttempted.add(channelId)
+    void runWithAccount(accountId, () =>
+      runWithRequestWorkspace(row.workspace_id, () => this.autoNameChannel(channelId)),
+    ).catch(() => undefined)
   }
 
   updateChannel(channelId: string, patch: { name?: string; topic?: string; accessMode?: ChannelAccessMode }): ChannelSummary {
@@ -960,6 +1083,10 @@ export class ChannelService {
         this.broadcastToAccounts([input.ephemeralTo], ch.workspace_id, 'channel/message', { message: view })
       } else {
         this.broadcastToChannel(input.channelId, ch.workspace_id, 'channel/message', { message: view })
+        if (input.senderType === 'account' || input.senderType === 'agent') {
+          const actorForNaming = input.senderType === 'account' ? input.senderId : ch.created_by
+          this.maybeScheduleAutoName(input.channelId, ch, actorForNaming)
+        }
       }
     }
     return view
@@ -1720,6 +1847,15 @@ export function registerChannelRoutes(ctx: Context, resolveLlm: (sessionId?: str
     try {
       const body = (await route.json()) as { name?: string; topic?: string; accessMode?: ChannelAccessMode }
       route.send(200, { channel: service.updateChannel(route.params.id, body ?? {}) })
+    } catch (error) {
+      sendError(route, error)
+    }
+  })
+
+  ctx.http.route('POST', '/api/channels/:id/auto-name', async (route) => {
+    try {
+      const channel = await service.autoNameChannel(route.params.id)
+      route.send(200, { channel })
     } catch (error) {
       sendError(route, error)
     }

@@ -409,3 +409,102 @@ test('membersChrome Icon renders workspace avatar with green dot for online memb
   assert.ok(offlineView.container.querySelector('[data-ai-avatar="mesh"]'))
   assert.equal(offlineView.queryByTestId('member-online-dot-acc-offline'), null)
 })
+
+test('CreateChannelDialog replaces name/topic fields with search box and builds human-first default name', async () => {
+  let postedBody: Record<string, unknown> | null = null
+  const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = new URL(String(input), 'http://test.local')
+    if (url.pathname === '/api/channels' && init?.method === 'POST') {
+      postedBody = JSON.parse(String(init.body ?? '{}')) as Record<string, unknown>
+      return new Response(
+        JSON.stringify({
+          channel: {
+            id: 'ch-new',
+            workspaceId: 'ws-1',
+            kind: 'channel',
+            dmKey: '',
+            name: String(postedBody.name ?? ''),
+            topic: '',
+            accessMode: 'private',
+            createdBy: 'acc-alice',
+            createdAt: 1,
+            updatedAt: 1,
+            memberCount: 2,
+            agentCount: 1,
+            lastMessageAt: 1,
+            lastMessageText: '',
+          },
+          members: [],
+          messages: [],
+          activities: [],
+          myAccountId: 'acc-alice',
+          canManageMembers: true,
+        }),
+        { status: 200 },
+      )
+    }
+    if (url.pathname === '/api/channels') {
+      return new Response(JSON.stringify({ channels: [] }), { status: 200 })
+    }
+    if (url.pathname === '/api/account/workspace-profile') {
+      return new Response(JSON.stringify({ accountId: 'acc-alice' }), { status: 200 })
+    }
+    if (url.pathname === '/api/db/list') {
+      return new Response(
+        JSON.stringify({
+          items: [
+            { id: 'acc-alice', title: 'Alice' },
+            { id: 'acc-97', title: '97', email: '97@example.com' },
+            { id: 'acc-bob', title: 'Bob', email: 'bob@example.com' },
+          ],
+        }),
+        { status: 200 },
+      )
+    }
+    return new Response(JSON.stringify({}), { status: 200 })
+  })
+  vi.stubGlobal('fetch', fetchMock)
+
+  const fakeUseSessionView = ((selector: (s: { sessions: Array<{ id: string; title: string; createdBy?: string }> }) => unknown) =>
+    selector({
+      sessions: [
+        { id: 'ag-1', title: '赤板灵', createdBy: 'acc-alice' },
+        { id: 'ag-2', title: '紫晶美', createdBy: 'acc-alice' },
+      ],
+    })) as unknown as Parameters<typeof ChannelSidebarSections>[0]['useSessionView']
+
+  const view = render(
+    <MemoryRouter initialEntries={['/']}>
+      <ChannelSidebarSections routeChannelId={null} useSessionView={fakeUseSessionView} />
+    </MemoryRouter>,
+  )
+
+  fireEvent.click(view.getByTestId('sidebar-create-channel'))
+  const dialog = await waitFor(() => view.getByTestId('create-channel-dialog'))
+
+  // 不再渲染「聊天名称」和「主题（可选）」输入框，改为搜索框
+  assert.equal(dialog.textContent?.includes('聊天名称'), false)
+  assert.equal(dialog.textContent?.includes('主题（可选）'), false)
+  const searchInput = view.getByTestId('create-channel-search')
+
+  // 搜索过滤 Agent
+  fireEvent.change(searchInput, { target: { value: '赤板' } })
+  assert.ok(dialog.textContent?.includes('赤板灵'))
+  assert.equal(dialog.textContent?.includes('紫晶美'), false)
+
+  // 先勾选 Agent「赤板灵」
+  fireEvent.click(view.getByText('赤板灵'))
+
+  // 清空搜索并勾选人类成员「97」
+  fireEvent.change(searchInput, { target: { value: '' } })
+  await waitFor(() => assert.ok(view.getByText('97')))
+  fireEvent.click(view.getByText('97'))
+
+  // 默认名称必须人类成员优先在前，其次 Agent
+  assert.equal(view.getByTestId('create-channel-default-name').textContent, '默认名称：Alice、97、赤板灵')
+
+  fireEvent.click(view.getByTestId('create-channel-submit'))
+  await waitFor(() => {
+    assert.equal(postedBody?.name, 'Alice、97、赤板灵')
+  })
+})
