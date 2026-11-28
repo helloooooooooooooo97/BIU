@@ -935,11 +935,6 @@ export const ChannelStage = memo(function ChannelStage({
                           rows={1}
                           value={text}
                           onChange={(e) => handleTextChange(e.target.value)}
-                          placeholder={
-                            isDm
-                              ? `给 ${channel?.name ?? '对方'} 发消息…`
-                              : `在 # ${channel?.name ?? ''} 发消息… 输入 @ 召唤群内 Agent`
-                          }
                           data-testid="channel-composer-input"
                           className="composer-tiptap block w-full resize-none border-0 bg-transparent p-0 outline-none placeholder:text-(--biu-color-text-placeholder)"
                           onKeyDown={(e) => {

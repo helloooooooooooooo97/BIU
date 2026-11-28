@@ -8,11 +8,11 @@ import type { CollectionActionInfo, DbRecord } from '@biu/type-file-system'
 import { channelAppPath } from '@biu/web-session-view'
 import { openOrCreateDm } from './channel-store.ts'
 
-export function MemberIcon({ record, size = 18 }: { record: DbRecord; size?: number }) {
+export function MemberIcon({ record, size = 16 }: { record: DbRecord; size?: number }) {
   const memberId = String(record.id ?? '').trim()
   const avatar = typeof record.avatar === 'string' ? record.avatar.trim() : ''
   const online = record.status === 'online'
-  const dotSize = Math.max(6, Math.round(size * 0.38))
+  const dotSize = Math.max(5, Math.round(size * 0.3))
 
   return (
     <span
@@ -33,7 +33,7 @@ export function MemberIcon({ record, size = 18 }: { record: DbRecord; size?: num
       )}
       {online ? (
         <span
-          className="pointer-events-none absolute right-0 bottom-0 rounded-full bg-emerald-500 ring-[1.5px] ring-(--biu-color-bg)"
+          className="pointer-events-none absolute right-0 bottom-0 rounded-full bg-emerald-500 ring-1 ring-(--biu-color-bg)"
           style={{ width: dotSize, height: dotSize }}
           title="在线"
           aria-label="在线"
