@@ -18,6 +18,7 @@ const plugins: AppModule[] = [
 test('parseAppPath covers home, session, and registered plugin modules', () => {
   assert.deepEqual(parseAppPath('/'), { kind: 'home' })
   assert.deepEqual(parseAppPath('/agents/abc'), { kind: 'session', sessionId: 'abc', view: 'chat' })
+  assert.deepEqual(parseAppPath('/channels/ch-1'), { kind: 'channel', channelId: 'ch-1' })
   assert.deepEqual(parseAppPath('/agents/abc/debug'), {
     kind: 'session',
     sessionId: 'abc',

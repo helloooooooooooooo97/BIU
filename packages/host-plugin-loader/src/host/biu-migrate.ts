@@ -3,7 +3,7 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, statSync } from 'node
 import { basename, dirname, join } from 'node:path'
 import { openPooledSqlite, sharedSqlitePoolStats, closeAllSharedSqliteConnections } from './sqlite-pool.ts'
 import { assertSqliteVersion, getSchemaVersion, isEmptyDatabase, quoteSqlitePath, setSchemaVersion } from './sqlite-open.ts'
-import { CREATE_CORE_SQL, LATEST_BIU_SCHEMA, createLatestSchema, dropLegacyEditorColumns, ensurePagesPerfIndexes, rebuildPageBlockCollectionKeys, tableColumnNames, tableNames } from './biu-schema.ts'
+import { CREATE_CHANNELS_SQL, CREATE_CORE_SQL, LATEST_BIU_SCHEMA, createLatestSchema, dropLegacyEditorColumns, ensurePagesPerfIndexes, rebuildPageBlockCollectionKeys, tableColumnNames, tableNames } from './biu-schema.ts'
 import { copyLegacyBodies, rebuildContentRefs } from './editor-content.ts'
 import { parseFrontmatterBody } from './gc-assets.ts'
 
@@ -2120,6 +2120,9 @@ export const BIU_MIGRATIONS: Migration[] = [
       }
       db.exec('DROP TABLE IF EXISTS record_owners')
     }
+  } },
+  { version: 64, module: 'core-chat', name: 'slack_group_channels', up(db) {
+    db.exec(CREATE_CHANNELS_SQL)
   } },
 ]
 

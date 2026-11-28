@@ -1,5 +1,7 @@
 import type { DatabaseSync } from 'node:sqlite'
-import { currentAccountId, currentActorContext } from '@biu/host-plugin-loader/data-dir'
+import { currentAccountId, currentActorContext, type ActorRoomContext } from '@biu/host-plugin-loader/data-dir'
+
+export type { ActorRoomContext }
 
 export type ActorScopeRule = {
   allowedCollections?: string[] | null
@@ -19,6 +21,7 @@ export type Actor =
       sessionId?: string
       invokerId?: string
       scope?: ActorScopeRule
+      roomContext?: ActorRoomContext
     }
   | {
       type: 'mcp'
@@ -237,6 +240,7 @@ export class AuthorizationService {
         workspaceId,
         sessionId: delegated.actorId,
         invokerId: delegated.invokerId,
+        ...(delegated.roomContext ? { roomContext: delegated.roomContext } : {}),
         ...(delegated.maxRole || delegated.allowedCollections
           ? {
               scope: {
@@ -486,6 +490,37 @@ export class AuthorizationService {
       }
       if (!roleCoversAction(effectiveRole, action)) {
         return { allowed: false, reason: 'INSUFFICIENT_PERMISSION' }
+      }
+      // 群聊可见下界（RoomFloor）：防止 Agent 在群里读取/吐出私人数据或非全群可读数据
+      if (actor.type === 'agent' && actor.roomContext && resource.type === 'record') {
+        if (PERSONAL_ONLY_COLLECTIONS.has(resource.collection)) {
+          return { allowed: false, reason: 'PRIVATE_RESOURCE' }
+        }
+        const room = actor.roomContext
+        const audience = (room.audienceAccountIds ?? []).map((id) => id.trim()).filter(Boolean)
+        if (room.denyPersonal) {
+          const mode = this.effectiveAccessMode(resource)
+          if (mode !== 'members') {
+            // 仅当存在显式跨人共享（且群内非 owner 成员均具备读权限）时才允许读取；纯私人记录一律拒绝
+            if (audience.length <= 1) {
+              return { allowed: false, reason: 'PRIVATE_RESOURCE' }
+            }
+          }
+        }
+        if (audience.length > 0) {
+          for (const memberId of audience) {
+            const readable = this.authorize(
+              { type: 'account', accountId: memberId, workspaceId: actor.workspaceId },
+              'resource:read',
+              resource,
+            )
+            if (!readable.allowed) {
+              return { allowed: false, reason: 'PRIVATE_RESOURCE' }
+            }
+          }
+        } else if (room.hasExternalMember) {
+          return { allowed: false, reason: 'PRIVATE_RESOURCE' }
+        }
       }
       return { allowed: true, effectiveRole, source: delegated.source }
     }

@@ -30,6 +30,7 @@ import { estimateTokens, liftToolImages } from '@biu/host-sessions'
 import { persistDroppedFile, persistPastedImages, readArtifactFile, withPastedImagePicks } from '@biu/host-sessions/artifacts'
 import { collectLiveDispatchedTasks } from '@biu/host-live-sessions/usage'
 import { decorateDispatchedTasks, loadLiveDispatchTasks, registerChatInspectorRoutes } from './inspector.ts'
+import { registerChannelRoutes } from './channels.ts'
 
 const CLOUD_SESSION_SECRET_KEYS = new Set(['apikey', 'apikeys', 'authorization', 'xapikey'])
 
@@ -1882,4 +1883,5 @@ export function apply(ctx: Context) {
     }
   })
   registerChatInspectorRoutes(ctx, visibleSession)
+  registerChannelRoutes(ctx, (sessionId) => chat.resolveLlm(sessionId))
 }

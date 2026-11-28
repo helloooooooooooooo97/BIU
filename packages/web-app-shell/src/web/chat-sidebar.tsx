@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type DragEvent } from 'react'
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type DragEvent, type ReactNode } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { Link, useNavigate } from 'react-router-dom'
 import {
@@ -279,11 +279,14 @@ const WindowedSessionList = memo(function WindowedSessionList({
 
 export type ChatSidebarProps = {
   routeSessionId: string | null
+  routeChannelId?: string | null
   useSessionView: ReturnType<typeof bindSessionView>
   sessionView: SessionViewService
   /** 弹层（小人菜单）里使用时：会话行变成按钮并关闭弹层，不再做页面跳转。 */
   popoverClose?: () => void
   iconRail?: boolean
+  /** 置于「代理」上方的 Slack 风格群聊与成员私聊分区（由 core-chat 槽位注入）。 */
+  channelsHeader?: ReactNode
 }
 
 /**
@@ -292,10 +295,12 @@ export type ChatSidebarProps = {
  */
 export const ChatSidebar = memo(function ChatSidebar({
   routeSessionId,
+  routeChannelId,
   useSessionView,
   sessionView,
   popoverClose,
   iconRail = false,
+  channelsHeader,
 }: ChatSidebarProps) {
   const navigate = useNavigate()
   const sessions = useSessionView((state) => state.sessions)
@@ -365,7 +370,7 @@ export const ChatSidebar = memo(function ChatSidebar({
   }, [routeSessionId, sections, expandProjectGroup])
 
   const popover = Boolean(popoverClose)
-  const highlightId = popover ? sessionId : routeSessionId
+  const highlightId = routeChannelId ? null : popover ? sessionId : routeSessionId
   // 已经在会话页里就直接换 session，否则把输入框拉起来（悬浮聊天），别把人踢出当前页面。
   const openSessionPath = useCallback(
     (id: string) => {
@@ -460,6 +465,7 @@ export const ChatSidebar = memo(function ChatSidebar({
       <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-2 pb-3" data-chat-scroll="">
         {iconRail ? (
           <div className="min-w-0">
+            {channelsHeader}
             <WindowedSessionList
               sessions={railSessions}
               rowKey="rail"
@@ -474,6 +480,7 @@ export const ChatSidebar = memo(function ChatSidebar({
           </div>
         ) : (
         <div className="mt-2 space-y-1.5">
+          {channelsHeader}
           {sections.map((section) => {
             const sectionCollapsed = Boolean(collapsedProjects[`chat.section.${section.kind}`])
             const count =

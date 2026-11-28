@@ -1,6 +1,6 @@
 import { Service, type Context } from 'cordis'
 import type { ToolRequest } from '@biu/host-tools'
-import { currentTenantScope } from '@biu/host-plugin-loader/data-dir'
+import { currentActorContext, currentTenantScope } from '@biu/host-plugin-loader/data-dir'
 import { getNoticesPort } from '@biu/host-plugin-loader/ports'
 import { TenantStateMap } from '@biu/host-plugin-loader/tenant-state'
 
@@ -12,18 +12,28 @@ export interface ApprovalNotifyPayload {
   args: Record<string, unknown>
   accountId?: string
   workspaceId?: string
+  channelId?: string
+  runId?: string
+  agentId?: string
+  invokerId?: string
 }
 
 export class ApprovalsService extends Service {
   private modes: TenantStateMap<'auto' | 'hold'>
   holdTimeoutMs = DEFAULT_HOLD_TIMEOUT_MS
   private notify: ((payload: ApprovalNotifyPayload) => void) | undefined
+  private notifyListeners = new Set<(payload: ApprovalNotifyPayload) => void>()
+  private decideListeners = new Set<(payload: { id: string; allow: boolean; channelId?: string; runId?: string; accountId: string }) => void>()
   private pending = new Map<
     string,
     {
       req: ToolRequest
       accountId: string
       workspaceId: string
+      channelId?: string
+      runId?: string
+      agentId?: string
+      invokerId?: string
       resolve: (allow: boolean) => void
       timer?: ReturnType<typeof setTimeout>
     }
@@ -65,23 +75,56 @@ export class ApprovalsService extends Service {
       }
     }, 'approvals.tenant-lifecycle')
     ctx.tools.guard(async (req) => {
-      if (!needsApproval(req.name, this.mode)) return req
+      const actor = currentActorContext()
+      const delegatedGroupCall = Boolean(
+        actor?.type === 'agent' && actor.roomContext && actor.invokerId && actor.invokerId !== actor.delegatedBy,
+      )
+      if (!needsApproval(req.name, this.mode, delegatedGroupCall)) return req
       const id = crypto.randomUUID()
-      const { accountId, workspaceId } = currentTenantScope()
+      const tenant = currentTenantScope()
+      // 群聊跨人调用 Agent 触发敏感工具时，审批强绑定给 Agent Owner（delegatedBy），他人无法代点允许
+      const accountId = (delegatedGroupCall && actor?.delegatedBy) || tenant.accountId
+      const workspaceId = tenant.workspaceId
+      const channelId = actor?.roomContext?.channelId
+      const runId = actor?.runId
+      const agentId = actor?.type === 'agent' ? actor.actorId : undefined
+      const invokerId = actor?.invokerId
       const allow = await new Promise<boolean>((resolve) => {
         const timer = setTimeout(() => {
           if (!this.pending.has(id)) return
           this.pending.delete(id)
           resolve(false)
         }, this.holdTimeoutMs)
-        this.pending.set(id, { req, accountId, workspaceId, resolve, timer })
-        this.notify?.({
+        this.pending.set(id, {
+          req,
+          accountId,
+          workspaceId,
+          ...(channelId ? { channelId } : {}),
+          ...(runId ? { runId } : {}),
+          ...(agentId ? { agentId } : {}),
+          ...(invokerId ? { invokerId } : {}),
+          resolve,
+          timer,
+        })
+        const payload: ApprovalNotifyPayload = {
           id,
           name: req.name,
           args: req.args,
           ...(accountId ? { accountId } : {}),
           ...(workspaceId ? { workspaceId } : {}),
-        })
+          ...(channelId ? { channelId } : {}),
+          ...(runId ? { runId } : {}),
+          ...(agentId ? { agentId } : {}),
+          ...(invokerId ? { invokerId } : {}),
+        }
+        this.notify?.(payload)
+        for (const fn of this.notifyListeners) {
+          try {
+            fn(payload)
+          } catch {
+            /* ignore */
+          }
+        }
       })
       return allow ? req : { ...req, deny: `denied: ${req.name}` }
     })
@@ -89,6 +132,16 @@ export class ApprovalsService extends Service {
 
   setNotify(notify: (payload: ApprovalNotifyPayload) => void) {
     this.notify = notify
+  }
+
+  onNotify(fn: (payload: ApprovalNotifyPayload) => void): () => void {
+    this.notifyListeners.add(fn)
+    return () => this.notifyListeners.delete(fn)
+  }
+
+  onDecide(fn: (payload: { id: string; allow: boolean; channelId?: string; runId?: string; accountId: string }) => void): () => void {
+    this.decideListeners.add(fn)
+    return () => this.decideListeners.delete(fn)
   }
 
   private matchesCurrentTenant(item: { accountId: string; workspaceId: string }) {
@@ -110,13 +163,21 @@ export class ApprovalsService extends Service {
     this.pending.delete(id)
     if (item.timer) clearTimeout(item.timer)
     item.resolve(allow)
+    for (const fn of this.decideListeners) {
+      try {
+        fn({ id, allow, channelId: item.channelId, runId: item.runId, accountId: item.accountId })
+      } catch {
+        /* ignore */
+      }
+    }
     getNoticesPort(this.ctx)?.markSourceRead?.(`approval:${id}`)
     return { ok: true }
   }
 }
 
-function needsApproval(name: string, mode: 'auto' | 'hold') {
+function needsApproval(name: string, mode: 'auto' | 'hold', delegatedGroupCall = false) {
   if (name === 'db_delete') return true
+  if (delegatedGroupCall) return sensitive(name) || name.startsWith('mcp_')
   if (mode === 'auto') return false
   return sensitive(name)
 }

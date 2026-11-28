@@ -1,6 +1,6 @@
 type DatabaseSync = import('node:sqlite').DatabaseSync
 
-export const LATEST_BIU_SCHEMA = 63
+export const LATEST_BIU_SCHEMA = 64
 
 export const CREATE_CORE_SQL = `
 CREATE TABLE IF NOT EXISTS pages (
@@ -495,7 +495,68 @@ CREATE TABLE IF NOT EXISTS editor_content (
 CREATE INDEX IF NOT EXISTS editor_content_record ON editor_content(collection, record_id);
 `
 
-const CREATE_LATEST_SQL = `${CREATE_CORE_SQL}\n${CREATE_EDITOR_SQL}`
+export const CREATE_CHANNELS_SQL = `
+CREATE TABLE IF NOT EXISTS channels (
+  id TEXT PRIMARY KEY,
+  workspace_id TEXT NOT NULL DEFAULT '',
+  kind TEXT NOT NULL DEFAULT 'channel',
+  dm_key TEXT NOT NULL DEFAULT '',
+  name TEXT NOT NULL,
+  topic TEXT NOT NULL DEFAULT '',
+  access_mode TEXT NOT NULL DEFAULT 'private',
+  created_by TEXT NOT NULL DEFAULT '',
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS channels_workspace_updated ON channels(workspace_id, updated_at DESC);
+CREATE INDEX IF NOT EXISTS channels_dm_key ON channels(workspace_id, dm_key);
+
+CREATE TABLE IF NOT EXISTS channel_members (
+  channel_id TEXT NOT NULL,
+  member_type TEXT NOT NULL,
+  member_id TEXT NOT NULL,
+  role TEXT NOT NULL DEFAULT 'member',
+  added_by TEXT NOT NULL DEFAULT '',
+  added_at INTEGER NOT NULL,
+  PRIMARY KEY (channel_id, member_type, member_id)
+);
+CREATE INDEX IF NOT EXISTS channel_members_lookup ON channel_members(member_type, member_id, channel_id);
+
+CREATE TABLE IF NOT EXISTS channel_messages (
+  id TEXT PRIMARY KEY,
+  channel_id TEXT NOT NULL,
+  seq INTEGER NOT NULL,
+  sender_type TEXT NOT NULL,
+  sender_id TEXT NOT NULL,
+  reply_to_id TEXT NOT NULL DEFAULT '',
+  text TEXT NOT NULL DEFAULT '',
+  mentions_json TEXT NOT NULL DEFAULT '[]',
+  trace_id TEXT NOT NULL DEFAULT '',
+  ephemeral_to TEXT NOT NULL DEFAULT '',
+  meta_json TEXT NOT NULL DEFAULT '{}',
+  created_at INTEGER NOT NULL
+);
+CREATE UNIQUE INDEX IF NOT EXISTS channel_messages_channel_seq ON channel_messages(channel_id, seq);
+CREATE INDEX IF NOT EXISTS channel_messages_ephemeral ON channel_messages(channel_id, ephemeral_to, seq);
+
+CREATE TABLE IF NOT EXISTS channel_agent_runs (
+  id TEXT PRIMARY KEY,
+  channel_id TEXT NOT NULL,
+  agent_id TEXT NOT NULL,
+  agent_owner_id TEXT NOT NULL DEFAULT '',
+  invoker_id TEXT NOT NULL DEFAULT '',
+  origin_message_id TEXT NOT NULL DEFAULT '',
+  reply_message_id TEXT NOT NULL DEFAULT '',
+  status TEXT NOT NULL DEFAULT 'queued',
+  events_json TEXT NOT NULL DEFAULT '[]',
+  error TEXT NOT NULL DEFAULT '',
+  created_at INTEGER NOT NULL,
+  finished_at INTEGER NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS channel_agent_runs_channel ON channel_agent_runs(channel_id, created_at DESC);
+`
+
+const CREATE_LATEST_SQL = `${CREATE_CORE_SQL}\n${CREATE_EDITOR_SQL}\n${CREATE_CHANNELS_SQL}`
 
 function hasTable(db: DatabaseSync, name: string) {
   return tableNames(db).includes(name)

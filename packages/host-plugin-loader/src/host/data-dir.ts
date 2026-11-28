@@ -17,7 +17,7 @@ export {
 export { adoptCasAssets, listCasAssetFiles, listDocAssetFiles, rewriteAssetText, upsertAttachmentRow, replacePageBlockRefs, ensureRefTables } from './adopt-cas-assets.ts'
 export { openSqlite, configureSqlite, quoteSqlitePath, SQLITE_BUSY_TIMEOUT_MS, SQLITE_WAL_AUTOCHECKPOINT, getSchemaVersion, setSchemaVersion } from './sqlite-open.ts'
 export { wrapPreparedStmtCache } from './sqlite-pool.ts'
-export { ensureBiuAssetSchema, LATEST_BIU_SCHEMA, createLatestSchema } from './biu-schema.ts'
+export { ensureBiuAssetSchema, LATEST_BIU_SCHEMA, createLatestSchema, CREATE_CHANNELS_SQL } from './biu-schema.ts'
 export { migrateBiu, openAndMigrateBiu, renameSessionsTableToAgents, sharedBiuPoolStats, closeAllSharedBiuConnections } from './biu-migrate.ts'
 export { migrateEvents, openAndMigrateEvents, LATEST_EVENTS_SCHEMA } from './events-migrate.ts'
 export {
@@ -169,6 +169,16 @@ export type McpTenant = {
   allowedTools: string[]
 }
 
+export type ActorRoomContext = {
+  channelId: string
+  /** 群内默认禁止访问任何人的私人记录（personal），防止主人或他人通过群聊泄露私密数据。 */
+  denyPersonal: boolean
+  /** 群内是否存在外部协作者/访客成员。 */
+  hasExternalMember?: boolean
+  /** 群内所有人类成员的 accountId 列表；用于做群可见交集下界（RoomFloor）。 */
+  audienceAccountIds?: string[]
+}
+
 export type DelegatedActorContext = {
   type: 'agent' | 'mcp'
   actorId: string
@@ -176,6 +186,8 @@ export type DelegatedActorContext = {
   invokerId?: string
   maxRole?: 'viewer' | 'commenter' | 'editor' | 'manager' | 'owner'
   allowedCollections?: string[] | null
+  roomContext?: ActorRoomContext
+  runId?: string
 }
 
 const mcpTenantScope = new AsyncLocalStorage<McpTenant>()
