@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import { act, cleanup, fireEvent, render } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import type { SessionListItem, SessionViewService } from '@biu/web-session-view'
-import { ChatSidebar } from './chat-sidebar.tsx'
+import { ChatSidebar, resolveSidebarGroupProjectPath } from './chat-sidebar.tsx'
 
 function makeSessions(count: number): SessionListItem[] {
   return Array.from({ length: count }, (_, i) => ({
@@ -121,4 +121,23 @@ test('iconRail flattens pinned and regular sessions into one deduplicated window
   assert.equal(result.container.querySelectorAll('section').length, 0)
   const rows = result.container.querySelectorAll('.chat-session-row')
   assert.equal(rows.length, 4)
+})
+
+test('resolveSidebarGroupProjectPath maps legacy host paths into /workspace in cloud spaces', () => {
+  assert.equal(
+    resolveSidebarGroupProjectPath({ kind: 'project', label: 'hello', path: '/workspace/hello' }, true),
+    '/workspace/hello',
+  )
+  assert.equal(
+    resolveSidebarGroupProjectPath({ kind: 'project', label: 'hello', path: '/Users/a97/hello' }, true),
+    '/workspace/hello',
+  )
+  assert.equal(
+    resolveSidebarGroupProjectPath({ kind: 'project', label: 'hello', path: '/Users/a97/hello' }, false),
+    '/Users/a97/hello',
+  )
+  assert.equal(
+    resolveSidebarGroupProjectPath({ kind: 'ungrouped', label: '未分组' }, true),
+    undefined,
+  )
 })

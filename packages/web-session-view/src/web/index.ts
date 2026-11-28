@@ -61,6 +61,7 @@ export {
   UNGROUPED_PROJECT_KEY,
   mostRecentSessionId,
   buildSidebarSections,
+  folderNameFromPath,
   type SessionSidebarGroup,
   type SidebarGroupKind,
   type SidebarSection,
@@ -881,7 +882,13 @@ export class SessionViewService extends Service {
       if (!sessionsChanged && !busySessions) return
       const patch: Partial<SessionViewState> = {}
       const currentId = this.value.sessionId
-      if (sessionsChanged) patch.sessions = next
+      if (sessionsChanged) {
+        patch.sessions = next
+        const currentItem = currentId ? next.find((item) => item.id === currentId) : undefined
+        if (currentItem?.project?.path && !this.value.project?.path) {
+          patch.project = currentItem.project
+        }
+      }
       if (busySessions) {
         patch.busySessions = busySessions
         if (currentId) {
@@ -933,29 +940,55 @@ export class SessionViewService extends Service {
     this.replace({ approvalMode: body.mode === 'hold' ? 'hold' : 'auto' })
   }
 
-  async newSession(opts: { projectPath?: string } = {}) {
+  async newSession(opts: { projectPath?: string; createProject?: boolean } = {}) {
+    const projectPath = opts.projectPath?.trim()
+    const createProject = opts.createProject !== false
     const res = await apiFetch('/api/agents', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({}),
+      body: JSON.stringify(projectPath ? { projectPath, createProject } : {}),
     })
-    const body = (await res.json()) as { id?: string }
-    if (!body.id) throw new Error('无法创建 session')
-    const projectPath = opts.projectPath?.trim()
-    if (projectPath) {
+    const body = (await res.json().catch(() => ({}))) as {
+      id?: string
+      project?: { name: string; path?: string; boundAt: number }
+      error?: string
+    }
+    if (!res.ok || !body.id) throw new Error(body.error || '无法创建 session')
+    let boundProject = body.project
+    if (projectPath && !boundProject?.path) {
+      // 兼容旧版未在 POST /api/agents 中绑定项目的服务端；绑定失败时回滚删除刚建的空会话，避免落入「未分组」。
       const bind = await apiFetch(`/api/agents/${body.id}/project`, {
         method: 'PUT',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ path: projectPath }),
+        body: JSON.stringify({ path: projectPath, create: createProject }),
       })
-      if (!bind.ok) {
-        const err = (await bind.json().catch(() => ({}))) as { error?: string }
-        throw new Error(err.error || `绑定项目失败：${bind.status}`)
+      const bindBody = (await bind.json().catch(() => ({}))) as {
+        project?: { name: string; path?: string; boundAt: number }
+        error?: string
       }
+      if (!bind.ok) {
+        await apiFetch(`/api/agents/${body.id}`, { method: 'DELETE' }).catch(() => undefined)
+        throw new Error(bindBody.error || `绑定项目失败：${bind.status}`)
+      }
+      boundProject = bindBody.project
     }
     markSidebarMascotFresh(body.id)
-    await this.load(body.id, { view: 'chat' })
+    // 先刷新列表再 load，确保 load() 读取到已绑定的 listedProject，避免 project=undefined 触发 projectView 回写把新会话清空进「未分组」。
     await this.refreshSessions({ refresh: true })
+    if (boundProject?.path) {
+      const listed = this.value.sessions.find((item) => item.id === body.id)
+      if (listed && listed.project?.path !== boundProject.path) {
+        this.replace({
+          sessions: this.value.sessions.map((item) =>
+            item.id === body.id ? { ...item, project: boundProject } : item,
+          ),
+        })
+      }
+    }
+    await this.load(body.id, { view: 'chat' })
+    if (boundProject?.path && this.value.sessionId === body.id && !this.value.project?.path) {
+      this.setProjectMeta(boundProject)
+    }
     return body.id
   }
 

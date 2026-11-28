@@ -1275,16 +1275,41 @@ export function apply(ctx: Context) {
     const payload = ((await route.json().catch(() => null)) ?? {}) as {
       title?: string
       id?: string
+      projectPath?: string
+      createProject?: boolean
     }
     const requestedId = typeof payload.id === 'string' ? payload.id.trim() : ''
     const sessionId = isAssignableRecordId(requestedId) ? requestedId : allocateRecordId()
+    const rawProjectPath = typeof payload.projectPath === 'string' ? payload.projectPath.trim() : ''
     const record = await ctx.sessions.create(sessionId, {
       ...(typeof payload.title === 'string' ? { title: payload.title } : {}),
     })
+    if (rawProjectPath) {
+      try {
+        await ctx.sessions.setProject(record.id, {
+          path: rawProjectPath,
+          create: payload.createProject === true,
+        })
+      } catch (error) {
+        await ctx.sessions.delete(record.id).catch(() => undefined)
+        const account = getAccountPort(ctx) as
+          | (ReturnType<typeof getAccountPort> & {
+              store?: {
+                activeWorkspaceId?: () => string | null
+                detachRecord?: (workspaceId: string, collection: string, recordId: string) => void
+              }
+            })
+          | undefined
+        const wsId = currentRequestWorkspaceId().trim() || account?.store?.activeWorkspaceId?.() || ''
+        if (wsId) account?.store?.detachRecord?.(wsId, '/agents', record.id)
+        return route.send(400, { error: error instanceof Error ? error.message : String(error) })
+      }
+    }
     route.send(201, {
       id: record.id,
       version: record.version,
       title: record.config?.title,
+      ...(record.project ? { project: record.project } : {}),
       ...(record.mascot ? { mascot: record.mascot } : {}),
       ...(record.config ? { config: record.config } : {}),
     })
