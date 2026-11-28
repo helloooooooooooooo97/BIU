@@ -13,6 +13,7 @@ import { PageContentLoading } from './page-content-status.tsx'
 import type { TableColumnSlice } from './table-window.ts'
 import { normalizeAuthzRole } from '../shared/authz-labels.ts'
 import type { TableSandboxItem } from '../shared/table-sandbox-model.ts'
+import { AccessRequestGate, AccessUpgradeBar, isAccessRequestableCollection } from './access-request-gate.tsx'
 
 const RecordDetail = lazy(() => import('./record-detail.tsx').then((m) => ({ default: m.RecordDetail })))
 const LazySharePanel = lazy(() => import('./share-popover.tsx').then((m) => ({ default: m.SharePanel })))
@@ -29,6 +30,8 @@ function SharePanel(props: ComponentProps<typeof LazySharePanel>) {
 
 export type BrowserRecordStageProps = {
   detailId: string | null
+  detailAccessDenied?: boolean
+  onCloseAccessDenied?: () => void
   selected: DbRecord | null
   schema?: CollectionSchema
   listChrome: ReactNode
@@ -115,6 +118,8 @@ export type BrowserRecordStageProps = {
 export const BrowserRecordStage = memo(function BrowserRecordStage(props: BrowserRecordStageProps) {
   const {
     detailId,
+    detailAccessDenied = false,
+    onCloseAccessDenied,
     selected,
     schema,
     listChrome,
@@ -318,10 +323,28 @@ export const BrowserRecordStage = memo(function BrowserRecordStage(props: Browse
     )
   }
 
+  if (detailId && detailAccessDenied && !selected) {
+    return (
+      <AccessRequestGate
+        collection={collectionPath}
+        recordId={detailId}
+        onRetry={refreshOpenDetail}
+        onBack={onCloseAccessDenied}
+      />
+    )
+  }
+
   if (!selected || !schema) return null
+
+  const isViewerUpgradeable =
+    !localData &&
+    isAccessRequestableCollection(collectionPath) &&
+    normalizeAuthzRole(selected.shareRole) === 'viewer' &&
+    !(collectionPath === PLUGINS_COLLECTION_PATH && selected.builtin === true)
 
   return (
     <Suspense fallback={<PageContentLoading />}>
+      {isViewerUpgradeable ? <AccessUpgradeBar collection={collectionPath} recordId={selected.id} /> : null}
       <RecordDetail
         selected={selected}
         schema={schema}

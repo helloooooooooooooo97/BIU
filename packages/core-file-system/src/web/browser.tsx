@@ -121,6 +121,7 @@ import { useViewDisplayApplier } from './use-browser-view-display.ts'
 import { createBrowserMutations } from './use-browser-mutations.ts'
 import { buildTableIconLookup, createBrowserTablePaint } from './browser-table-paint.tsx'
 import { BrowserRecordStage } from './browser-record-stage.tsx'
+import { isAccessRequestableCollection } from './access-request-gate.tsx'
 import { normalizeColumnSummaries } from './column-summary.ts'
 import { activeColumnSandboxItem, normalizeColumnViews, resolveColumnSandboxItems } from './column-sandbox-model.ts'
 import { ColumnHeaderMenu, type ColumnHeaderMenuTarget } from './column-header-menu.tsx'
@@ -1735,21 +1736,31 @@ export function CollectionBrowser({
     }
   }, [routeRecordId])
 
+  const [detailAccessDenied, setDetailAccessDenied] = useState(false)
+
   useEffect(() => {
     if (!detailId) {
       setDetailRow(null)
+      setDetailAccessDenied(false)
       return
     }
     let cancelled = false
+    setDetailAccessDenied(false)
     void readJson<{ value?: DbRecord }>(`/api/db/read?path=${encodeURIComponent(`${dataPath}/${detailId}`)}`)
       .then((data) => {
         const row = data.value
         if (cancelled || !row?.id) return
+        setDetailAccessDenied(false)
         setDetailRow(applyPendingDetailPatches(row))
       })
       .catch((error) => {
         if (cancelled || !(error instanceof HttpError) || error.status !== 404) return
         if (itemsRef.current.some((item) => item.id === detailId)) return
+        if (!localData && isAccessRequestableCollection(collectionPath)) {
+          setDetailRow(null)
+          setDetailAccessDenied(true)
+          return
+        }
         setOpenDetailId(null)
         setDetailRow(null)
         queueMicrotask(() => onCloseRecord?.())
@@ -1757,7 +1768,7 @@ export function CollectionBrowser({
     return () => {
       cancelled = true
     }
-  }, [collectionPath, dataPath, detailId, reloadKey])
+  }, [collectionPath, dataPath, detailId, localData, reloadKey])
 
   useEffect(() => () => window.clearTimeout(noticeTimer.current), [])
 
@@ -4123,6 +4134,13 @@ export function CollectionBrowser({
         >
         <BrowserRecordStage
           detailId={detailId}
+          detailAccessDenied={detailAccessDenied}
+          onCloseAccessDenied={() => {
+            setDetailAccessDenied(false)
+            setOpenDetailId(null)
+            setDetailRow(null)
+            onCloseRecord?.()
+          }}
           selected={selected}
           schema={schema}
           listChrome={listChrome}
