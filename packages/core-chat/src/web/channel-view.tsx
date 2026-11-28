@@ -43,14 +43,13 @@ import { useWorkspaceProfile } from '@biu/biu-ui/use-workspace-profile'
 import { PickChip, pickPreview, splitPickStream, type PickService } from '@biu/core-pick/web'
 import { SidebarMascot, resolveSessionMascot } from '@biu/public-mascot'
 import { bindSessionView, channelAppPath, sessionAppPath, type SessionViewService } from '@biu/web-session-view'
-import {
-  computeChannelShareScope,
-  type ChannelMemberView,
-  type ChannelMention,
-  type ChannelMessageView,
-  type ChannelSavedMessageView,
-  type ChannelSearchHit,
-  type ForumPostStatus,
+import type {
+  ChannelMemberView,
+  ChannelMention,
+  ChannelMessageView,
+  ChannelSavedMessageView,
+  ChannelSearchHit,
+  ForumPostStatus,
 } from '../shared/channel-types.ts'
 import { ChannelComposer, type ChannelComposerHandle } from './channel-composer.tsx'
 import { ChannelFloatingSidebar, type ChannelFloatingTab } from './channel-floating-sidebar.tsx'
@@ -824,9 +823,6 @@ export const ChannelStage = memo(function ChannelStage({
   const isDm = channel?.kind === 'dm'
   const isAnnouncement = channel?.kind === 'announcement'
   const isForum = channel?.kind === 'forum'
-  const effectiveShareScope = channel
-    ? (channel.shareScope ?? computeChannelShareScope(channel.accessMode, channel.memberCount, channel.kind))
-    : 'personal'
   const isReadOnlyMember = !isAnnouncement && channel?.canPost === false
   const canPostAnnouncement = !isAnnouncement || (channel?.canPost ?? Boolean(detail?.canManageMembers))
   const activeForumPostStatus = isForum && activeThreadRootId ? getForumPostStatus(threadRootMessage) : null
@@ -914,10 +910,6 @@ export const ChannelStage = memo(function ChannelStage({
                     <MegaphoneIcon className="size-3.5 shrink-0 text-(--biu-color-icon)" aria-hidden />
                   ) : isForum ? (
                     <ChatBubbleLeftRightIcon className="size-3.5 shrink-0 text-(--biu-color-icon)" aria-hidden />
-                  ) : effectiveShareScope === 'personal' ? (
-                    <LockClosedIcon className="size-3.5 shrink-0 text-(--biu-color-icon)" aria-hidden />
-                  ) : effectiveShareScope === 'shared' ? (
-                    <UserGroupIcon className="size-3.5 shrink-0 text-(--biu-color-icon)" aria-hidden />
                   ) : (
                     <HashtagIcon className="size-3.5 shrink-0 text-(--biu-color-icon)" aria-hidden />
                   )}
@@ -1009,10 +1001,6 @@ export const ChannelStage = memo(function ChannelStage({
                     <MegaphoneIcon className="size-3.5 shrink-0 text-(--biu-color-icon)" aria-hidden />
                   ) : isForum ? (
                     <ChatBubbleLeftRightIcon className="size-3.5 shrink-0 text-(--biu-color-icon)" aria-hidden />
-                  ) : effectiveShareScope === 'personal' ? (
-                    <LockClosedIcon className="size-3.5 shrink-0 text-(--biu-color-icon)" aria-hidden />
-                  ) : effectiveShareScope === 'shared' ? (
-                    <UserGroupIcon className="size-3.5 shrink-0 text-(--biu-color-icon)" aria-hidden />
                   ) : (
                     <HashtagIcon className="size-3.5 shrink-0 text-(--biu-color-icon)" aria-hidden />
                   )}

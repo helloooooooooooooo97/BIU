@@ -2318,9 +2318,10 @@ test('channel UI aligns with personal/shared/workspace visibility model, toggles
     </MemoryRouter>,
   )
 
-  // 1. 侧栏对仅自己+自己Agent 的频道显示 personal 图标；新建弹窗显示「仅受邀人员 / 空间全员」与动态可见范围提示
+  // 1. 侧栏普通群聊统一展示 # 图标并保留可见范围元数据；新建弹窗显示「仅受邀人员 / 空间全员」与动态可见范围提示
   await waitFor(() => {
-    assert.ok(view.queryByTestId('sidebar-channel-icon-personal-ch-scope'))
+    const icon = view.getByTestId('sidebar-channel-icon-channel-ch-scope')
+    assert.equal(icon.getAttribute('data-share-scope'), 'personal')
   })
 
   fireEvent.click(view.getByTestId('sidebar-create-channel'))
