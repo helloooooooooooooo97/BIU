@@ -44,6 +44,7 @@ export const TAG_TONE_ORANGE = 'var(--biu-color-ink-orange)' as const
 export const TAG_TONE_GREEN = 'var(--biu-color-ink-green)' as const
 export const TAG_TONE_RED = 'var(--biu-color-ink-red)' as const
 export const TAG_TONE_PURPLE = 'var(--biu-color-ink-purple)' as const
+export const TAG_TONE_GRAY = 'var(--biu-color-ink-gray)' as const
 
 export function tagTone(id: string) {
   let hash = 0
@@ -52,34 +53,73 @@ export function tagTone(id: string) {
   return TAG_TONES[hash % TAG_TONES.length]!
 }
 
-/** 动作胶囊共用标签色彩体系（--biu-color-ink-*）：按语义映射红/绿/蓝/橙/紫，其余按 action.id 稳定落入 TAG_TONES。 */
+/**
+ * 动作按钮统一语义色系（复用标签 --biu-color-ink-* 调色板）：
+ * - 红（危险 / 破坏）：delete / uninstall / remove / trash / purge / clear / tone='danger'
+ * - 绿（启动 / 激活 / 恢复）：start / play / run / enable / pack / install / restore / resume
+ * - 橙（停止 / 停用 / 暂停）：stop / disable / pause / close / archive
+ * - 蓝（进入 / 创建 / 协作）：chat / open / open-split / open-page / add-child / add-subpage / add-subtask / create / new / fork / send / deliver / invite / report / progress
+ * - 紫（编辑 / 配置 / 工具）：rename / edit / sandbox / compact / config / settings
+ * - 灰（中性 / 默认）：未显式归类的动作统一落入中性灰，避免随机着色破坏语义
+ */
 export function actionTone(id: string, tone?: string): string {
-  if (tone === 'danger' || id === 'uninstall' || id === 'delete' || id === 'remove' || id === 'trash') {
+  const key = String(id ?? '').trim().toLowerCase()
+  if (
+    tone === 'danger' ||
+    key === 'uninstall' ||
+    key === 'delete' ||
+    key === 'remove' ||
+    key === 'trash' ||
+    key === 'purge' ||
+    key === 'clear'
+  ) {
     return TAG_TONE_RED
   }
-  if (id === 'start' || id === 'play' || id === 'run' || id === 'open' || id === 'enable' || id === 'restore') {
+  if (
+    key === 'start' ||
+    key === 'play' ||
+    key === 'run' ||
+    key === 'enable' ||
+    key === 'pack' ||
+    key === 'install' ||
+    key === 'restore' ||
+    key === 'resume'
+  ) {
     return TAG_TONE_GREEN
   }
+  if (key === 'stop' || key === 'disable' || key === 'pause' || key === 'close' || key === 'archive') {
+    return TAG_TONE_ORANGE
+  }
   if (
-    id === 'add-child' ||
-    id === 'add-subpage' ||
-    id === 'add-subtask' ||
-    id === 'chat' ||
-    id === 'report' ||
-    id === 'progress' ||
-    id === 'deliver' ||
-    id === 'send' ||
-    id === 'fork'
+    key === 'chat' ||
+    key === 'open' ||
+    key === 'open-split' ||
+    key === 'open-page' ||
+    key === 'add-child' ||
+    key === 'add-subpage' ||
+    key === 'add-subtask' ||
+    key === 'create' ||
+    key === 'new' ||
+    key === 'fork' ||
+    key === 'send' ||
+    key === 'deliver' ||
+    key === 'invite' ||
+    key === 'report' ||
+    key === 'progress'
   ) {
     return TAG_TONE_BLUE
   }
-  if (id === 'stop' || id === 'close' || id === 'pause' || id === 'disable') {
-    return TAG_TONE_ORANGE
-  }
-  if (id === 'rename' || id === 'edit' || id === 'sandbox' || id === 'pack') {
+  if (
+    key === 'rename' ||
+    key === 'edit' ||
+    key === 'sandbox' ||
+    key === 'compact' ||
+    key === 'config' ||
+    key === 'settings'
+  ) {
     return TAG_TONE_PURPLE
   }
-  return tagTone(id)
+  return TAG_TONE_GRAY
 }
 
 export function ensureTagChipStyle() {

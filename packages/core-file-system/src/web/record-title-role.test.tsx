@@ -1,8 +1,10 @@
 /** @vitest-environment jsdom */
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import { afterEach, test } from 'vitest'
 import { cleanup, render, screen } from '@testing-library/react'
-import { RecordTitle } from './browser-row-title.tsx'
+import { isRecordActive, RecordTitle } from './browser-row-title.tsx'
 
 afterEach(() => {
   cleanup()
@@ -75,4 +77,82 @@ test('RecordTitle renders permission icon in armed mode and omits it when row ha
     />,
   )
   assert.equal(screen.queryByTestId('fsdb-title-role-icon'), null)
+})
+
+test('RecordTitle marks active MCP, Skill, and Plugin rows in both fast-paint and armed modes', () => {
+  assert.equal(isRecordActive({ id: 'p1', running: true }), true)
+  assert.equal(isRecordActive({ id: 'm1', enabled: true }), true)
+  assert.equal(isRecordActive({ id: 's1', enabled: 'true' }), true)
+  assert.equal(isRecordActive({ id: 's2', enabled: false, running: false }), false)
+
+  const { container, rerender } = render(
+    <RecordTitle
+      row={{ id: 'mcp-1', title: 'Filesystem', enabled: true }}
+      label="Filesystem"
+      tableIcon="link"
+      treeOn={false}
+      collapsed
+      onToggleCollapsed={noop}
+      pick={{}}
+      onOpenSplit={noop}
+      onOpenRow={noop}
+      onWriteEmoji={noop}
+    />,
+  )
+  assert.ok(container.querySelector('.fsdb-title-host[data-record-active]'))
+
+  rerender(
+    <RecordTitle
+      row={{ id: 'skill-1', title: 'Skill A', enabled: true }}
+      label="Skill A"
+      tableIcon="academic-cap"
+      treeOn={false}
+      collapsed
+      onToggleCollapsed={noop}
+      pick={{}}
+      onOpenSplit={noop}
+      onOpenRow={noop}
+      onWriteEmoji={noop}
+      toolsArmed
+    />,
+  )
+  assert.ok(container.querySelector('.fsdb-title-host[data-record-active]'))
+
+  rerender(
+    <RecordTitle
+      row={{ id: 'plugin-1', title: 'HTML', running: true }}
+      label="HTML"
+      tableIcon="puzzle-piece"
+      treeOn={false}
+      collapsed
+      onToggleCollapsed={noop}
+      pick={{}}
+      onOpenSplit={noop}
+      onOpenRow={noop}
+      onWriteEmoji={noop}
+      toolsArmed
+    />,
+  )
+  assert.ok(container.querySelector('.fsdb-title-host[data-record-active]'))
+
+  rerender(
+    <RecordTitle
+      row={{ id: 'plugin-2', title: 'Draft', running: false, enabled: false }}
+      label="Draft"
+      tableIcon="puzzle-piece"
+      treeOn={false}
+      collapsed
+      onToggleCollapsed={noop}
+      pick={{}}
+      onOpenSplit={noop}
+      onOpenRow={noop}
+      onWriteEmoji={noop}
+      toolsArmed
+    />,
+  )
+  assert.equal(container.querySelector('.fsdb-title-host[data-record-active]'), null)
+
+  const css = readFileSync(resolve(import.meta.dirname, './fsdb-style.ts'), 'utf8')
+  assert.match(css, /\.fsdb-title-host:is\(\[data-record-active\],:has\(\[data-plugin-enabled\]\)\)[^{]*\{color:var\(--biu-color-emphasis\)\}/)
+  assert.match(css, /\.fsdb-detail-title-icon\[data-record-active\][^{]*\{color:var\(--biu-color-emphasis\)\}/)
 })

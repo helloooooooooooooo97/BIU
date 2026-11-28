@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { ChatBubbleLeftRightIcon, TrashIcon } from '@heroicons/react/16/solid'
+import { actionTone } from '@biu/biu-ui/tag-chip'
 import type { CollectionChrome } from '@biu/type-file-system/ui'
 import type { CollectionActionInfo, DbRecord } from '@biu/type-file-system'
 import { channelAppPath } from '@biu/web-session-view'
@@ -30,6 +31,7 @@ export function MemberDmAction({
       <button
         type="button"
         className="fsdb-action-btn"
+        style={{ ['--biu-tag' as string]: actionTone('chat') }}
         title={`与 ${label} 私聊`}
         aria-label={`会话 ${label}`}
         data-testid={`member-dm-action-${memberId}`}
@@ -51,6 +53,7 @@ export function MemberDmAction({
         <button
           type="button"
           className="fsdb-action-btn is-danger"
+          style={{ ['--biu-tag' as string]: actionTone(deleteAction.id, 'danger') }}
           title={`${deleteAction.label} ${label}`}
           aria-label={`${deleteAction.label} ${label}`}
           disabled={actionBusy}

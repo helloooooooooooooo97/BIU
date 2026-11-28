@@ -23,6 +23,7 @@ import { PaneConfigMenuItem } from './pane-more-menu.tsx'
 import { PageContentFailed, PageContentLoading } from './page-content-status.tsx'
 import { RecordProperties } from './record-prop-host.tsx'
 import { useRecordContentBody } from './record-content.tsx'
+import { isRecordActive } from './browser-row-title.tsx'
 
 export { PageContentFailed, PageContentLoading } from './page-content-status.tsx'
 
@@ -71,10 +72,11 @@ function DetailTitleIcon({
 }) {
   const [open, setOpen] = useState(false)
   const [anchor, setAnchor] = useState<HTMLElement | null>(null)
+  const active = isRecordActive(record)
   if (locked) {
     return (
       <span className="fsdb-detail-title-icon-wrap">
-        <span className="fsdb-detail-title-icon">
+        <span className="fsdb-detail-title-icon" data-record-active={active ? '' : undefined}>
           {emoji ? (
             <span className="fsdb-record-emoji">{emoji}</span>
           ) : Icon ? (
@@ -93,6 +95,7 @@ function DetailTitleIcon({
       <button
         type="button"
         className="fsdb-detail-title-icon"
+        data-record-active={active ? '' : undefined}
         title={emoji ? '更换图标' : '设置图标'}
         aria-label={emoji ? `更换 ${label} 的图标` : `设置 ${label} 的图标`}
         onClick={(event) => {

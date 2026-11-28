@@ -7,7 +7,7 @@ test('plugin actions come from the collection action schema', () => {
   assert.equal(pluginsChrome.Actions, undefined)
 })
 
-test('plugin title marks enabled rows so the row icon can turn green', () => {
+test('plugin title marks enabled or running rows so the row icon turns emphasis color', () => {
   const Title = pluginsChrome.Title
   assert.ok(Title)
   const off = render(<Title record={{ id: 'draft' }} label="草稿" />)
@@ -17,4 +17,6 @@ test('plugin title marks enabled rows so the row icon can turn green', () => {
   assert.ok(mark)
   assert.match(mark?.textContent ?? '', /画板/)
   assert.equal(on.container.querySelector('[data-testid="plugin-enabled-dot"]'), null)
+  const running = render(<Title record={{ id: 'html', running: true }} label="HTML" />)
+  assert.ok(running.container.querySelector('[data-plugin-enabled]'))
 })

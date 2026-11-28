@@ -122,7 +122,12 @@ export function tagsFromRecord(row: Record<string, unknown>) {
 }
 
 export function pluginRecordEnabled(row?: Record<string, unknown>) {
-  return row?.enabled === true || row?.enabled === 'true'
+  return (
+    row?.running === true ||
+    row?.running === 'true' ||
+    row?.enabled === true ||
+    row?.enabled === 'true'
+  )
 }
 
 /** 与列表 RecordMark 相同：emoji 最多两枚。 */
