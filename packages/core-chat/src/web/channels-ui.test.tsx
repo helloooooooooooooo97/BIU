@@ -117,8 +117,11 @@ test('sidebar shows 聊天 section without 成员 section or empty dashed prompt
   assert.equal(view.queryByText('群聊'), null)
   assert.equal(view.queryByText('Carol'), null)
   assert.ok(view.getByTestId('sidebar-create-channel'))
-  const imgs = [...view.container.querySelectorAll('img')].map((el) => el.getAttribute('src'))
-  assert.ok(imgs.includes(bobAvatar))
+  const imgs = [...view.container.querySelectorAll('img')]
+  assert.ok(imgs.map((el) => el.getAttribute('src')).includes(bobAvatar))
+  const bobImg = imgs.find((el) => el.getAttribute('src') === bobAvatar)
+  assert.equal(Boolean(bobImg?.className.includes('max-w-none')), true)
+  assert.equal(Boolean(bobImg?.parentElement?.className.includes('!size-[18px]')), true)
 
   // 空列表时也不应出现下方虚线「新建群聊」提示，只保留右上角 + 按钮
   view.unmount()
