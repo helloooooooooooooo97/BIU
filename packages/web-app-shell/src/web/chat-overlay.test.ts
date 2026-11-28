@@ -51,23 +51,23 @@ import {
   focusComposerEditor,
 } from './chat-overlay.ts'
 
-test('collapsed sidebar keeps a VS Code-style icon rail', () => {
-  assert.equal(SIDEBAR_RAIL, 48)
+test('collapsed sidebar hides completely instead of keeping an icon rail', () => {
   assert.equal(
     chatColumnWidth({ viewportWidth: 1600, inspectorOpen: true, inspectorWidth: 320, sidebarCollapsed: true }),
-    1600 - INSPECTOR_MIN - SIDEBAR_RAIL,
+    1600 - INSPECTOR_MIN,
   )
 })
 
-test('sidebar below min width becomes the icon rail', () => {
-  const rail = allocateShellColumns({
+test('sidebar below min width hides completely without icon rail', () => {
+  const hidden = allocateShellColumns({
     viewportWidth: 1600,
     leftPane: true,
     leftWidth: SIDEBAR_MIN - 1,
     inspectorOpen: false,
     inspectorWidth: 320,
   })
-  assert.equal(rail.left, SIDEBAR_RAIL)
+  assert.equal(hidden.left, 0)
+  assert.equal(hidden.leftMode, 'hidden')
 })
 
 test('sidebar stays a normal pane at min width', () => {
@@ -199,21 +199,21 @@ test('Notion-style progressive compression sheds sidebar first, then switches in
   assert.equal(narrowLeft.leftMode, 'docked')
   assert.equal(narrowLeft.inspectorMode, 'split')
 
-  // 4. 中屏（768~879px）：优先自动把左栏临时收到 48px 图标轨，保住中 + 右双栏
-  const autoRail = allocateShellColumns({
+  // 4. 中屏（768~879px）：放不下三栏时直接把左栏隐藏为 0px（不再保留最小缩略图标轨），保住中 + 右双栏
+  const autoHideMid = allocateShellColumns({
     viewportWidth: 840,
     leftPane: true,
     leftWidth: 240,
     inspectorOpen: true,
     inspectorWidth: 480,
   })
-  assert.equal(autoRail.left, SIDEBAR_RAIL)
-  assert.equal(autoRail.leftMode, 'rail')
-  assert.equal(autoRail.leftAutoCollapsed, true)
-  assert.equal(autoRail.leftCanDock, false)
-  assert.equal(autoRail.inspectorMode, 'split')
-  assert.equal(autoRail.center, CENTER_MIN)
-  assert.equal(autoRail.inspector, 840 - SIDEBAR_RAIL - CENTER_MIN)
+  assert.equal(autoHideMid.left, 0)
+  assert.equal(autoHideMid.leftMode, 'hidden')
+  assert.equal(autoHideMid.leftAutoCollapsed, true)
+  assert.equal(autoHideMid.leftCanDock, false)
+  assert.equal(autoHideMid.inspectorMode, 'split')
+  assert.equal(autoHideMid.center, CENTER_MIN)
+  assert.equal(autoHideMid.inspector, 840 - CENTER_MIN)
 
   // 5. 窄屏（720~767px）：左栏自动隐藏为 0px（顶栏展开 + 抽屉），中 + 右继续无滚动分屏
   const autoHideLeft = allocateShellColumns({

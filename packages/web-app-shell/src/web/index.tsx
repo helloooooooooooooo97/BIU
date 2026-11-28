@@ -633,11 +633,11 @@ function Shell(props: SlotProps) {
     paintedCols.current = { left: cols.left, inspector: cols.inspector, center: cols.center }
     applyShellColumnCssVars(shellRef.current, cols)
     if (pending.sidebar != null) {
-      const wantRail = !cols.leftAutoCollapsed && cols.left === SIDEBAR_RAIL
-      if (wantRail !== sidebarCollapsedRef.current) {
-        sidebarCollapsedRef.current = wantRail
-        layoutSnap.current.sidebarCollapsed = wantRail
-        setSidebarCollapsed(wantRail)
+      const wantCollapsed = !cols.leftAutoCollapsed && cols.left <= 0
+      if (wantCollapsed !== sidebarCollapsedRef.current) {
+        sidebarCollapsedRef.current = wantCollapsed
+        layoutSnap.current.sidebarCollapsed = wantCollapsed
+        setSidebarCollapsed(wantCollapsed)
       }
     }
     return paintedCols.current
