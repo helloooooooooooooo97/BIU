@@ -26,8 +26,24 @@ export class NoticesService extends Service {
 
   push(input: NoticeInput) {
     const row = this.store.push(input)
-    if (row) this.bump()
+    if (row) this.bump(row.workspaceId, row.accountId)
     return row
+  }
+
+  updateBySource(
+    sourceKey: string,
+    workspaceId: string,
+    updater: Parameters<NoticesStore['updateBySource']>[2],
+  ) {
+    const touched = this.store.updateBySource(sourceKey, workspaceId, updater)
+    const seen = new Set<string>()
+    for (const target of touched) {
+      const k = `${target.workspaceId}\0${target.accountId}`
+      if (seen.has(k)) continue
+      seen.add(k)
+      this.bump(target.workspaceId, target.accountId)
+    }
+    return touched.length
   }
 
   markSourceRead(sourceKey: string) {
@@ -42,8 +58,10 @@ export class NoticesService extends Service {
     return n
   }
 
-  private bump() {
-    const { accountId, workspaceId } = currentTenantScope()
+  private bump(targetWorkspaceId?: string, targetAccountId?: string) {
+    const scope = currentTenantScope()
+    const workspaceId = (targetWorkspaceId ?? scope.workspaceId).trim()
+    const accountId = (targetAccountId ?? scope.accountId).trim()
     const http = this.ctx.get('http') as
       | { broadcast?: (type: string, payload: unknown, workspaceId?: string, accountId?: string) => void }
       | undefined

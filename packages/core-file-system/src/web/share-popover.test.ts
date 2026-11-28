@@ -360,3 +360,15 @@ test('share panel shows explicit collaboration role hints for plugins, mcp, and 
     /!\(collectionPath === PLUGINS_COLLECTION_PATH && selected\.builtin === true && selected\.canManagePackage === true\)/,
   )
 })
+
+test('share panel loads and displays pending access requests with inline approve and reject actions', () => {
+  const src = readShareUiSource()
+  const accountHost = readFileSync(resolve(import.meta.dirname, '../../../host-account/src/host/index.ts'), 'utf8')
+  assert.match(src, /data-testid="fsdb-share-pending-requests"/)
+  assert.match(src, /data-testid="fsdb-share-request-approve"/)
+  assert.match(src, /data-testid="fsdb-share-request-reject"/)
+  assert.match(src, /\/api\/account\/access-requests/)
+  assert.match(accountHost, /POST', '\/api\/account\/access-requests'/)
+  assert.match(accountHost, /access-request:\$\{req\.id\}/)
+  assert.match(accountHost, /access-request-result:\$\{req\.id\}/)
+})

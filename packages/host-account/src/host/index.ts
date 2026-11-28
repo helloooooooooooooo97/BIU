@@ -1437,6 +1437,54 @@ export function apply(ctx: Context, config: AccountConfig = {}) {
     })
   })
 
+  const roleLabelZh = (role: string) =>
+    role === 'editor' ? '可编辑' : role === 'commenter' ? '可评论' : '可查看'
+
+  type NoticesBridge = {
+    push?: (input: {
+      title: string
+      body?: string
+      kind: 'approval' | 'task' | 'session'
+      href?: string
+      sourceKey: string
+      accountId?: string
+      workspaceId?: string
+      content?: unknown
+    }) => unknown
+    updateBySource?: (
+      sourceKey: string,
+      workspaceId: string,
+      updater: (prev: { title: string; body: string; content?: unknown; read: boolean }) => {
+        title?: string
+        body?: string
+        content?: unknown
+        read?: boolean
+      },
+    ) => number
+  }
+
+  const noticesBridge = (): NoticesBridge | undefined => {
+    try {
+      return ctx.get('notices' as never) as NoticesBridge | undefined
+    } catch {
+      return undefined
+    }
+  }
+
+  const resolveRecordTitleForNotice = async (collection: string, recordId: string): Promise<string> => {
+    try {
+      const db = ctx.get('database') as {
+        collection?: (path: string) => { get?: (id: string) => Promise<Record<string, unknown> | null> | Record<string, unknown> | null } | undefined
+      } | undefined
+      const row = await db?.collection?.(collection)?.get?.(recordId)
+      const title = String(row?.title ?? row?.name ?? '').trim()
+      if (title) return title
+    } catch {
+      /* 标题不可读时回退为路径 */
+    }
+    return `${collection}/${recordId}`
+  }
+
   authedRoute('POST', '/api/account/access-requests', async (route, me) => {
     const activeWorkspace = resolveScopedWorkspaceId(ctx)
     requireCollaborativeWorkspace(activeWorkspace ?? '')
@@ -1453,6 +1501,40 @@ export function apply(ctx: Context, config: AccountConfig = {}) {
       body.requestedRole ?? 'viewer',
       String(body.note ?? ''),
     )
+    if (result.delivered && result.request && result.approverIds.length) {
+      const req = result.request
+      const notices = noticesBridge()
+      if (notices?.push) {
+        const recordTitle = await resolveRecordTitleForNotice(req.collection, req.recordId)
+        const roleText = roleLabelZh(req.requestedRole)
+        const payload = {
+          type: 'access-request',
+          requestId: req.id,
+          collection: req.collection,
+          recordId: req.recordId,
+          recordTitle,
+          requesterId: req.requesterId,
+          requesterName: req.requesterName,
+          requesterEmail: req.requesterEmail,
+          requesterMemberKind: req.requesterMemberKind,
+          requestedRole: req.requestedRole,
+          note: req.note,
+          status: 'pending',
+        }
+        for (const approverId of result.approverIds) {
+          notices.push({
+            kind: 'approval',
+            sourceKey: `access-request:${req.id}`,
+            title: `${req.requesterName} 申请「${recordTitle}」的${roleText}权限`,
+            body: req.note || `${req.requesterName} 申请访问 ${req.collection}/${req.recordId}`,
+            href: `${req.collection}/${req.recordId}`,
+            accountId: approverId,
+            workspaceId: activeWorkspace,
+            content: payload,
+          })
+        }
+      }
+    }
     route.send(200, {
       submitted: result.submitted,
       updated: result.updated,
@@ -1510,16 +1592,64 @@ export function apply(ctx: Context, config: AccountConfig = {}) {
       ...(grantedRole ? { grantedRole } : {}),
       decisionNote: String(body.decisionNote ?? ''),
     })
+    const req = result.request
     if (body.decision === 'approve') {
-      broadcastRecordAccessChange(activeWorkspace, result.request.collection, result.request.recordId)
+      broadcastRecordAccessChange(activeWorkspace, req.collection, req.recordId)
     }
-    route.send(200, { request: result.request })
+    const notices = noticesBridge()
+    if (notices) {
+      notices.updateBySource?.(`access-request:${req.id}`, activeWorkspace, (prev) => ({
+        read: true,
+        content:
+          prev.content && typeof prev.content === 'object' && !Array.isArray(prev.content)
+            ? {
+                ...(prev.content as Record<string, unknown>),
+                status: req.status,
+                ...(req.grantedRole ? { grantedRole: req.grantedRole } : {}),
+                ...(req.handledByName ? { handledByName: req.handledByName } : {}),
+                ...(req.decisionNote ? { decisionNote: req.decisionNote } : {}),
+              }
+            : prev.content,
+      }))
+      if (body.decision === 'approve') {
+        const recordTitle = await resolveRecordTitleForNotice(req.collection, req.recordId)
+        const grantedText = roleLabelZh(req.grantedRole ?? req.requestedRole)
+        notices.push?.({
+          kind: 'approval',
+          sourceKey: `access-request-result:${req.id}`,
+          title: `已获得「${recordTitle}」的${grantedText}权限`,
+          body: req.decisionNote || `${req.handledByName || '审批人'}已同意你的权限申请，点击可直达。`,
+          href: `${req.collection}/${req.recordId}`,
+          accountId: req.requesterId,
+          workspaceId: activeWorkspace,
+        })
+      } else {
+        // 拒绝时不暴露记录真实标题，防止探测
+        notices.push?.({
+          kind: 'approval',
+          sourceKey: `access-request-result:${req.id}`,
+          title: `权限申请未通过（${req.collection}/${req.recordId}）`,
+          body: req.decisionNote || `${req.handledByName || '审批人'}已拒绝你的权限申请。`,
+          href: '',
+          accountId: req.requesterId,
+          workspaceId: activeWorkspace,
+        })
+      }
+    }
+    route.send(200, { request: req })
   })
 
   authedRoute('POST', '/api/account/access-requests/:id/cancel', async (route, me) => {
     const activeWorkspace = resolveScopedWorkspaceId(ctx)
     requireCollaborativeWorkspace(activeWorkspace ?? '')
     const request = account.store.cancelAccessRequest(me.id, String(route.params.id ?? ''))
+    noticesBridge()?.updateBySource?.(`access-request:${request.id}`, activeWorkspace, (prev) => ({
+      read: true,
+      content:
+        prev.content && typeof prev.content === 'object' && !Array.isArray(prev.content)
+          ? { ...(prev.content as Record<string, unknown>), status: 'cancelled' }
+          : prev.content,
+    }))
     route.send(200, { request })
   })
 
