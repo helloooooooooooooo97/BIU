@@ -1,6 +1,6 @@
 import { createElement, lazy, Suspense, type ComponentType } from 'react'
 import type { Context } from 'cordis'
-import { ChatBubbleLeftRightIcon, CpuChipIcon, SignalIcon, MapIcon } from '@heroicons/react/16/solid'
+import { ChatBubbleLeftRightIcon, CpuChipIcon } from '@heroicons/react/16/solid'
 import { bindSessionView, type SessionViewService } from '@biu/web-session-view'
 import type { SlotProps } from '@biu/web-slots'
 import { ChatSelectBubble } from './chat-select-bubble.tsx'
@@ -48,23 +48,11 @@ function StageChatMessageOutline(props: SlotProps) {
   })
 }
 
-function InspectorTrajectory(props: SlotProps) {
-  return createElement(
-    'div',
-    { className: 'flex min-h-0 flex-1 flex-col overflow-hidden', 'data-testid': 'inspector-trajectory' },
-    createElement(TrajectoryView, props),
-  )
-}
-
-function InspectorUsage(props: SlotProps) {
-  return createElement(
-    'div',
-    { className: 'min-h-0 flex-1 overflow-y-auto p-2.5', 'data-testid': 'inspector-usage' },
-    createElement(UsagePanel, {
-      useSessionView: props.useSessionView as ReturnType<typeof bindSessionView>,
-      sessionView: props.sessionView as SessionViewService,
-    }),
-  )
+function StageUsage(props: SlotProps) {
+  return createElement(UsagePanel, {
+    useSessionView: props.useSessionView as ReturnType<typeof bindSessionView>,
+    sessionView: props.sessionView as SessionViewService,
+  })
 }
 
 export function apply(ctx: Context) {
@@ -104,6 +92,7 @@ export function apply(ctx: Context) {
   ctx.slots.place('stage', ChatThread, { key: 'chat-thread', order: 1, props })
   ctx.slots.place('stage-aside', StageChatMessageOutline, { key: 'chat-outline', order: 1, props })
   ctx.slots.place('trajectory', TrajectoryView, { key: 'trajectory', order: 1, props })
+  ctx.slots.place('usage', StageUsage, { key: 'usage', order: 1, props })
   ctx.slots.place('composer', ChatComposer, {
     key: 'chat',
     order: 10,
@@ -112,32 +101,6 @@ export function apply(ctx: Context) {
   ctx.slots.place('dock', ChatConfigBanner, { key: 'chat-config-banner', order: 1 })
   ctx.slots.place('dock', ApprovalsRail, { key: 'approvals', order: 5, props })
   ctx.slots.place('dock', ChatLiveHud, { key: 'chat-live-hud', order: 0, props })
-  ctx.slots.place('inspector-panels', InspectorTrajectory, {
-    key: 'chat-traj',
-    order: 1,
-    props: () => ({
-      ...slotProps,
-      tabId: 'traj',
-      tabLabel: '轨迹',
-      tabIcon: MapIcon,
-      ensureTrajectory: true,
-      focusOnCall: true,
-      requiresSession: true,
-      centerKinds: ['session'],
-    }),
-  })
-  ctx.slots.place('inspector-panels', InspectorUsage, {
-    key: 'chat-usage',
-    order: 2,
-    props: () => ({
-      ...slotProps,
-      tabId: 'usage',
-      tabLabel: '用量',
-      tabIcon: SignalIcon,
-      requiresSession: true,
-      centerKinds: ['session'],
-    }),
-  })
   ctx.inject(['databaseUi'], (inner) => {
     const ui = inner.get('databaseUi') as DatabaseUi
     let sessions: { dispose: () => void } | undefined

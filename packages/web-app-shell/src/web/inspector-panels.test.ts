@@ -18,10 +18,9 @@ test('inspector home only lists the four core collections', () => {
   assert.ok(inspectorHomeRank('database:/tags') < inspectorHomeRank('database:/plugins'))
 })
 
-test('inspector plus menu pins trajectory and usage first', () => {
-  assert.equal(inspectorPlusPinRank('usage'), 0)
-  assert.equal(inspectorPlusPinRank('traj'), 1)
-  assert.ok(inspectorPlusPinRank('database:/pages') > inspectorPlusPinRank('traj'))
+test('inspector plus menu no longer pins retired trajectory or usage tabs', () => {
+  assert.equal(inspectorPlusPinRank('usage'), inspectorPlusPinRank('database:/pages'))
+  assert.equal(inspectorPlusPinRank('traj'), inspectorPlusPinRank('database:/pages'))
 })
 
 test('inspector only offers session panels when a session is selected', () => {

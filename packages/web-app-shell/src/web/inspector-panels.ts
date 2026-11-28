@@ -63,9 +63,9 @@ export function inspectorTabCollectionPath(tabId: string) {
 }
 
 const INSPECTOR_HOME_PATHS = ['/data', '/agents', '/pages', '/tags', '/plugins'] as const
-const INSPECTOR_PLUS_PIN = ['usage', 'traj']
+const INSPECTOR_PLUS_PIN: readonly string[] = []
 
-/** 加号菜单：用量、轨迹固定在最上面。 */
+/** 轨迹与用量已移至左侧 Agent 展开子项（原地浏览）；保留排序函数兼容扩展置顶项。 */
 export function inspectorPlusPinRank(tabId: string) {
   const i = INSPECTOR_PLUS_PIN.indexOf(slotTabId(tabId))
   return i === -1 ? INSPECTOR_PLUS_PIN.length : i
