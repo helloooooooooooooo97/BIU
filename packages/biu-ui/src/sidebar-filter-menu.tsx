@@ -322,10 +322,10 @@ export function SidebarFilterMenu({
         aria-label={title}
         aria-haspopup="menu"
         aria-expanded={open}
-        className={`relative grid size-6 shrink-0 cursor-pointer place-items-center rounded-md border-0 p-0 transition-colors ${
+        className={`grid size-6 shrink-0 cursor-pointer place-items-center rounded-md border-0 bg-transparent p-0 transition-colors hover:bg-(--biu-color-bg-hover) ${
           open || hasNonDefaultView
-            ? 'bg-(--biu-color-emphasis-muted) text-(--biu-color-emphasis)'
-            : 'bg-transparent text-(--biu-color-text-muted) hover:bg-(--biu-color-bg-hover) hover:text-(--biu-color-text)'
+            ? 'text-(--biu-color-emphasis)'
+            : 'text-(--biu-color-text-muted) hover:text-(--biu-color-text)'
         }`}
         onClick={(event) => {
           event.stopPropagation()
@@ -333,12 +333,6 @@ export function SidebarFilterMenu({
         }}
       >
         <FilterLinesGlyph />
-        {hasNonDefaultView ? (
-          <span
-            className="pointer-events-none absolute top-0.5 right-0.5 size-1.5 rounded-full bg-(--biu-color-emphasis)"
-            aria-hidden="true"
-          />
-        ) : null}
       </button>
 
       {open && typeof document !== 'undefined'
