@@ -278,9 +278,9 @@ export const ChannelSidebarSections = memo(function ChannelSidebarSections({
               <span className="relative grid size-6 shrink-0 place-items-center">
                 {isDm ? (
                   peerAvatar ? (
-                    <img src={peerAvatar} alt="" className="size-5 rounded-full object-cover" />
+                    <img src={peerAvatar} alt="" className="size-5 max-w-none shrink-0 rounded-full object-cover" />
                   ) : (
-                    <AiAvatar seed={ch.peerAccountId || ch.id} size={20} className="rounded-full" />
+                    <AiAvatar seed={ch.peerAccountId || ch.id} size={20} className="shrink-0 rounded-full" />
                   )
                 ) : ch.accessMode === 'private' ? (
                   <LockClosedIcon className="size-3.5 opacity-80" aria-hidden />
@@ -376,9 +376,9 @@ export const ChannelSidebarSections = memo(function ChannelSidebarSections({
                   <>
                     {isDm ? (
                       peerAvatar ? (
-                        <img src={peerAvatar} alt="" className="size-4.5 rounded-full object-cover" />
+                        <img src={peerAvatar} alt="" className="size-[18px] max-w-none shrink-0 rounded-full object-cover" />
                       ) : (
-                        <AiAvatar seed={ch.peerAccountId || ch.id} size={18} className="rounded-full" />
+                        <AiAvatar seed={ch.peerAccountId || ch.id} size={18} className="shrink-0 rounded-full" />
                       )
                     ) : ch.accessMode === 'private' ? (
                       <LockClosedIcon className="size-3.5" />
@@ -387,7 +387,7 @@ export const ChannelSidebarSections = memo(function ChannelSidebarSections({
                     )}
                     {peerOnline ? (
                       <span
-                        className="absolute right-0 bottom-0 size-2 rounded-full bg-emerald-500 ring-[1.5px] ring-(--biu-color-bg-subtle)"
+                        className="absolute -right-0.5 -bottom-0.5 size-2 rounded-full bg-emerald-500 ring-[1.5px] ring-(--biu-color-bg-subtle)"
                         data-testid={`sidebar-dm-online-${ch.id}`}
                         aria-hidden
                       />
@@ -472,8 +472,10 @@ export const ChannelSidebarSections = memo(function ChannelSidebarSections({
                                 setExpandedChannels((prev) => ({ ...prev, [ch.id]: !threadExpanded }))
                               }}
                             >
-                              <span className="sidebar-rail-icon sidebar-group-fold">
-                                <span className="sidebar-group-fold-face relative group-hover:hidden! group-hover/fold:hidden!">
+                              <span className={`sidebar-rail-icon sidebar-group-fold${isDm ? ' !size-[18px]' : ''}`}>
+                                <span
+                                  className={`sidebar-group-fold-face relative group-hover:hidden! group-hover/fold:hidden!${isDm ? ' !size-[18px]' : ''}`}
+                                >
                                   {channelFace}
                                 </span>
                                 <span className="sidebar-group-fold-chevron group-hover:grid! group-hover/fold:grid!">
@@ -485,7 +487,9 @@ export const ChannelSidebarSections = memo(function ChannelSidebarSections({
                             </button>
                           ) : (
                             <span className="relative grid size-6 shrink-0 place-items-center" aria-hidden>
-                              <span className="sidebar-rail-icon relative opacity-85">{channelFace}</span>
+                              <span className={`sidebar-rail-icon relative${isDm ? ' !size-[18px]' : ' opacity-85'}`}>
+                                {channelFace}
+                              </span>
                             </span>
                           )}
                           <Link
