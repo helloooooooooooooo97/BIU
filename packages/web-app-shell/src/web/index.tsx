@@ -531,6 +531,7 @@ function Shell(props: SlotProps) {
   const routeSessionId = appRoute.kind === 'session' ? appRoute.sessionId : null
   const routeChannelId = appRoute.kind === 'channel' ? appRoute.channelId : null
   const channelSidebarEntries = useSlotEntries(slots, 'chat-sidebar-channels')
+  const docsSidebarEntries = useSlotEntries(slots, 'chat-sidebar-docs')
   const channelStageEntries = useSlotEntries(slots, 'channel-stage')
   const agentHref = sessionId ? sessionAppPath(sessionId) : '/'
   const showChatSidebar = activeModule === 'agent'
@@ -1012,6 +1013,23 @@ function Shell(props: SlotProps) {
                         </>
                       ) : null
                     }
+                    docsFooter={
+                      docsSidebarEntries.length > 0 ? (
+                        <>
+                          {docsSidebarEntries.map((entry) => {
+                            const extra = entry.props ? entry.props() : {}
+                            return (
+                              <entry.Component
+                                key={entry.id}
+                                {...extra}
+                                iconRail={sidebarNarrow && !leftDrawerOpen}
+                                renderSlot={props.renderSlot}
+                              />
+                            )
+                          })}
+                        </>
+                      ) : null
+                    }
                   />
                 </Suspense>
               ) : null}
@@ -1229,6 +1247,7 @@ export function apply(ctx: Context) {
       sidebar: { kind: 'single' },
       'module-sidebar': { kind: 'single' },
       'chat-sidebar-channels': { kind: 'list' },
+      'chat-sidebar-docs': { kind: 'list' },
       'channel-stage': { kind: 'list' },
       demos: { kind: 'list' },
       dock: { kind: 'list' },
