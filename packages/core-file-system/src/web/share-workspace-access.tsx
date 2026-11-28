@@ -93,14 +93,47 @@ export function WorkspaceAccess({
     | null
   >(null)
   const [memberPickerOpen, setMemberPickerOpen] = useState(false)
-  const isAgentReadOnly = collection === '/agents'
-  const effectiveRoleOptions = isAgentReadOnly
-    ? [{ value: 'viewer' as ShareRole, label: '可查看', hint: '仅查看聊天记录，不可操作或修改代理配置' }]
-    : ROLE_OPTIONS
-  const effectiveMemberDefaultRoleOptions = isAgentReadOnly
-    ? [{ value: 'viewer' as const, label: '可查看', hint: '仅查看聊天记录，不可操作或修改代理配置' }]
+  const isAgentCollection = collection === '/agents'
+  const [policy, setPolicy] = useState<{
+    allowExternalShare: boolean
+    allowAgentEditShare: boolean
+    allowAgentManagerShare: boolean
+  }>({
+    allowExternalShare: true,
+    allowAgentEditShare: true,
+    allowAgentManagerShare: false,
+  })
+  const [pendingManagerGrant, setPendingManagerGrant] = useState<{
+    label: string
+    run: () => Promise<unknown>
+  } | null>(null)
+  const agentInternalRoleOptions: ReadonlyArray<{ value: ShareRole; label: string; hint: string }> = [
+    { value: 'viewer', label: '可查看', hint: '查看聊天记录，可 Fork 为自己的代理' },
+    ...(policy.allowAgentEditShare
+      ? [{ value: 'editor' as ShareRole, label: '可编辑', hint: '可重命名与调整配置，但不能直接对话' }]
+      : []),
+    ...(policy.allowAgentManagerShare
+      ? [{ value: 'manager' as ShareRole, label: '可管理（高风险）', hint: '直接接管代理对话与执行，等同在工作区运行该代理' }]
+      : []),
+  ]
+  const agentExternalRoleOptions: ReadonlyArray<{ value: ShareRole; label: string; hint: string }> = [
+    { value: 'viewer', label: '可查看', hint: '查看聊天记录，可 Fork 为自己的代理' },
+    ...(policy.allowAgentEditShare
+      ? [{ value: 'editor' as ShareRole, label: '可编辑', hint: '可重命名与调整配置，但不能直接对话' }]
+      : []),
+  ]
+  const effectiveRoleOptions = isAgentCollection ? agentInternalRoleOptions : ROLE_OPTIONS
+  const effectiveExternalRoleOptions = isAgentCollection ? agentExternalRoleOptions : ROLE_OPTIONS
+  const effectiveMemberDefaultRoleOptions = isAgentCollection
+    ? [
+        { value: 'viewer' as const, label: '可查看', hint: '查看聊天记录，可 Fork 为自己的代理' },
+        ...(policy.allowAgentEditShare
+          ? [{ value: 'editor' as const, label: '可编辑', hint: '可重命名与调整配置，但不能直接对话' }]
+          : []),
+      ]
     : MEMBER_DEFAULT_ROLE_OPTIONS
-  const [role, setRole] = useState<ShareRole>(isAgentReadOnly ? 'viewer' : 'editor')
+  const [role, setRole] = useState<ShareRole>(isAgentCollection ? 'viewer' : 'editor')
+  const [externalRole, setExternalRole] = useState<ShareRole>(isAgentCollection ? 'viewer' : 'editor')
   const [guestUrl, setGuestUrl] = useState('')
   const [guestCopied, setGuestCopied] = useState(false)
   const [inheritance, setInheritance] = useState<{
@@ -123,6 +156,11 @@ export function WorkspaceAccess({
       canManage?: boolean
       people?: AccessPerson[]
       memberViews?: AccessMemberView[]
+      policy?: {
+        allowExternalShare?: boolean
+        allowAgentEditShare?: boolean
+        allowAgentManagerShare?: boolean
+      }
       inheritance?: {
         mode?: 'inherit' | 'custom'
         hasParent?: boolean
@@ -139,6 +177,24 @@ export function WorkspaceAccess({
     setCanManage(data.canManage !== false)
     setPeople(data.people ?? [])
     setMemberViews(data.memberViews ?? [])
+    if (data.policy) {
+      const nextPolicy = {
+        allowExternalShare: data.policy.allowExternalShare !== false,
+        allowAgentEditShare: data.policy.allowAgentEditShare !== false,
+        allowAgentManagerShare: Boolean(data.policy.allowAgentManagerShare),
+      }
+      setPolicy(nextPolicy)
+      if (isAgentCollection) {
+        setRole((prev) => {
+          if (prev === 'manager' && !nextPolicy.allowAgentManagerShare) {
+            return nextPolicy.allowAgentEditShare ? 'editor' : 'viewer'
+          }
+          if (prev === 'editor' && !nextPolicy.allowAgentEditShare) return 'viewer'
+          return prev
+        })
+        setExternalRole((prev) => (prev === 'editor' && !nextPolicy.allowAgentEditShare ? 'viewer' : prev))
+      }
+    }
     setInheritance({
       mode: data.inheritance?.mode === 'inherit' ? 'inherit' : 'custom',
       hasParent: Boolean(data.inheritance?.hasParent),
@@ -346,14 +402,37 @@ export function WorkspaceAccess({
 
   const roleSelect = (
     <ShareSelect
-      value={isAgentReadOnly ? 'viewer' : role}
+      value={role}
       options={effectiveRoleOptions}
       ariaLabel="权限"
       placement="bottom-end"
-      minMenuWidth={168}
-      onChange={(next) => setRole(isAgentReadOnly ? 'viewer' : next)}
+      minMenuWidth={208}
+      onChange={(next) => setRole(next)}
     />
   )
+
+  const externalRoleSelect = (
+    <ShareSelect
+      value={externalRole}
+      options={effectiveExternalRoleOptions}
+      ariaLabel="外部协作者权限"
+      placement="bottom-end"
+      minMenuWidth={208}
+      onChange={(next) => setExternalRole(next)}
+    />
+  )
+
+  function confirmOrRunAgentGrant(
+    targetRole: string,
+    targetLabel: string,
+    action: () => Promise<unknown>,
+  ) {
+    if (isAgentCollection && targetRole === 'manager') {
+      setPendingManagerGrant({ label: targetLabel, run: action })
+      return
+    }
+    void action()
+  }
 
   const internalCount = internalPeople.length + memberViews.length
   const externalCount = externalPeople.length
@@ -441,12 +520,81 @@ export function WorkspaceAccess({
           ) : null}
         </div>
       </div>
-      {isAgentReadOnly ? (
+      {isAgentCollection ? (
         <div
-          style={{ fontSize: 12, color: 'var(--biu-color-text-muted)', marginTop: 4 }}
-          data-testid="fsdb-share-agent-readonly-hint"
+          style={{ fontSize: 12, color: 'var(--biu-color-text-muted)', marginTop: 4, lineHeight: 1.5 }}
+          data-testid="fsdb-share-agent-roles-hint"
         >
-          代理分享仅开放聊天记录（只读），他人无法操作代理或修改配置
+          代理权限：<strong>可查看</strong>可查看记录并 Fork；<strong>可编辑</strong>可改名与调整配置但不能对话；
+          {policy.allowAgentManagerShare
+            ? <><strong>可管理</strong>将直接接管代理对话与执行（高风险）。</>
+            : <>「可管理」默认关闭，可在设置 → 工作区 → 权限中开启。</>}
+        </div>
+      ) : null}
+      {isAgentCollection && role === 'manager' ? (
+        <div
+          data-testid="fsdb-agent-manager-warning"
+          role="alert"
+          style={{
+            marginTop: 8,
+            padding: '8px 10px',
+            borderRadius: 8,
+            fontSize: 12,
+            lineHeight: 1.5,
+            background: 'color-mix(in srgb, var(--biu-color-danger, #ef4444) 12%, transparent)',
+            border: '1px solid color-mix(in srgb, var(--biu-color-danger, #ef4444) 38%, transparent)',
+            color: 'var(--biu-color-text)',
+          }}
+        >
+          <strong>高风险提示：</strong>授予代理「可管理」后，对方可直接向该代理发消息并触发工具执行，相当于直接在该代理的工作区中运行操作（最危险的权限）。如只需复用或改配置，建议改为「可查看（可 Fork）」或「可编辑」。
+        </div>
+      ) : null}
+      {pendingManagerGrant ? (
+        <div
+          data-testid="fsdb-agent-manager-confirm"
+          role="alertdialog"
+          aria-label="确认授予代理可管理权限"
+          style={{
+            marginTop: 8,
+            padding: '10px 12px',
+            borderRadius: 8,
+            fontSize: 12,
+            lineHeight: 1.5,
+            background: 'color-mix(in srgb, var(--biu-color-danger, #ef4444) 14%, transparent)',
+            border: '1px solid color-mix(in srgb, var(--biu-color-danger, #ef4444) 48%, transparent)',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 8,
+          }}
+        >
+          <div>
+            <strong>确认向「{pendingManagerGrant.label}」授予代理「可管理」权限？</strong>
+            <div style={{ marginTop: 4, opacity: 0.9 }}>
+              对方将直接接管此代理，可直接发消息并调用代理的工具与工作区权限。请确认对方完全可信。
+            </div>
+          </div>
+          <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+            <button
+              type="button"
+              className="fsdb-share-copy"
+              onClick={() => setPendingManagerGrant(null)}
+            >
+              取消
+            </button>
+            <button
+              type="button"
+              className="fsdb-share-publish"
+              data-testid="fsdb-agent-manager-confirm-ok"
+              style={{ background: 'var(--biu-color-danger, #dc2626)', color: '#fff' }}
+              onClick={() => {
+                const pending = pendingManagerGrant
+                setPendingManagerGrant(null)
+                void pending.run()
+              }}
+            >
+              确认授予（高风险）
+            </button>
+          </div>
         </div>
       ) : null}
       {statusNotice ? (
@@ -480,14 +628,14 @@ export function WorkspaceAccess({
             {isMembersOpen ? (
               <ShareSelect
                 inline
-                value={isAgentReadOnly ? 'viewer' : memberDefaultRole}
+                value={isAgentCollection && !policy.allowAgentEditShare ? 'viewer' : memberDefaultRole}
                 options={effectiveMemberDefaultRoleOptions}
                 ariaLabel="空间全员默认权限"
                 placement="bottom-end"
-                minMenuWidth={160}
+                minMenuWidth={190}
                 onChange={(next) => {
                   if (next === 'viewer' || next === 'editor') {
-                    void updateGeneralAccess('members', isAgentReadOnly ? 'viewer' : next)
+                    void updateGeneralAccess('members', next)
                   }
                 }}
               />
@@ -567,14 +715,15 @@ export function WorkspaceAccess({
                 {canEdit ? (
                   <ShareSelect
                     inline
-                    value={isAgentReadOnly ? 'viewer' : (row.role as ShareRole)}
+                    value={row.role as ShareRole}
                     options={effectiveRoleOptions}
                     ariaLabel={`调整 ${row.name} 的权限`}
                     placement="bottom-end"
-                    minMenuWidth={168}
+                    minMenuWidth={208}
                     onChange={(next) => {
-                      const targetRole = isAgentReadOnly ? 'viewer' : next
-                      if (targetRole !== row.role) void grant({ email: row.email }, 'internal', targetRole)
+                      if (next !== row.role) {
+                        confirmOrRunAgentGrant(next, row.name, () => grant({ email: row.email }, 'internal', next))
+                      }
                     }}
                   />
                 ) : (
@@ -604,14 +753,15 @@ export function WorkspaceAccess({
                 {canEdit ? (
                   <ShareSelect
                     inline
-                    value={isAgentReadOnly ? 'viewer' : ((row.role || 'editor') as ShareRole)}
+                    value={(row.role || 'editor') as ShareRole}
                     options={effectiveRoleOptions}
                     ariaLabel={`调整 ${row.name} 的权限`}
                     placement="bottom-end"
-                    minMenuWidth={168}
+                    minMenuWidth={208}
                     onChange={(next) => {
-                      const targetRole = isAgentReadOnly ? 'viewer' : next
-                      if (targetRole !== row.role) void grant({ memberViewId: row.id }, 'internal', targetRole)
+                      if (next !== row.role) {
+                        confirmOrRunAgentGrant(next, row.name, () => grant({ memberViewId: row.id }, 'internal', next))
+                      }
                     }}
                   />
                 ) : (
@@ -702,10 +852,13 @@ export function WorkspaceAccess({
             <button type="button" className="fsdb-share-publish" disabled={!selectedTarget} data-testid="fsdb-share-member-add" onClick={() => {
               if (!selectedTarget) return
               if (selectedTarget.kind === 'member_view') {
-                if (selectedTarget.isLocked) void grant({ memberViewId: selectedTarget.id }, 'internal')
-                else void grantUnlockedMemberViewSnapshot(selectedTarget.id, selectedTarget.name)
+                const action = () =>
+                  selectedTarget.isLocked
+                    ? grant({ memberViewId: selectedTarget.id }, 'internal')
+                    : grantUnlockedMemberViewSnapshot(selectedTarget.id, selectedTarget.name)
+                confirmOrRunAgentGrant(role, selectedTarget.name, action)
               } else {
-                void grant({ email: selectedTarget.email }, 'internal')
+                confirmOrRunAgentGrant(role, selectedTarget.name, () => grant({ email: selectedTarget.email }, 'internal'))
               }
             }}>添加</button>
           </div>
@@ -728,14 +881,13 @@ export function WorkspaceAccess({
                 {canEdit ? (
                   <ShareSelect
                     inline
-                    value={isAgentReadOnly ? 'viewer' : (row.role as ShareRole)}
-                    options={effectiveRoleOptions}
+                    value={row.role as ShareRole}
+                    options={effectiveExternalRoleOptions}
                     ariaLabel={`调整 ${row.name} 的权限`}
                     placement="bottom-end"
-                    minMenuWidth={168}
+                    minMenuWidth={208}
                     onChange={(next) => {
-                      const targetRole = isAgentReadOnly ? 'viewer' : next
-                      if (targetRole !== row.role) void grant({ email: row.email }, 'external', targetRole)
+                      if (next !== row.role) void grant({ email: row.email }, 'external', next)
                     }}
                   />
                 ) : (
@@ -758,27 +910,40 @@ export function WorkspaceAccess({
           {!externalCount ? <li className="is-empty">尚未添加外部协作者</li> : null}
         </ul>
         {canManage ? (
-          <>
-            <div className="fsdb-share-invite-row">
-              <input
-                className="fsdb-share-link-field"
-                type="email"
-                value={email}
-                placeholder="输入外部账号邮箱"
-                data-testid="fsdb-share-member-email"
-                onChange={(event) => setEmail(event.target.value)}
-              />
-              {roleSelect}
-              <button type="button" className="fsdb-share-publish" disabled={!email.trim()} onClick={() => void grant({ email: email.trim() }, 'external')}>添加</button>
-            </div>
-            <div className="fsdb-share-guest-row" data-testid="fsdb-share-guest">
-              <span className="fsdb-share-guest-info">
-                <span className="fsdb-share-guest-icon" aria-hidden><LinkIcon className="size-3.5" /></span>
-                <span><strong>临时访客</strong><em>{guestUrl ? '链接有效期 24 小时' : '无需注册，仅可访问此内容'}</em></span>
-              </span>
-              <button type="button" onClick={() => void createGuestLink()}>{guestCopied ? '已复制' : guestUrl ? '重新生成' : '生成链接'}</button>
-            </div>
-          </>
+          policy.allowExternalShare ? (
+            <>
+              <div className="fsdb-share-invite-row">
+                <input
+                  className="fsdb-share-link-field"
+                  type="email"
+                  value={email}
+                  placeholder="输入外部账号邮箱"
+                  data-testid="fsdb-share-member-email"
+                  onChange={(event) => setEmail(event.target.value)}
+                />
+                {externalRoleSelect}
+                <button
+                  type="button"
+                  className="fsdb-share-publish"
+                  disabled={!email.trim()}
+                  onClick={() => void grant({ email: email.trim() }, 'external', externalRole)}
+                >
+                  添加
+                </button>
+              </div>
+              <div className="fsdb-share-guest-row" data-testid="fsdb-share-guest">
+                <span className="fsdb-share-guest-info">
+                  <span className="fsdb-share-guest-icon" aria-hidden><LinkIcon className="size-3.5" /></span>
+                  <span><strong>临时访客</strong><em>{guestUrl ? '链接有效期 24 小时' : '无需注册，仅可访问此内容'}</em></span>
+                </span>
+                <button type="button" onClick={() => void createGuestLink()}>{guestCopied ? '已复制' : guestUrl ? '重新生成' : '生成链接'}</button>
+              </div>
+            </>
+          ) : (
+            <p className="fsdb-share-copy-note" data-testid="fsdb-share-external-disabled">
+              当前空间已在「设置 → 工作区 → 权限」中关闭该数据类型的外部分享。
+            </p>
+          )
         ) : null}
       </section>
       {error ? <p className="fsdb-share-error is-inline">{error}</p> : null}

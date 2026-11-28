@@ -759,8 +759,17 @@ export function registerDatabaseHttpRoutes(
         }
       }
     }
+    const effectiveExternalCollection =
+      normalizeCollectionPath(collection) === VIEWS_COLLECTION_PATH
+        ? (parseViewShareRecordId(recordId)?.targetCollection || collection)
+        : collection
+    const allowExternalShare =
+      !workspaceId || isLocalDeviceShare(workspaceId)
+        ? true
+        : (getAccountService(ctx)?.store?.isExternalShareAllowed?.(workspaceId, effectiveExternalCollection) ?? true)
     route.send(200, {
       share: share ? { ...share, url: publicShareUrl(route.req, share.token) } : null,
+      allowExternalShare,
       ...(inheritedShare ? { inheritedShare } : { inheritedShare: null }),
       ...(inheritance ? { inheritance } : {}),
       ...(viewPublicStats ? { viewPublicStats } : {}),
@@ -802,6 +811,19 @@ export function registerDatabaseHttpRoutes(
         db.notifyShareChange()
         notifyViewShare()
         route.send(200, { share: null })
+        return
+      }
+      const shareWsId = currentRequestWorkspaceId()
+      const policyCollection =
+        normalizeCollectionPath(collection) === VIEWS_COLLECTION_PATH
+          ? (parseViewShareRecordId(recordId)?.targetCollection || collection)
+          : collection
+      if (
+        shareWsId &&
+        !isLocalDeviceShare(shareWsId) &&
+        getAccountService(ctx)?.store?.isExternalShareAllowed?.(shareWsId, policyCollection) === false
+      ) {
+        route.send(403, { error: '当前空间已关闭该数据类型的外部分享，请联系管理员在设置 → 工作区 → 权限中开启' })
         return
       }
       const share = shares.upsert({

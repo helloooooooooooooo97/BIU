@@ -878,6 +878,54 @@ export function apply(ctx: Context, config: AccountConfig = {}) {
     )
   })
 
+  authedRoute('GET', '/api/account/workspaces/:id/permissions', async (route, me) => {
+    const workspaceId = route.params.id!
+    if (getRuntimePolicy().allowCloudLinking && account.workspaceLocation(workspaceId) === 'cloud') {
+      const connection = account.cloudConnection(me.id)
+      if (!connection) throw new CollabError('请先登录云端账号', 401)
+      let response: Response
+      try {
+        response = await fetch(`${connection.origin}/api/account/workspaces/${encodeURIComponent(workspaceId)}/permissions`, {
+          headers: { authorization: `Bearer ${connection.token}` },
+        })
+      } catch {
+        throw new CollabError('云端暂时连不上', 503)
+      }
+      const payload = (await response.json().catch(() => ({}))) as Record<string, unknown>
+      if (!response.ok) throw new CollabError(String(payload.error || '读取空间权限设置失败'), response.status)
+      route.send(200, payload)
+      return
+    }
+    route.send(200, account.store.getWorkspacePermissions(me.id, workspaceId))
+  })
+
+  authedRoute('PATCH', '/api/account/workspaces/:id/permissions', async (route, me) => {
+    const workspaceId = route.params.id!
+    const body = (await route.json().catch(() => ({}))) as Record<string, unknown>
+    if (getRuntimePolicy().allowCloudLinking && account.workspaceLocation(workspaceId) === 'cloud') {
+      const connection = account.cloudConnection(me.id)
+      if (!connection) throw new CollabError('请先登录云端账号', 401)
+      let response: Response
+      try {
+        response = await fetch(`${connection.origin}/api/account/workspaces/${encodeURIComponent(workspaceId)}/permissions`, {
+          method: 'PATCH',
+          headers: { authorization: `Bearer ${connection.token}`, 'content-type': 'application/json' },
+          body: JSON.stringify(body),
+        })
+      } catch {
+        throw new CollabError('云端暂时连不上', 503)
+      }
+      const payload = (await response.json().catch(() => ({}))) as Record<string, unknown>
+      if (!response.ok) throw new CollabError(String(payload.error || '更新空间权限设置失败'), response.status)
+      broadcastAccessChange(workspaceId, 'records')
+      route.send(200, payload)
+      return
+    }
+    const result = account.store.updateWorkspacePermissions(me.id, workspaceId, body)
+    broadcastAccessChange(workspaceId, 'records')
+    route.send(200, result)
+  })
+
   authedRoute('DELETE', '/api/account/workspaces/:id', async (route, me) => {
     const body = (await route.json().catch(() => ({}))) as { name?: string }
     const confirmName = String(body.name ?? '')
