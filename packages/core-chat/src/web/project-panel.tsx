@@ -1,6 +1,7 @@
 import type { SlotProps } from '@biu/web-slots'
 import { bindProjectView, type ProjectViewService } from '@biu/web-slots/project-view'
 import { FolderGlyph } from '@biu/web-session-view/folder-glyph'
+import { CloudFolderPickerDialog } from './cloud-folder-picker.tsx'
 
 /** 紧凑项目绑定：始终仅文件夹图标；未绑定虚线框，绑定后实线，无文字/高亮。 */
 export function SessionProjectPanel(props: SlotProps) {
@@ -9,6 +10,7 @@ export function SessionProjectPanel(props: SlotProps) {
   const sessionId = useProjectView((state) => state.sessionId)
   const project = useProjectView((state) => state.project)
   const busy = useProjectView((state) => state.busy)
+  const pickerOpen = useProjectView((state) => state.pickerOpen)
   const error = useProjectView((state) => state.error)
 
   if (!sessionId) {
@@ -41,6 +43,15 @@ export function SessionProjectPanel(props: SlotProps) {
         <span className="project-chip-error" title={error}>
           !
         </span>
+      ) : null}
+      {pickerOpen ? (
+        <CloudFolderPickerDialog
+          sessionId={sessionId}
+          currentProjectPath={project?.path}
+          busy={busy}
+          projectView={projectView}
+          onClose={() => projectView.closeCloudPicker()}
+        />
       ) : null}
     </div>
   )

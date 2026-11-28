@@ -7,6 +7,7 @@
   "description": "读 cordis.plugins.json、解析 workspace 包、Vite virtual 模块",
   "exports": {
     ".": "./src/host/index.ts",
+    "./cloud-folders": "./src/host/cloud-folders.ts",
     "./data-dir": "./src/host/data-dir.ts",
     "./env": "./src/host/env.ts",
     "./ports": "./src/host/ports.ts",

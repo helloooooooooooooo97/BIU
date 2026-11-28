@@ -1,6 +1,7 @@
 import { createCipheriv, createDecipheriv, createHash, randomBytes } from 'node:crypto'
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname } from 'node:path'
+import { CLOUD_VIRTUAL_ROOT, createCloudFolder, listCloudFolders } from '@biu/host-plugin-loader/cloud-folders'
 import { currentAccountId, currentRequestWorkspaceId, dataDir, dataHome, dataPath } from '@biu/host-plugin-loader/data-dir'
 import { getAccountPort } from '@biu/host-plugin-loader/ports'
 import { getRuntimePolicy } from '@biu/host-plugin-loader/runtime'
@@ -1601,10 +1602,56 @@ export function apply(ctx: Context) {
       toolsTokens: toolsSchemaTokens,
     })
   })
+  const requireCloudFolderTenant = (route: { send: (status: number, body: unknown) => void }) => {
+    const accountId = currentAccountId().trim()
+    const workspaceId = currentRequestWorkspaceId().trim()
+    if (!accountId) {
+      route.send(401, { error: '需要登录才能访问个人云端文件夹' })
+      return null
+    }
+    if (!workspaceId) {
+      route.send(400, { error: '需要选择工作空间' })
+      return null
+    }
+    if (getRuntimePolicy().authzMode === 'rbac') {
+      const account = getAccountPort(ctx)
+      if (!account?.store?.isMember?.(accountId, workspaceId)) {
+        route.send(403, { error: '无权访问当前空间的个人文件夹' })
+        return null
+      }
+    }
+    return { accountId, workspaceId }
+  }
+  ctx.http.route('GET', '/api/workspace/folders', async (route) => {
+    const tenant = requireCloudFolderTenant(route)
+    if (!tenant) return
+    try {
+      const parentPath = String(route.query.get('path') ?? '').trim() || CLOUD_VIRTUAL_ROOT
+      const listing = await listCloudFolders(tenant.workspaceId, tenant.accountId, parentPath)
+      route.send(200, {
+        ...listing,
+        mode: getRuntimePolicy().allowHostPathBinding ? 'host' : 'cloud',
+      })
+    } catch (error) {
+      route.send(400, { error: error instanceof Error ? error.message : String(error) })
+    }
+  })
+  ctx.http.route('POST', '/api/workspace/folders', async (route) => {
+    const tenant = requireCloudFolderTenant(route)
+    if (!tenant) return
+    try {
+      const payload = ((await route.json().catch(() => null)) ?? {}) as { parentPath?: unknown; name?: unknown }
+      const parentPath = String(payload.parentPath ?? '').trim() || CLOUD_VIRTUAL_ROOT
+      const name = String(payload.name ?? '')
+      const folder = await createCloudFolder(tenant.workspaceId, tenant.accountId, parentPath, name)
+      route.send(201, { ok: true, folder })
+    } catch (error) {
+      route.send(400, { error: error instanceof Error ? error.message : String(error) })
+    }
+  })
   ctx.http.route('PUT', '/api/agents/:id/project', async (route) => {
-    if (!getRuntimePolicy().allowHostPathBinding) return route.send(403, { error: '云端空间使用隔离沙箱工作区，不支持绑定宿主机路径' })
     if (!(await requireWritableSession(route.params.id, route))) return
-    const payload = (await route.json()) as { path?: string | null; name?: string | null }
+    const payload = (await route.json()) as { path?: string | null; name?: string | null; create?: boolean }
     try {
       // path 优先；兼容旧客户端误传 name=null 解绑
       const rawPath = payload.path !== undefined ? payload.path : payload.name
@@ -1612,14 +1659,22 @@ export function apply(ctx: Context) {
         await ctx.sessions.setProject(route.params.id, null)
         return route.send(200, { ok: true, project: null })
       }
-      const project = await ctx.sessions.setProject(route.params.id, { path: String(rawPath) })
+      const project = await ctx.sessions.setProject(route.params.id, {
+        path: String(rawPath),
+        create: payload.create === true,
+      })
       route.send(200, { ok: true, project })
     } catch (error) {
-      route.send(400, { error: String(error) })
+      route.send(400, { error: error instanceof Error ? error.message : String(error) })
     }
   })
   ctx.http.route('POST', '/api/agents/:id/project/pick', async (route) => {
-    if (!getRuntimePolicy().allowHostPathBinding) return route.send(403, { error: '云端空间不支持选择宿主机目录' })
+    if (!getRuntimePolicy().allowHostPathBinding) {
+      return route.send(403, {
+        error: '云端空间不支持选择宿主机目录，请使用云端项目文件夹选择器',
+        code: 'CLOUD_FOLDER_PICKER_REQUIRED',
+      })
+    }
     try {
       const record = await requireWritableSession(route.params.id, route)
       if (!record) return

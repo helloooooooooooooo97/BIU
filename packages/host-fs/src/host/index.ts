@@ -1,9 +1,9 @@
-import { mkdirSync } from 'node:fs'
+import { existsSync, realpathSync } from 'node:fs'
 import { mkdir, readFile, readdir, writeFile } from 'node:fs/promises'
 import { dirname, isAbsolute, join, normalize, relative, resolve } from 'node:path'
 import { Service, type Context } from 'cordis'
 import { currentSessionId } from '@biu/host-sessions/scope'
-import { currentRequestWorkspaceId, dataHome } from '@biu/host-plugin-loader/data-dir'
+import { cloudUserWorkRoot, resolveCloudProjectSync } from '@biu/host-plugin-loader/cloud-folders'
 import { getRuntimePolicy } from '@biu/host-plugin-loader/runtime'
 import {
   STR_REPLACE_EDITOR_DESCRIPTION,
@@ -15,10 +15,23 @@ import {
 
 const SANDBOX_VIRTUAL_WORKSPACE = '/workspace'
 
-function requireWorkspaceSegment(id: string): string {
-  const safe = id.trim().replace(/[^a-zA-Z0-9_-]/g, '')
-  if (!safe) throw new Error('workspace scope is required in cloud runtime')
-  return safe
+function assertNoSymlinkEscape(root: string, full: string) {
+  if (!existsSync(root)) return
+  const rootReal = realpathSync(root)
+  let cursor = full
+  while (true) {
+    if (existsSync(cursor)) {
+      const real = realpathSync(cursor)
+      const rel = relative(rootReal, real)
+      if (rel.startsWith('..') || isAbsolute(rel)) {
+        throw new Error('path escapes workspace')
+      }
+      return
+    }
+    const next = dirname(cursor)
+    if (next === cursor) return
+    cursor = next
+  }
 }
 
 export class FsService extends Service {
@@ -30,26 +43,38 @@ export class FsService extends Service {
     this.defaultRoot = resolve(defaultRoot)
   }
 
-  /** 当前生效工作区：云端按 workspaceId 独立隔离（无 workspaceId 时 fail-closed）；本机若 Session 已绑定 host 路径则为该目录，否则默认 `.workspace`。 */
+  /**
+   * 当前生效工作区：
+   * - 云端按 (workspaceId, accountId) 物理隔离到个人工作目录；若当前 Session 绑定了个人云端项目子目录，则进一步锁定到该项目目录；
+   * - 本机若 Session 已绑定 host 路径则为该目录，否则默认 `.workspace`。
+   */
   get root() {
     return this.effectiveRoot()
   }
 
   effectiveRoot() {
     if (getRuntimePolicy().isolateWorkspaceDirs) {
-      const wsId = requireWorkspaceSegment(currentRequestWorkspaceId())
-      const dir = resolve(dataHome(), 'workspaces', wsId, 'work')
-      mkdirSync(dir, { recursive: true })
-      return dir
+      const userRoot = cloudUserWorkRoot()
+      const projectPath = this.sessionProjectRawPath()
+      if (projectPath) {
+        const bound = resolveCloudProjectSync(userRoot, projectPath)
+        if (bound) return bound
+      }
+      return userRoot
     }
     return this.sessionProjectRoot() ?? this.defaultRoot
   }
 
-  sessionProjectRoot() {
+  private sessionProjectRawPath() {
     const sessionId = currentSessionId()
     if (!sessionId) return null
     const sessions = this.ctx.get('sessions') as { peek?: (id: string) => { project?: { path?: string } } | undefined } | undefined
     const path = sessions?.peek?.(sessionId)?.project?.path
+    return path ? String(path).trim() || null : null
+  }
+
+  sessionProjectRoot() {
+    const path = this.sessionProjectRawPath()
     return path ? resolve(path) : null
   }
 
@@ -65,6 +90,9 @@ export class FsService extends Service {
     const relToRoot = relative(root, full)
     if (relToRoot.startsWith('..') || (!isAbsolute(input) && normalize(input).startsWith('..'))) {
       throw new Error('path escapes workspace')
+    }
+    if (getRuntimePolicy().isolateWorkspaceDirs) {
+      assertNoSymlinkEscape(root, full)
     }
     return full
   }
@@ -222,6 +250,9 @@ export function apply(ctx: Context, config: { root?: string } = {}) {
       if (!sessionId) return ''
       const project = inner.sessions.peek(sessionId)?.project
       if (!project?.path) return ''
+      if (getRuntimePolicy().isolateWorkspaceDirs) {
+        return `当前 Session 绑定个人云端项目「${project.name}」（个人云工作区路径：${project.path}）。bash / 文件工具的工作区根目录已切换到该项目目录（沙箱内映射为 /workspace，请使用相对路径或 /workspace/... 读写）。`
+      }
       return `当前 Session 绑定 host 工作区「${project.name}」：${project.path}。bash / 文件工具直接读写该目录（对齐 dsh workspace cwd）。`
     })
   })

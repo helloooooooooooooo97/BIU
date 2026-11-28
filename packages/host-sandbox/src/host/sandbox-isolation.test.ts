@@ -6,9 +6,12 @@ import { test } from 'vitest'
 import { Context } from 'cordis'
 import * as tools from '@biu/host-tools'
 import * as fs from '@biu/host-fs'
+import * as sessionStore from '@biu/host-session-store'
+import * as sessions from '@biu/host-sessions'
 import * as subprocess from '@biu/host-subprocess'
 import * as shell from '@biu/host-subprocess/shell'
-import { runWithRequestWorkspace } from '@biu/host-plugin-loader/data-dir'
+import { runWithAccount, runWithRequestWorkspace } from '@biu/host-plugin-loader/data-dir'
+import { runWithSession } from '@biu/host-sessions/scope'
 import * as sandbox from './index.ts'
 
 test('sanitizeSandboxEnv strips host secrets like API keys and admin passwords', () => {
@@ -69,7 +72,7 @@ test('buildSeatbeltProfile restricts writes and blocks sibling workspaces and se
   assert.match(profile, /\(deny network\*\)/)
 })
 
-test('cloud runtime isolates workspaces per workspaceId and strips host secrets in bash', async () => {
+test('cloud runtime isolates directories per (workspaceId, accountId), supports personal project binding, and strips host secrets in bash', async () => {
   const prevOnline = process.env.BIU_ONLINE
   const prevHome = process.env.BIU_HOME
   const prevDriver = process.env.BIU_SANDBOX_DRIVER
@@ -85,31 +88,75 @@ test('cloud runtime isolates workspaces per workspaceId and strips host secrets 
   try {
     const ctx = new Context()
     await ctx.plugin(tools)
+    await ctx.plugin(sessionStore, { driver: 'memory' })
+    await ctx.plugin(sessions)
     await ctx.plugin(fs, { root: join(tempHome, 'default') })
     await ctx.plugin(sandbox)
     await ctx.plugin(subprocess)
     await ctx.plugin(shell)
 
-    const rootA = runWithRequestWorkspace('ws-alpha', () => ctx.fs.effectiveRoot())
-    const rootB = runWithRequestWorkspace('ws-beta', () => ctx.fs.effectiveRoot())
-    assert.notEqual(rootA, rootB)
-    assert.ok(rootA.endsWith(join('workspaces', 'ws-alpha', 'work')))
-    assert.ok(rootB.endsWith(join('workspaces', 'ws-beta', 'work')))
+    const withTenant = <T,>(wsId: string, accountId: string, fn: () => T) =>
+      runWithRequestWorkspace(wsId, () => runWithAccount(accountId, fn))
 
-    // Virtual /workspace path maps cleanly into the current workspace
-    runWithRequestWorkspace('ws-alpha', () => {
-      assert.equal(ctx.fs.resolve('/workspace/hello.txt'), join(rootA, 'hello.txt'))
+    // Fail-closed when accountId is missing
+    assert.throws(
+      () => runWithRequestWorkspace('ws-alpha', () => ctx.fs.effectiveRoot()),
+      /account scope is required in cloud runtime/,
+    )
+
+    // Different workspaces AND different accounts in the same workspace get isolated directories
+    const rootAlphaA = withTenant('ws-alpha', 'acct-a', () => ctx.fs.effectiveRoot())
+    const rootAlphaB = withTenant('ws-alpha', 'acct-b', () => ctx.fs.effectiveRoot())
+    const rootBetaA = withTenant('ws-beta', 'acct-a', () => ctx.fs.effectiveRoot())
+    assert.notEqual(rootAlphaA, rootAlphaB)
+    assert.notEqual(rootAlphaA, rootBetaA)
+    assert.ok(rootAlphaA.endsWith(join('workspaces', 'ws-alpha', 'users', 'acct-a', 'work')))
+    assert.ok(rootAlphaB.endsWith(join('workspaces', 'ws-alpha', 'users', 'acct-b', 'work')))
+    assert.ok(rootBetaA.endsWith(join('workspaces', 'ws-beta', 'users', 'acct-a', 'work')))
+
+    // Virtual /workspace path maps cleanly into the current user's personal workspace
+    withTenant('ws-alpha', 'acct-a', () => {
+      assert.equal(ctx.fs.resolve('/workspace/hello.txt'), join(rootAlphaA, 'hello.txt'))
       assert.throws(() => ctx.fs.resolve('/etc/passwd'), /path escapes workspace/)
     })
 
-    // Write isolated file in ws-alpha and verify bash sees it without leaking host env
-    writeFileSync(join(rootA, 'note.txt'), 'alpha-only', 'utf8')
-    const res = (await runWithRequestWorkspace('ws-alpha', () =>
+    // Write isolated file in ws-alpha/acct-a and verify acct-b cannot see it
+    writeFileSync(join(rootAlphaA, 'note.txt'), 'alpha-a-only', 'utf8')
+    const res = (await withTenant('ws-alpha', 'acct-a', () =>
       ctx.tools.invoke('bash', { command: 'cat note.txt && echo "|KEY=$DEEPSEEK_API_KEY"' }),
     )) as { code: number | null; stdout: string }
     assert.equal(res.code, 0)
-    assert.match(res.stdout, /alpha-only/)
+    assert.match(res.stdout, /alpha-a-only/)
     assert.match(res.stdout, /\|KEY=\s*$/)
+
+    const resB = (await withTenant('ws-alpha', 'acct-b', () =>
+      ctx.tools.invoke('bash', { command: 'test ! -e note.txt && echo isolated' }),
+    )) as { code: number | null; stdout: string }
+    assert.equal(resB.code, 0)
+    assert.match(resB.stdout, /isolated/)
+
+    // Binding a cloud project folder scopes effectiveRoot + bash strictly to that personal subfolder
+    const rec = await ctx.sessions.create()
+    const bound = await withTenant('ws-alpha', 'acct-a', () =>
+      ctx.sessions.setProject(rec.id, { path: '/workspace/my-app', create: true }),
+    )
+    assert.equal(bound?.name, 'my-app')
+    assert.equal(bound?.path, '/workspace/my-app')
+    await withTenant('ws-alpha', 'acct-a', () =>
+      runWithSession(rec.id, async () => {
+        const projRoot = ctx.fs.effectiveRoot()
+        assert.ok(projRoot.endsWith(join('workspaces', 'ws-alpha', 'users', 'acct-a', 'work', 'my-app')))
+        await ctx.fs.write('README.md', 'scoped-project')
+        const out = (await ctx.tools.invoke('bash', { command: 'cat README.md' })) as { code: number | null; stdout: string }
+        assert.equal(out.code, 0)
+        assert.match(out.stdout, /scoped-project/)
+      }),
+    )
+    // Host absolute paths are rejected in cloud mode
+    await assert.rejects(
+      () => withTenant('ws-alpha', 'acct-a', () => ctx.sessions.setProject(rec.id, { path: '/etc' })),
+      /云端项目路径必须在 \/workspace 内/,
+    )
   } finally {
     if (prevOnline === undefined) delete process.env.BIU_ONLINE
     else process.env.BIU_ONLINE = prevOnline
@@ -138,22 +185,25 @@ test('SandboxService.wrap fails closed in cloud mode when driver degrades to env
     await ctx.plugin(fs, { root: join(tempHome, 'default') })
     await ctx.plugin(sandbox)
 
+    const withTenant = <T,>(fn: () => T) =>
+      runWithRequestWorkspace('ws-test', () => runWithAccount('acct-test', fn))
+
     process.env.BIU_SANDBOX_DRIVER = 'env-only'
     assert.throws(
-      () => runWithRequestWorkspace('ws-test', () => ctx.sandbox.wrap({ argv: ['/bin/sh', '-lc', 'echo hi'] })),
+      () => withTenant(() => ctx.sandbox.wrap({ argv: ['/bin/sh', '-lc', 'echo hi'] })),
       /Cloud runtime requires an OS-level sandbox/,
     )
 
     process.env.BIU_SANDBOX_DRIVER = 'none'
     assert.throws(
-      () => runWithRequestWorkspace('ws-test', () => ctx.sandbox.wrap({ argv: ['/bin/sh', '-lc', 'echo hi'] })),
+      () => withTenant(() => ctx.sandbox.wrap({ argv: ['/bin/sh', '-lc', 'echo hi'] })),
       /Cloud runtime requires an OS-level sandbox/,
     )
 
     // Explicit dev opt-in allows env-only
     process.env.BIU_ALLOW_UNSAFE_SANDBOX = '1'
     process.env.BIU_SANDBOX_DRIVER = 'env-only'
-    const wrapped = runWithRequestWorkspace('ws-test', () => ctx.sandbox.wrap({ argv: ['/bin/sh', '-lc', 'echo hi'] }))
+    const wrapped = withTenant(() => ctx.sandbox.wrap({ argv: ['/bin/sh', '-lc', 'echo hi'] }))
     assert.equal(wrapped.driver, 'env-only')
   } finally {
     if (prevOnline === undefined) delete process.env.BIU_ONLINE
