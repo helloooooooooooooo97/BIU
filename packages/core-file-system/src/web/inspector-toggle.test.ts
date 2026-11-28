@@ -1399,6 +1399,18 @@ test('session collection uses the cursor glyph labeled 代理', () => {
   assert.match(glyphs, /<CursorArrowRaysIcon/)
 })
 
+test('channels collection uses chat-bubble-left-right glyph distinct from agent cursor icon', () => {
+  const glyphs = readFileSync(resolve(import.meta.dirname, './table-glyph.tsx'), 'utf8')
+  const css = readFileSync(resolve(import.meta.dirname, './fsdb-style.ts'), 'utf8')
+  const spec = readFileSync(resolve(import.meta.dirname, '../../../core-chat/src/host/channels-collection.ts'), 'utf8')
+  assert.match(spec, /label: '聊天'/)
+  assert.match(spec, /icon: 'chat-bubble-left-right'/)
+  assert.match(glyphs, /name === 'chat-bubble' \|\| name === 'chat-bubble-left-right'\) return 'chat'/)
+  assert.match(glyphs, /<ChatBubbleLeftRightIcon/)
+  assert.match(css, /\.fsdb-record-mark\[data-icon="chat"\]\{--fsdb-glyph:var\(--fsdb-glyph-chat\)\}/)
+  assert.match(css, /\.fsdb-record-mark\[data-icon="cursor"\]\{--fsdb-glyph:var\(--fsdb-glyph-cursor\)\}/)
+})
+
 test('widget collection uses the grouped-rectangles glyph, not the plugin puzzle', () => {
   const glyphs = readFileSync(resolve(import.meta.dirname, './table-glyph.tsx'), 'utf8')
   assert.match(glyphs, /name === 'rectangle-group'/)
