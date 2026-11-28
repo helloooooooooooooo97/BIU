@@ -15,6 +15,7 @@ function markSvg(displayWidth: number) {
       showBackground={BRAND_DEFAULT.showBackground}
       circleRatio={BRAND_DEFAULT.circleRatio}
       displayWidth={displayWidth}
+      clipId="biu-mark-clip"
       title="BIU"
     />,
   ).replace(/ role="img" aria-label="BIU"/, '')

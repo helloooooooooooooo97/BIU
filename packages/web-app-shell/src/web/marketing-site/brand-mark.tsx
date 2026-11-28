@@ -3,18 +3,20 @@ import { useSiteLocale } from './locale.tsx'
 
 /**
  * BIU 品牌标记：B、I、U 三个字母刚好拼成这个形状 ——
- * 贯穿圆心的斜线是 I，它右上方被短线分开的两小块是 B 的两个弧，左下的半圆是 U。
+ * 贯穿圆心的标准 45° 斜线是 I，它右上方被严格垂直短线分开的两小块是 B 的两个弧，左下的半圆是 U。
  *
- * 几何取自设计稿（1080 视图框）：
- *   圆心 (450, 615)，半径 290
- *   分界角：232.7° / 320.6° / 52.5°
- * 两线的交点在圆心偏右下一点，不是过圆心的直径 —— 所以三块大小并不相等。
+ * 几何定义（标准 45° 对角 + 严格 2:1:1 分割）：
+ *   圆心 (450, 615)，背景半边长 290
+ *   分界角：225° / 315° / 45°
  *
  * 三块与字母、画面方位的对应（colors 下标即下方顺序）：
- *   colors[0]  232.7°→320.6°（88°） 右上偏上 → B 的上弧
- *   colors[1]  320.6°→52.5°（92°）  右上偏右 → B 的下弧
- *   colors[2]  52.5°→232.7°（180°） 左下半圆 → U
- *   232.7° ↔ 52.5° 那条贯穿圆心的斜线 → I
+ *   colors[0]  225°→315°（90°）  正上/右上偏上 → B 的上弧（1 份）
+ *   colors[1]  315°→45°（90°）   正右/右上偏右 → B 的下弧（1 份）
+ *   colors[2]  45°→225°（180°）  左下半圆      → U（2 份）
+ *   225° ↔ 45° 那条贯穿圆心的 45° 直线 → I
+ *
+ * 绘制采用「单圆 clipPath + 层叠铺底」：底层整圆填 U、中层覆盖 B 上弧并向 B 下弧内部斜向兜底、
+ * 顶层覆盖 B 下弧，彻底消除相邻斜边独立抗锯齿产生的白缝与毛边。
  * 默认深海配色（BRAND_DEFAULT），标签页图标 public/favicon.svg 由它生成。
  */
 
@@ -39,30 +41,17 @@ function onCircle(deg: number, r: number): [number, number] {
 }
 
 function p([x, y]: [number, number]) {
-  return `${x.toFixed(1)} ${y.toFixed(1)}`
+  return `${x.toFixed(2)} ${y.toFixed(2)}`
 }
 
 /**
- * 两条线都过圆心，把圆分成三块。分界角取自设计稿：
- *   线 1：232.7° ↔ 52.5°
- *   线 2：320.6° ↔ 140.6°（只画 320.6° 这一侧到圆心的一段）
- * 于是三块是：232.7→320.6、320.6→52.5（B 的两个弧）、52.5→232.7（U）；线 1 就是 I。
+ * 两条正交线严格过圆心，把圆按 2:1:1（180° : 90° : 90°）分成三块：
+ *   线 1：225° ↔ 45°（标准 45° 对角直线 = I）
+ *   线 2：315° → 圆心（与线 1 严格垂直）
+ * 三块依次为：225°→315°（B 上弧，90°）、315°→45°（B 下弧，90°）、45°→225°（U，180°）。
  */
-const SPLIT = { a: 232.7, b: 320.6, c: 52.5 } as const
-
-/** 从圆心出发的一块扇区（走顺时针方向由 from 到 to）。半径由调用方给。 */
-function sector(from: number, to: number, r: number) {
-  const [x1, y1] = onCircle(from, r)
-  const [x2, y2] = onCircle(to, r)
-  const sweep = (to - from + 360) % 360
-  const largeArc = sweep > 180 ? 1 : 0
-  return [
-    `M ${CX} ${CY}`,
-    `L ${p([x1, y1])}`,
-    `A ${r} ${r} 0 ${largeArc} 1 ${p([x2, y2])}`,
-    'Z',
-  ].join(' ')
-}
+export const BRAND_SPLIT = { a: 225, b: 315, c: 45 } as const
+const SPLIT = BRAND_SPLIT
 
 /** viewBox 的边长（= BOX*2），用于把「屏幕像素」换算成 viewBox 单位。 */
 const VB_SIZE = BOX * 2
@@ -97,6 +86,8 @@ export type BrandMarkProps = {
    * 不传时按 viewBox 单位原样使用（适合尺寸已知且足够大的场合）。
    */
   displayWidth?: number
+  /** 可选自定义 clipPath id（用于静态导出资产时生成确定性 SVG）。 */
+  clipId?: string
 }
 
 export function BrandMark({
@@ -110,9 +101,12 @@ export function BrandMark({
   className,
   title = 'BIU brand mark',
   displayWidth,
+  clipId: clipIdProp,
 }: BrandMarkProps) {
+  const autoId = useId()
+  const clipId = clipIdProp ?? `biu-mark-${autoId.replace(/[^a-zA-Z0-9_-]/g, '')}`
   // 圆的实际半径：只受 circleRatio 影响，背景方块保持 ViewBox 大小不变。
-  const r = MAX_R * Math.min(1, Math.max(0.05, circleRatio))
+  const r = Math.round(MAX_R * Math.min(1, Math.max(0.05, circleRatio)) * 100) / 100
   /**
    * 把线宽换算成 viewBox 单位，并保证在小尺寸下不会退化成亚像素。
    * 0 = 用户明确要隐藏这条线，原样传达，不做任何保底。
@@ -145,6 +139,7 @@ export function BrandMark({
         stroke={stroke}
         strokePx={strokePx}
         linePx={linePx}
+        clipId={clipId}
       />
     </svg>
   )
@@ -158,6 +153,7 @@ function BrandMarkShapes({
   stroke,
   strokePx,
   linePx,
+  clipId,
 }: {
   colors: [string, string, string]
   r: number
@@ -166,7 +162,9 @@ function BrandMarkShapes({
   stroke: string
   strokePx: number
   linePx: number
+  clipId: string
 }) {
+  const s = BOX
   return (
     <>
       {showBackground ? (
@@ -179,9 +177,26 @@ function BrandMarkShapes({
           fill={background}
         />
       ) : null}
-      <path d={sector(SPLIT.a, SPLIT.b, r)} fill={colors[0]} />
-      <path d={sector(SPLIT.b, SPLIT.c, r)} fill={colors[1]} />
-      <path d={sector(SPLIT.c, SPLIT.a, r)} fill={colors[2]} />
+      <g clipPath={`url(#${clipId})`}>
+        <g transform={`rotate(${SPLIT.c} ${CX} ${CY})`}>
+          {/* 顺序保持 colors[0] / colors[1] / colors[2]：B 上弧铺满兜底 → B 下弧斜向延展入 U 兜底 → U 覆盖下半圆，三边零白缝零串色 */}
+          <path
+            d={`M ${CX - s} ${CY - s} H ${CX + s} V ${CY + s} H ${CX - s} Z`}
+            fill={colors[0]}
+            data-brand-part="b-top"
+          />
+          <path
+            d={`M ${CX} ${CY - s} H ${CX + s} V ${CY + s} L ${CX} ${CY} Z`}
+            fill={colors[1]}
+            data-brand-part="b-bottom"
+          />
+          <path
+            d={`M ${CX - s} ${CY} H ${CX + s} V ${CY + s} H ${CX - s} Z`}
+            fill={colors[2]}
+            data-brand-part="u"
+          />
+        </g>
+      </g>
       <circle cx={CX} cy={CY} r={r} fill="none" stroke={stroke} strokeWidth={strokePx} />
       <path
         d={`M ${p(onCircle(SPLIT.a, r))} L ${p(onCircle(SPLIT.c, r))}`}
@@ -195,6 +210,11 @@ function BrandMarkShapes({
         strokeWidth={linePx}
         strokeLinecap="round"
       />
+      <defs>
+        <clipPath id={clipId}>
+          <circle cx={CX} cy={CY} r={r} />
+        </clipPath>
+      </defs>
     </>
   )
 }
@@ -382,6 +402,7 @@ export function BrandPrint({
                   stroke={stroke}
                   strokePx={lift(config.strokeWidth)}
                   linePx={lift(config.lineWidth)}
+                  clipId={`${idBase}-clip-${level}`}
                 />
               </svg>
             </pattern>

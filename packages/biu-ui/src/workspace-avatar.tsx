@@ -33,32 +33,14 @@ export const WORKSPACE_AVATAR_PRESETS: readonly WorkspaceAvatarPreset[] = [
   { id: 'warm-gray', label: '暖灰', colors: ['#e8ddd3', '#b3a498', '#6b5f55'] },
 ]
 
-/** 与官网 BrandMark 一致的三块扇区分界角：B 上弧 / B 下弧 / U。 */
-const CX = 50
-const CY = 50
-const R = 50.5
-const SPLIT = { a: 232.7, b: 320.6, c: 52.5 } as const
-
-function onCircle(deg: number, r: number): [number, number] {
-  const rad = (deg * Math.PI) / 180
-  return [CX + r * Math.cos(rad), CY + r * Math.sin(rad)]
-}
-
-function fmt([x, y]: [number, number]): string {
-  return `${x.toFixed(2)} ${y.toFixed(2)}`
-}
-
-function sectorPath(from: number, to: number, r: number): string {
-  const p1 = onCircle(from, r)
-  const p2 = onCircle(to, r)
-  const sweep = (to - from + 360) % 360
-  const largeArc = sweep > 180 ? 1 : 0
-  return `M ${CX} ${CY} L ${fmt(p1)} A ${r} ${r} 0 ${largeArc} 1 ${fmt(p2)} Z`
-}
-
-const SECTOR_0 = sectorPath(SPLIT.a, SPLIT.b, R)
-const SECTOR_1 = sectorPath(SPLIT.b, SPLIT.c, R)
-const SECTOR_2 = sectorPath(SPLIT.c, SPLIT.a, R)
+/**
+ * 与官网 BrandMark 一致的标准 45° 对角、严格 2:1:1（180° : 90° : 90°）层叠几何：
+ *   底层整圆填 U（c2，45°→225°）
+ *   中层覆盖 B 上弧（c0，225°→315°）并向 B 下弧内部斜向延展兜底，消除抗锯齿缝隙
+ *   顶层覆盖 B 下弧（c1，315°→45°）
+ */
+const AVATAR_ROTATE = 'rotate(45 50 50)'
+const AVATAR_B_TOP_POINTS = '-10,50 50,50 110,-10 -10,-10'
 
 function resolvePreset(presetId?: string): WorkspaceAvatarPreset {
   return (
@@ -75,11 +57,11 @@ export function buildWorkspaceAvatarDataUrl(
   const svg =
     `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" data-biu-workspace-avatar="${preset.id}">` +
     `<defs><clipPath id="c"><circle cx="50" cy="50" r="50"/></clipPath></defs>` +
-    `<g clip-path="url(#c)">` +
-    `<path d="${SECTOR_0}" fill="${c0}"/>` +
-    `<path d="${SECTOR_1}" fill="${c1}"/>` +
-    `<path d="${SECTOR_2}" fill="${c2}"/>` +
-    `</g></svg>`
+    `<g clip-path="url(#c)"><g transform="${AVATAR_ROTATE}">` +
+    `<rect x="-10" y="-10" width="120" height="120" fill="${c2}"/>` +
+    `<polygon points="${AVATAR_B_TOP_POINTS}" fill="${c0}"/>` +
+    `<rect x="50" y="-10" width="60" height="60" fill="${c1}"/>` +
+    `</g></g></svg>`
   return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`
 }
 
@@ -129,9 +111,11 @@ export function WorkspaceAvatar({
         </clipPath>
       </defs>
       <g clipPath={`url(#${clipId})`}>
-        <path d={SECTOR_0} fill={c0} />
-        <path d={SECTOR_1} fill={c1} />
-        <path d={SECTOR_2} fill={c2} />
+        <g transform={AVATAR_ROTATE}>
+          <rect x="-10" y="-10" width="120" height="120" fill={c2} />
+          <polygon points={AVATAR_B_TOP_POINTS} fill={c0} />
+          <rect x="50" y="-10" width="60" height="60" fill={c1} />
+        </g>
       </g>
     </svg>
   )
