@@ -21,6 +21,7 @@ import {
 import { useLocation } from 'react-router-dom'
 import { EditorContent, useEditor } from '@tiptap/react'
 import { AiAvatar } from '@biu/biu-ui/ai-avatar'
+import { resolveAssetUrl } from '@biu/biu-ui/workspace-transport'
 import { fetchMentionItems } from '@biu/core-editor/mention'
 import { pickKey, textPickFromPlain, usePickState, type PickService } from '@biu/core-pick/web'
 import { SidebarMascot, resolveSessionMascot } from '@biu/public-mascot'
@@ -145,6 +146,29 @@ export const ChannelComposer = memo(
     const lastTypingSentRef = useRef(0)
     const canSubmitRef = useRef(false)
     const pickKeysRef = useRef(new Set<string>())
+    const previewUrlsRef = useRef(new Map<string, string>())
+
+    const revokePreviewUrl = useCallback((id: string) => {
+      const url = previewUrlsRef.current.get(id)
+      if (!url) return
+      previewUrlsRef.current.delete(id)
+      try {
+        URL.revokeObjectURL(url)
+      } catch {
+        /* ignore in environments without revokeObjectURL */
+      }
+    }, [])
+
+    const revokeAllPreviewUrls = useCallback(() => {
+      for (const url of previewUrlsRef.current.values()) {
+        try {
+          URL.revokeObjectURL(url)
+        } catch {
+          /* ignore */
+        }
+      }
+      previewUrlsRef.current.clear()
+    }, [])
 
     const [canSubmit, setCanSubmit] = useState(false)
     const [expanded, setExpanded] = useState(false)
@@ -291,6 +315,9 @@ export const ChannelComposer = memo(
           for (const file of list) {
             try {
               const uploaded = await uploadChannelAttachment(channelId, file)
+              if (uploaded.kind === 'image' && typeof URL !== 'undefined' && typeof URL.createObjectURL === 'function') {
+                previewUrlsRef.current.set(uploaded.id, URL.createObjectURL(file))
+              }
               setAttachments((prev) => [...prev, uploaded].slice(0, MAX_CHANNEL_ATTACHMENTS))
             } catch (err) {
               onError(err instanceof Error ? err.message : String(err))
@@ -415,7 +442,11 @@ export const ChannelComposer = memo(
             isChannelEditorEmpty(editorRef.current)
           ) {
             event.preventDefault()
-            setAttachments((prev) => prev.slice(0, -1))
+            setAttachments((prev) => {
+              const last = prev[prev.length - 1]
+              if (last) revokePreviewUrl(last.id)
+              return prev.slice(0, -1)
+            })
             return true
           }
           return false
@@ -530,13 +561,14 @@ export const ChannelComposer = memo(
       }
     }, [editor])
 
-    // 卸载清理定时器
+    // 卸载清理定时器与本地图片预览 URL
     useEffect(
       () => () => {
         if (debounceRef.current != null) clearTimeout(debounceRef.current)
         if (draftTimerRef.current != null) clearTimeout(draftTimerRef.current)
+        revokeAllPreviewUrls()
       },
-      [],
+      [revokeAllPreviewUrls],
     )
 
     // 同步外部附件/引用状态对提交按钮和展开态的影响
@@ -578,6 +610,7 @@ export const ChannelComposer = memo(
         if (!pick?.picking) pick?.clear()
         pickKeysRef.current = new Set()
         if (switching) {
+          revokeAllPreviewUrls()
           setAttachments([])
           setUploadingFiles(0)
           setMentionTrigger(null)
@@ -657,11 +690,12 @@ export const ChannelComposer = memo(
       canSubmitRef.current = false
       setCanSubmit(false)
       setEditorHasChips(false)
+      revokeAllPreviewUrls()
       setAttachments([])
       setMentionTrigger(null)
       setExpanded(false)
       onClearReplyTo()
-    }, [channelId, flushDraftTimer, onClearReplyTo, pick])
+    }, [channelId, flushDraftTimer, onClearReplyTo, pick, revokeAllPreviewUrls])
 
     const handleSend = useCallback(async () => {
       if (sending || uploadingFiles > 0) return
@@ -849,17 +883,18 @@ export const ChannelComposer = memo(
           </div>
         ) : null}
 
-        {/* 图片附件：复用 Agent 同款 ImageThumbs 缩略图预览条 */}
+        {/* 图片附件：优先使用本地 blob 预览（与 Agent 输入框一致），同时兼容云端签名 URL */}
         {imageAttachments.length > 0 ? (
           <ImageThumbs
             images={imageAttachments.map((att) => ({
               name: att.name,
               mime: att.mime,
-              url: att.url,
+              url: previewUrlsRef.current.get(att.id) || resolveAssetUrl(att.url),
             }))}
             onRemove={(index) => {
               const target = imageAttachments[index]
               if (!target) return
+              revokePreviewUrl(target.id)
               setAttachments((prev) => prev.filter((x) => x.id !== target.id))
             }}
           />

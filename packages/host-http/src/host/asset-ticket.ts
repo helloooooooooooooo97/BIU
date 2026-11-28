@@ -60,6 +60,7 @@ export function verifyAssetTicket(
 }
 
 const AGENT_ARTIFACT_RE = /^\/api\/agents\/[^/]+\/artifacts\/[^/]+$/
+const CHANNEL_UPLOAD_RE = /^\/api\/channels\/[^/]+\/uploads\/[^/]+$/
 
 /**
  * Only read-only binary/media download routes accept short-lived HMAC asset tickets.
@@ -71,6 +72,7 @@ export function isAssetTicketEligiblePath(method: string, pathname: string): boo
     pathname.startsWith('/api/db/file/') ||
     pathname.startsWith('/api/page/file/') ||
     pathname.startsWith('/api/doc/file/') ||
-    AGENT_ARTIFACT_RE.test(pathname)
+    AGENT_ARTIFACT_RE.test(pathname) ||
+    CHANNEL_UPLOAD_RE.test(pathname)
   )
 }

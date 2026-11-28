@@ -414,8 +414,20 @@ export async function saveChannelContentAsPage(
   return { id, title: cleanTitle }
 }
 
+function defaultUploadName(file: File): string {
+  const raw = (file.name || '').trim()
+  if (raw) return raw
+  const mime = (file.type || '').toLowerCase()
+  if (mime === 'image/png') return 'image.png'
+  if (mime === 'image/jpeg' || mime === 'image/jpg') return 'image.jpg'
+  if (mime === 'image/gif') return 'image.gif'
+  if (mime === 'image/webp') return 'image.webp'
+  if (mime === 'image/svg+xml') return 'image.svg'
+  return 'attachment.bin'
+}
+
 export async function uploadChannelAttachment(channelId: string, file: File): Promise<ChannelAttachment> {
-  const name = encodeURIComponent(file.name || 'attachment.bin')
+  const name = encodeURIComponent(defaultUploadName(file))
   const res = await apiFetch(`/api/channels/${encodeURIComponent(channelId)}/uploads?name=${name}`, {
     method: 'POST',
     headers: { 'content-type': file.type || 'application/octet-stream' },

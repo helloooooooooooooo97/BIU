@@ -56,6 +56,7 @@ export function isHostControlPath(pathname: string): boolean {
 }
 
 const AGENT_ARTIFACT_PATH_RE = /^\/api\/agents\/[^/]+\/artifacts\/[^/]+$/
+const CHANNEL_UPLOAD_PATH_RE = /^\/api\/channels\/[^/]+\/uploads\/[^/]+$/
 
 function isSignedAssetPath(pathname: string): boolean {
   const clean = pathname.split('?')[0] || ''
@@ -63,7 +64,8 @@ function isSignedAssetPath(pathname: string): boolean {
     clean.startsWith('/api/db/file/') ||
     clean.startsWith('/api/page/file/') ||
     clean.startsWith('/api/doc/file/') ||
-    AGENT_ARTIFACT_PATH_RE.test(clean)
+    AGENT_ARTIFACT_PATH_RE.test(clean) ||
+    CHANNEL_UPLOAD_PATH_RE.test(clean)
   )
 }
 
