@@ -913,7 +913,9 @@ export class DatabaseService extends Service implements Database {
     overlay = true,
   ) {
     const actorSuffix =
-      spec.path === SKILLS_COLLECTION_PATH || spec.path === MCP_COLLECTION_PATH
+      spec.path === SKILLS_COLLECTION_PATH ||
+      spec.path === MCP_COLLECTION_PATH ||
+      spec.path === WORKSPACE_MEMBERS_COLLECTION_PATH
         ? `\t${resolveScopedWorkspaceId(this.ctx)}\t${currentAccountId()}`
         : ''
     const key = `${spec.path}\t${query.trash ? 1 : 0}\t${q}\t${overlay ? 1 : 0}\t${JSON.stringify(query.filter ?? {})}\t${(query.ids ?? []).join(',')}${actorSuffix}`
@@ -923,7 +925,9 @@ export class DatabaseService extends Service implements Database {
   private scanCollectionRows(spec: CollectionSpec, query: CollectionListQuery, overlay: boolean) {
     const load = specListQuery(query)
     const actorSuffix =
-      spec.path === SKILLS_COLLECTION_PATH || spec.path === MCP_COLLECTION_PATH
+      spec.path === SKILLS_COLLECTION_PATH ||
+      spec.path === MCP_COLLECTION_PATH ||
+      spec.path === WORKSPACE_MEMBERS_COLLECTION_PATH
         ? `\t${resolveScopedWorkspaceId(this.ctx)}\t${currentAccountId()}`
         : ''
     const key = `${spec.path}\t${load.trash ? 1 : 0}\t${load.q ?? ''}\t${overlay ? 1 : 0}\t${JSON.stringify(load.filter ?? {})}\t${(load.ids ?? []).join(',')}${actorSuffix}`

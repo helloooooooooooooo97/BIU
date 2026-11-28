@@ -22,7 +22,20 @@ type MemberRow = {
   status?: 'online' | 'active' | 'expired'
 }
 
-function asRecord(row: MemberRow): DbRecord {
+const MEMBER_ROLE_RANK: Record<string, number> = {
+  owner: 4,
+  admin: 3,
+  member: 2,
+  viewer: 1,
+}
+
+export function canRemoveMember(actorId: string, actorRole: string, target: { id: string; role: string }): boolean {
+  if (!actorId || actorId === target.id) return false
+  if (actorRole !== 'owner' && actorRole !== 'admin') return false
+  return (MEMBER_ROLE_RANK[actorRole] ?? 0) > (MEMBER_ROLE_RANK[target.role] ?? 0)
+}
+
+function asRecord(row: MemberRow, canRemove = false): DbRecord {
   const lastActiveAt = row.last_active_at ?? row.created_at
   const nickname = row.display_name.trim() || row.name.trim() || row.email
   return {
@@ -35,6 +48,7 @@ function asRecord(row: MemberRow): DbRecord {
     membershipKind: row.member_kind,
     lastActiveAt,
     joinedAt: row.created_at,
+    canRemove,
     ...recordBuiltinValues({ createdAt: row.created_at, updatedAt: lastActiveAt }),
   }
 }
@@ -47,7 +61,9 @@ export function workspaceMembersCollection(
   const rows = () => {
     const workspaceId = store.activeWorkspaceId()
     if (!workspaceId) return []
-    return store.currentMembers().map(asRecord)
+    const actorId = currentAccountId()
+    const actorRole = actorId ? (store.memberRole(actorId, workspaceId) ?? '') : ''
+    return store.currentMembers().map((row) => asRecord(row, canRemoveMember(actorId, actorRole, row)))
   }
   const list = async (query?: CollectionListQuery) => {
     let items = rows()
@@ -77,7 +93,7 @@ export function workspaceMembersCollection(
       title: '成员',
       inspector: true,
       blurb:
-        '当前工作区成员目录。db_list 查看成员；Owner 可用 db_update 将 role 限定为 owner|admin|member|viewer；Owner/Admin 可用 db_create 邀请、db_delete 移除其有权管理的成员。viewer 只能查看获准的数据，不能创建或编辑。修改标签等元数据不会改变角色。',
+        '当前工作区成员目录。db_list 查看成员；Owner 可用 db_update 将 role 限定为 owner|admin|member|viewer；Owner/Admin 可用 db_create 邀请、db_delete 或 db_action action=delete 移除权限低于自己的成员。viewer 只能查看获准的数据，不能创建或编辑。修改标签等元数据不会改变角色。',
       order: 18,
       icon: 'users',
     } } : {}),
@@ -131,6 +147,17 @@ export function workspaceMembersCollection(
           if (!collaborative) throw new Error('本机空间不提供邮箱邀请，局域网访问者会自动出现在成员列表')
           return store.addMemberByEmail(actorId, workspaceId, String(args.email ?? ''))
         },
+      },
+      {
+        id: 'delete',
+        label: '移除',
+        for: 'both',
+        placement: ['row', 'detail'],
+        tone: 'danger',
+        when: { canRemove: true },
+        confirm: '确定将这位成员移出当前工作区？',
+        requiredAction: 'resource:delete',
+        description: '将成员移出当前工作区（仅空间所有者/管理员可移除权限低于自己的成员）。',
       },
     ],
     list,

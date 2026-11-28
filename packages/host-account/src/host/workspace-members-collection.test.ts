@@ -310,3 +310,57 @@ test('PATCH /api/account/workspaces/:id renames a cloud workspace directly in on
     else process.env.BIU_ONLINE = prevOnline
   }
 })
+
+test('workspace members delete action is only available to workspace managers who strictly outrank the target member', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'biu-member-remove-action-'))
+  dirs.push(dir)
+  const store = new CollabStore(openAndMigrateBiu(join(dir, 'biu.sqlite')))
+  const owner = store.register('Owner', Date.now(), 'secret1', 'owner@example.com')
+  const admin1 = store.register('Admin1', Date.now(), 'secret1', 'admin1@example.com')
+  const admin2 = store.register('Admin2', Date.now(), 'secret1', 'admin2@example.com')
+  const editor = store.register('Editor', Date.now(), 'secret1', 'editor@example.com')
+  const viewer = store.register('Viewer', Date.now(), 'secret1', 'viewer@example.com')
+  const workspace = store.createWorkspace(owner.id, 'RBAC Team')
+  for (const user of [admin1, admin2, editor, viewer]) {
+    store.addMemberByEmail(owner.id, workspace.id, user.email)
+    store.setActive(user.id, workspace.id)
+  }
+  store.setActive(owner.id, workspace.id)
+  store.updateMemberRole(owner.id, workspace.id, admin1.id, 'admin')
+  store.updateMemberRole(owner.id, workspace.id, admin2.id, 'admin')
+  store.updateMemberRole(owner.id, workspace.id, viewer.id, 'viewer')
+
+  const collection = workspaceMembersCollection(store)
+  const delAction = collection.actions?.find((a) => a.id === 'delete')
+  assert.ok(delAction)
+  assert.equal(delAction.label, '移除')
+  assert.equal(delAction.tone, 'danger')
+  assert.deepEqual(delAction.when, { canRemove: true })
+
+  const canRemoveMap = async (actorId: string) => {
+    const listed = await runWithAccount(actorId, () => collection.list())
+    return Object.fromEntries(listed.map((row) => [row.email, row.canRemove]))
+  }
+
+  // Owner can remove admin/editor/viewer, never self
+  assert.deepEqual(await canRemoveMap(owner.id), {
+    'owner@example.com': false,
+    'admin1@example.com': true,
+    'admin2@example.com': true,
+    'editor@example.com': true,
+    'viewer@example.com': true,
+  })
+  // Admin can remove editor/viewer, never owner, another admin, or self
+  assert.deepEqual(await canRemoveMap(admin1.id), {
+    'owner@example.com': false,
+    'admin1@example.com': false,
+    'admin2@example.com': false,
+    'editor@example.com': true,
+    'viewer@example.com': true,
+  })
+  // Editor and viewer cannot remove anyone
+  for (const nonManager of [editor.id, viewer.id]) {
+    const flags = await canRemoveMap(nonManager)
+    assert.equal(Object.values(flags).every((v) => v === false), true)
+  }
+})

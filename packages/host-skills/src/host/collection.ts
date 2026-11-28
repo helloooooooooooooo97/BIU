@@ -36,7 +36,7 @@ export function skillsCollection(skills: SkillsService): CollectionSpec {
         'SKILL.md 进正文；其它路径写进 .biu/skill/<id>/。纯正文只写 notes。' +
         'source 填上游 URL。列表 db_list /skills。改名字/说明/来源/开关 db_update。正文 db_content。删除 db_delete。' +
         '额外文件用 bash 直接读写：技能目录是 .biu/skill/<id>/，已落盘的文件见记录的 fileList 字段。' +
-        '本表只有 enable / disable 两个动作。',
+        '本表有 enable / disable / delete 三个动作。',
       order: 50,
       icon: 'academic-cap',
     },
@@ -144,6 +144,15 @@ export function skillsCollection(skills: SkillsService): CollectionSpec {
         when: { enabled: true },
         requiredAction: 'resource:read',
         run: (id) => skills.setEnabled(id, false),
+      },
+      {
+        id: 'delete',
+        label: '删除',
+        for: 'both',
+        placement: ['row', 'detail'],
+        tone: 'danger',
+        requiredAction: 'resource:delete',
+        description: '软删除：把这条技能放进回收站，列表不再显示。恢复走 /trash。',
       },
     ],
   }
