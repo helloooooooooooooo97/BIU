@@ -1228,6 +1228,8 @@ export function apply(ctx: Context) {
     children: {
       sidebar: { kind: 'single' },
       'module-sidebar': { kind: 'single' },
+      'chat-sidebar-channels': { kind: 'list' },
+      'channel-stage': { kind: 'list' },
       demos: { kind: 'list' },
       dock: { kind: 'list' },
       stage: { kind: 'list' },

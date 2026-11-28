@@ -132,6 +132,19 @@ export const ChannelSidebarSections = memo(function ChannelSidebarSections({
     () => members.filter((m) => !myAccountId || m.id !== myAccountId),
     [members, myAccountId],
   )
+  const selfMember = useMemo(
+    () => (myAccountId ? members.find((m) => m.id === myAccountId) ?? null : null),
+    [members, myAccountId],
+  )
+  const dmDisplayMembers = useMemo(
+    () =>
+      peerMembers.length > 0
+        ? peerMembers
+        : selfMember
+          ? [{ ...selfMember, name: `${selfMember.name}（自己）` }]
+          : [],
+    [peerMembers, selfMember],
+  )
 
   const handleOpenDm = useCallback(
     async (targetAccountId: string) => {
@@ -163,9 +176,22 @@ export const ChannelSidebarSections = memo(function ChannelSidebarSections({
   )
 
   if (iconRail) {
-    if (!groupChannels.length && !peerMembers.length) return null
     return (
       <div className="mb-1 flex flex-col gap-0.5 border-b border-(--biu-color-border-subtle) pb-1" data-testid="sidebar-channels-rail">
+        <button
+          type="button"
+          className="chat-session-row w-full border-0 bg-transparent"
+          title="新建群聊"
+          aria-label="新建群聊"
+          data-dock-tip="新建群聊"
+          data-dock-tip-at="e"
+          data-testid="sidebar-rail-create-channel"
+          onClick={() => setCreateOpen(true)}
+        >
+          <span className="grid size-6 shrink-0 place-items-center">
+            <UserGroupIcon className="size-4 opacity-85" aria-hidden />
+          </span>
+        </button>
         {groupChannels.map((ch) => {
           const active = ch.id === routeChannelId
           return (
@@ -189,7 +215,7 @@ export const ChannelSidebarSections = memo(function ChannelSidebarSections({
             </Link>
           )
         })}
-        {peerMembers.map((member) => {
+        {dmDisplayMembers.map((member) => {
           const dmId = dmByPeer.get(member.id)
           const active = Boolean(dmId && dmId === routeChannelId)
           return (
@@ -213,6 +239,19 @@ export const ChannelSidebarSections = memo(function ChannelSidebarSections({
             </button>
           )
         })}
+        {createOpen ? (
+          <CreateChannelDialog
+            members={peerMembers}
+            myAccountId={myAccountId}
+            useSessionView={useSessionView}
+            onClose={() => setCreateOpen(false)}
+            onCreated={(id) => {
+              setCreateOpen(false)
+              popoverClose?.()
+              navigate(channelAppPath(id))
+            }}
+          />
+        ) : null}
       </div>
     )
   }
@@ -236,7 +275,7 @@ export const ChannelSidebarSections = memo(function ChannelSidebarSections({
           <ChatCount count={groupChannels.length} />
           <button
             type="button"
-            className="sidebar-add"
+            className="grid size-6 shrink-0 place-items-center rounded-md border-0 bg-transparent p-0 text-(--biu-color-text-muted) hover:bg-(--biu-color-bg-hover) hover:text-(--biu-color-text)"
             title="新建群聊"
             aria-label="新建群聊"
             data-testid="sidebar-create-channel"
@@ -254,11 +293,12 @@ export const ChannelSidebarSections = memo(function ChannelSidebarSections({
             {groupChannels.length === 0 ? (
               <button
                 type="button"
-                className="mx-1 flex items-center gap-1.5 rounded-md px-2 py-1.5 text-left text-[12px] text-(--biu-color-text-subtle) hover:bg-(--biu-color-bg-hover) hover:text-(--biu-color-text)"
+                className="mx-1 flex items-center gap-1.5 rounded-md border border-dashed border-(--biu-color-border) px-2 py-1.5 text-left text-[12px] font-medium text-(--biu-color-text-muted) hover:bg-(--biu-color-bg-hover) hover:text-(--biu-color-text)"
+                data-testid="sidebar-create-first-channel"
                 onClick={() => setCreateOpen(true)}
               >
                 <PlusIcon className="size-3.5 shrink-0" />
-                <span>创建第一个群聊</span>
+                <span>新建群聊</span>
               </button>
             ) : (
               groupChannels.map((ch) => (
@@ -292,24 +332,28 @@ export const ChannelSidebarSections = memo(function ChannelSidebarSections({
         </SidebarFold>
       </section>
 
-      {/* 2. 成员私聊（Direct Messages）——位于代理上方 */}
-      {peerMembers.length > 0 ? (
-        <section className="min-w-0" data-testid="sidebar-members-section">
-          <div className="sidebar-section-head min-w-0">
-            <button
-              type="button"
-              className="flex h-full min-h-8 min-w-0 flex-1 items-center gap-2 text-left text-[12px] font-bold tracking-wider"
-              aria-expanded={!membersCollapsed}
-              onClick={() => toggleSection('chat.section.members')}
-            >
-              <span className="min-w-0 flex-1 truncate tracking-normal">成员</span>
-            </button>
-            <ChatCount count={peerMembers.length} />
-          </div>
+      {/* 2. 成员私聊（Direct Messages）——常驻展示并位于代理上方 */}
+      <section className="min-w-0" data-testid="sidebar-members-section">
+        <div className="sidebar-section-head min-w-0">
+          <button
+            type="button"
+            className="flex h-full min-h-8 min-w-0 flex-1 items-center gap-2 text-left text-[12px] font-bold tracking-wider"
+            aria-expanded={!membersCollapsed}
+            onClick={() => toggleSection('chat.section.members')}
+          >
+            <span className="min-w-0 flex-1 truncate tracking-normal">成员</span>
+          </button>
+          <ChatCount count={dmDisplayMembers.length} />
+        </div>
 
-          <SidebarFold open={!membersCollapsed}>
-            <div className="sidebar-section-rows flex min-w-0 flex-col pt-0.5">
-              {peerMembers.map((member) => {
+        <SidebarFold open={!membersCollapsed}>
+          <div className="sidebar-section-rows flex min-w-0 flex-col pt-0.5">
+            {dmDisplayMembers.length === 0 ? (
+              <div className="px-2 py-1 text-[12px] text-(--biu-color-text-subtle)">
+                邀请空间成员后可在此直接发起私聊
+              </div>
+            ) : (
+              dmDisplayMembers.map((member) => {
                 const dmId = dmByPeer.get(member.id)
                 const active = Boolean(dmId && dmId === routeChannelId)
                 return (
@@ -344,7 +388,7 @@ export const ChannelSidebarSections = memo(function ChannelSidebarSections({
                     trail={
                       <button
                         type="button"
-                        className="sidebar-add"
+                        className="grid size-6 shrink-0 place-items-center rounded-md border-0 bg-transparent p-0 text-(--biu-color-text-muted) hover:bg-(--biu-color-bg-hover) hover:text-(--biu-color-text)"
                         title={`发起与 ${member.name} 的私聊`}
                         aria-label={`发起与 ${member.name} 的私聊`}
                         onClick={(event) => {
@@ -357,11 +401,11 @@ export const ChannelSidebarSections = memo(function ChannelSidebarSections({
                     }
                   />
                 )
-              })}
-            </div>
-          </SidebarFold>
-        </section>
-      ) : null}
+              })
+            )}
+          </div>
+        </SidebarFold>
+      </section>
 
       {createOpen ? (
         <CreateChannelDialog

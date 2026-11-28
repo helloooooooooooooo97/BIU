@@ -14,6 +14,7 @@ import { bindSessionView, type DispatchedTaskRow, type SessionViewService } from
 import { BrandCornerMascot, SidebarMascot, resolveSessionMascot } from '@biu/public-mascot'
 import { HeadlessDismiss } from '@biu/biu-ui'
 import { ChatSidebar } from '@biu/web-app-shell/chat-sidebar'
+import { ChannelSidebarSections } from './channel-sidebar.tsx'
 import {
   getChatOverlay,
   getOverlayThread,
@@ -261,6 +262,13 @@ export function ApprovalsRail(props: SlotProps) {
                   useSessionView={useSessionView}
                   sessionView={sessionView}
                   popoverClose={close}
+                  channelsHeader={
+                    <ChannelSidebarSections
+                      useSessionView={useSessionView}
+                      sessionView={sessionView}
+                      popoverClose={close}
+                    />
+                  }
                 />
               )}
             />

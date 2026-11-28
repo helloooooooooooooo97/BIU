@@ -5,6 +5,7 @@ import { cleanup, fireEvent, render, waitFor } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { ChannelSidebarSections } from './channel-sidebar.tsx'
 import { ChannelStage } from './channel-view.tsx'
+import { MemberDmAction } from './members-chrome.tsx'
 import { resetChannelStore } from './channel-store.ts'
 
 beforeEach(() => {
@@ -224,4 +225,32 @@ test('ChannelStage renders IM messages, ephemeral notice, @mention popup, read-o
   } finally {
     window.removeEventListener('biu:inspector-tab', onTab)
   }
+})
+
+test('iconRail always shows create-channel entry and MemberDmAction renders visible 会话 button', async () => {
+  vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ channels: [], items: [] }), { status: 200 })))
+
+  const rail = render(
+    <MemoryRouter>
+      <ChannelSidebarSections routeChannelId={null} iconRail />
+    </MemoryRouter>,
+  )
+  assert.ok(rail.getByTestId('sidebar-rail-create-channel'))
+  rail.unmount()
+
+  const action = render(
+    <MemoryRouter>
+      <MemberDmAction record={{ id: 'acc-bob', title: 'Bob' }} />
+    </MemoryRouter>,
+  )
+  const btn = action.getByTestId('member-dm-action-acc-bob')
+  assert.equal(btn.textContent?.includes('会话'), true)
+})
+
+test('web-app-shell declares chat-sidebar-channels and channel-stage slots in root children', async () => {
+  const { readFileSync } = await import('node:fs')
+  const { resolve } = await import('node:path')
+  const shell = readFileSync(resolve(import.meta.dirname, '../../../web-app-shell/src/web/index.tsx'), 'utf8')
+  assert.match(shell, /'chat-sidebar-channels':\s*\{\s*kind:\s*'list'\s*\}/)
+  assert.match(shell, /'channel-stage':\s*\{\s*kind:\s*'list'\s*\}/)
 })
