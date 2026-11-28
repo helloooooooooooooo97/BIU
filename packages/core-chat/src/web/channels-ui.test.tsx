@@ -2357,3 +2357,69 @@ test('channel UI aligns with personal/shared/workspace visibility model, toggles
     assert.ok(roStage.queryByTestId('channel-readonly-member-bar'))
   })
 })
+
+test('sidebar groups and filters channels across all four kinds: dm, channel, announcement, and forum', async () => {
+  const now = Date.now()
+  window.localStorage.setItem(
+    'biu.sidebar.channels.view',
+    JSON.stringify({ groupBy: 'kind', orderBy: 'updated', kind: 'all', status: 'all', showTime: true }),
+  )
+  const makeCh = (id: string, kind: 'dm' | 'channel' | 'announcement' | 'forum', name: string) => ({
+    id,
+    workspaceId: 'ws-1',
+    kind,
+    dmKey: kind === 'dm' ? 'a\0b' : '',
+    peerAccountId: kind === 'dm' ? 'acc-bob' : undefined,
+    name,
+    topic: '',
+    accessMode: 'workspace' as const,
+    createdBy: 'acc-alice',
+    createdAt: now,
+    updatedAt: now,
+    memberCount: 2,
+    agentCount: 0,
+    lastMessageAt: now,
+    lastMessageText: '',
+  })
+
+  const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+    const url = new URL(String(input), 'http://test.local')
+    if (url.pathname === '/api/channels') {
+      return new Response(
+        JSON.stringify({
+          channels: [
+            makeCh('c-dm', 'dm', 'Bob'),
+            makeCh('c-grp', 'channel', '研发群'),
+            makeCh('c-ann', 'announcement', 'GPU通知公告'),
+            makeCh('c-frm', 'forum', '助手能力讨论'),
+          ],
+        }),
+        { status: 200 },
+      )
+    }
+    if (url.pathname === '/api/account/workspace-profile') {
+      return new Response(JSON.stringify({ accountId: 'acc-alice' }), { status: 200 })
+    }
+    return new Response(JSON.stringify({ items: [] }), { status: 200 })
+  })
+  vi.stubGlobal('fetch', fetchMock)
+
+  const view = render(
+    <MemoryRouter initialEntries={['/']}>
+      <ChannelSidebarSections routeChannelId={null} />
+    </MemoryRouter>,
+  )
+
+  await waitFor(() => {
+    assert.ok(view.queryByTestId('sidebar-channels-group-kind:dm'))
+    assert.ok(view.queryByTestId('sidebar-channels-group-kind:channel'))
+    assert.ok(view.queryByTestId('sidebar-channels-group-kind:announcement'))
+    assert.ok(view.queryByTestId('sidebar-channels-group-kind:forum'))
+  })
+
+  assert.ok(view.getByTestId('sidebar-channels-group-kind:announcement').textContent?.includes('GPU通知公告'))
+  assert.ok(view.getByTestId('sidebar-channels-group-kind:forum').textContent?.includes('助手能力讨论'))
+  assert.equal(view.getByTestId('sidebar-channels-group-kind:channel').textContent?.includes('GPU通知公告'), false)
+  assert.equal(view.getByTestId('sidebar-channels-group-kind:channel').textContent?.includes('助手能力讨论'), false)
+  window.localStorage.removeItem('biu.sidebar.channels.view')
+})
