@@ -32,7 +32,6 @@ import type {
   ChannelMention,
   ChannelMessageView,
 } from '../shared/channel-types.ts'
-import { collectClipboardImages } from './clipboard-images.ts'
 import {
   COMPOSER_LINE_PX,
   COMPOSER_PASTE_PICK_CHARS,
@@ -109,25 +108,29 @@ function ComposerMemberAvatar({ avatar, seed }: { avatar?: string; seed: string 
   return <AiAvatar seed={seed || 'biu-ai'} size={18} className="shrink-0 rounded-full" />
 }
 
+/**
+ * 与 clipboard-images.ts 一致：浏览器粘贴截图常同时把同一张图塞进 clipboardData.files 与 clipboardData.items
+ * （两个 File 对象的 name / lastModified 不同），因此优先读 files，仅在 files 为空时回退 items，
+ * 并按图片 type+size / 普通文件 type+size+name 去重，避免一次粘贴上传两张重复图片。
+ */
 function collectClipboardFiles(clipboard: DataTransfer | null | undefined): File[] {
   if (!clipboard) return []
+  const raw: Array<File | null | undefined> =
+    clipboard.files && clipboard.files.length > 0
+      ? Array.from(clipboard.files)
+      : clipboard.items
+        ? Array.from(clipboard.items).map((item) => (item.kind === 'file' ? item.getAsFile() : null))
+        : []
   const files: File[] = []
   const seen = new Set<string>()
-  const push = (file: File | null | undefined) => {
-    if (!file || file.size <= 0) return
-    const key = `${file.name}:${file.size}:${file.type}:${file.lastModified}`
-    if (seen.has(key)) return
+  for (const file of raw) {
+    if (!file || file.size <= 0) continue
+    const key = file.type.startsWith('image/')
+      ? `${file.type}\0${file.size}`
+      : `${file.type}\0${file.size}\0${file.name}`
+    if (seen.has(key)) continue
     seen.add(key)
     files.push(file)
-  }
-  if (clipboard.items) {
-    for (const item of Array.from(clipboard.items)) {
-      if (item.kind === 'file') push(item.getAsFile())
-    }
-  }
-  for (const img of collectClipboardImages(clipboard)) push(img)
-  if (files.length === 0 && clipboard.files) {
-    for (const file of Array.from(clipboard.files)) push(file)
   }
   return files
 }

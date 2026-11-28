@@ -9903,13 +9903,17 @@ html.dark .chat-outline-tick.is-active::after {
   place-items: center;
   width: 16px;
   height: 16px;
-  border: 0;
+  border: var(--biu-stroke-width) solid var(--biu-color-border);
   border-radius: var(--biu-radius-full);
-  background: #cccccc;
+  background: var(--biu-color-bg-muted);
   color: var(--biu-color-text);
   font-size: 11px;
   line-height: 1;
   cursor: pointer;
+}
+
+.composer-image-remove:hover {
+  background: var(--biu-color-bg-hover);
 }
 
 .composer-tool-chip {

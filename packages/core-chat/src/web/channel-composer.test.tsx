@@ -394,18 +394,20 @@ test('ChannelComposer previews pasted image via local blob URL and revokes it on
 
   try {
     let uploadedName = ''
+    let uploadCalls = 0
     const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = new URL(String(input), 'http://test.local')
       if (url.pathname.endsWith('/uploads') && init?.method === 'POST') {
+        uploadCalls += 1
         uploadedName = url.searchParams.get('name') ?? ''
         return new Response(
           JSON.stringify({
             attachment: {
-              id: 'pasted-1.png',
+              id: `pasted-${uploadCalls}.png`,
               name: uploadedName || 'image.png',
               mime: 'image/png',
               size: 16,
-              url: '/api/channels/ch-1/uploads/pasted-1.png',
+              url: `/api/channels/ch-1/uploads/pasted-${uploadCalls}.png`,
               kind: 'image',
             },
           }),
@@ -431,21 +433,25 @@ test('ChannelComposer previews pasted image via local blob URL and revokes it on
     )
 
     const input = await waitFor(() => view.getByTestId('channel-composer-input'))
-    const clipFile = new File([new Uint8Array([137, 80, 78, 71])], '', { type: 'image/png' })
+    // 模拟浏览器把同一张截图同时放进 clipboardData.files 和 clipboardData.items（且 name / lastModified 不同）
+    const fileFromFiles = new File([new Uint8Array([137, 80, 78, 71])], '', { type: 'image/png', lastModified: 1000 })
+    const fileFromItems = new File([new Uint8Array([137, 80, 78, 71])], 'image.png', { type: 'image/png', lastModified: 1005 })
     await act(async () => {
       fireEvent.paste(input, {
         clipboardData: {
-          items: [{ kind: 'file', type: 'image/png', getAsFile: () => clipFile }],
-          files: [clipFile],
+          items: [{ kind: 'file', type: 'image/png', getAsFile: () => fileFromItems }],
+          files: [fileFromFiles],
           getData: () => '',
         },
       })
     })
 
     await waitFor(() => {
-      const thumbImg = view.container.querySelector('[data-testid="composer-image-thumbs"] img')
-      assert.equal(thumbImg?.getAttribute('src'), 'blob:test-preview-1')
+      const thumbs = view.container.querySelectorAll('[data-testid="composer-image-thumbs"] img')
+      assert.equal(thumbs.length, 1)
+      assert.equal(thumbs[0]?.getAttribute('src'), 'blob:test-preview-1')
     })
+    assert.equal(uploadCalls, 1)
     assert.equal(uploadedName, 'image.png')
 
     const removeBtn = view.container.querySelector('.composer-image-remove') as HTMLButtonElement
