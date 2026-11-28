@@ -13,7 +13,7 @@ import {
 import { WORKSPACE_MEMBERS_COLLECTION_PATH } from './database-path.ts'
 import { listCollection } from './db-client.ts'
 import { FSDB_SHARES_CHANGE_EVENT, emitFsdbEvent } from './fsdb-events.ts'
-import { roleLabel } from './share-chain-detail.tsx'
+import { roleActionLabel as roleLabel } from '../shared/authz-labels.ts'
 import {
   MEMBER_DEFAULT_ROLE_OPTIONS,
   ROLE_OPTIONS,

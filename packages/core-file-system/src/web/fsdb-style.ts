@@ -1139,6 +1139,8 @@ a.fsdb-person.is-link:hover .fsdb-person-name,button.fsdb-person.is-link:hover .
 .fsdb-share-wrap{position:relative;display:inline-flex}
 .fsdb-share-panel{box-sizing:border-box;position:absolute;top:calc(100% + 6px);right:0;z-index:50;width:min(380px,calc(100vw - 16px));max-height:calc(100vh - 72px);overflow:auto;border:var(--biu-stroke-width) solid var(--biu-color-border-popover);border-radius:var(--biu-radius-popover);background:var(--biu-color-bg-popover);color:var(--biu-color-text);box-shadow:var(--biu-shadow-popover)}
 .fsdb-share-panel.is-embedded{position:static}
+.fsdb-share-floating{display:flex;flex-direction:column}
+.fsdb-share-floating>.fsdb-share-panel{max-height:100%}
 .fsdb-share-panel *{box-sizing:border-box}
 .fsdb-share-head{display:flex;align-items:baseline;gap:8px;padding:14px 16px 8px}
 .fsdb-share-head strong{flex:none;font-size:var(--biu-font-size-4);font-weight:var(--biu-font-weight-bold);color:var(--biu-color-text)}
@@ -1154,6 +1156,7 @@ a.fsdb-person.is-link:hover .fsdb-person-name,button.fsdb-person.is-link:hover .
 .fsdb-share-scope.is-external{background:color-mix(in srgb,var(--biu-color-warning,#d9730d) 16%,transparent);color:var(--biu-color-warning,#d9730d)}
 .fsdb-scope-detail{position:relative;display:inline-flex}
 .fsdb-scope-tag{--biu-tag:var(--biu-color-ink-gray);display:inline-flex;align-items:center;gap:var(--biu-space-1);height:var(--biu-space-5);border:0;border-radius:var(--biu-radius-sm);background:color-mix(in srgb,var(--biu-tag) 22%,transparent);padding:0 var(--biu-pad-chip-x);color:var(--biu-tag);font:inherit;font-size:var(--biu-chat-chip-font-size,var(--biu-font-size-3));font-weight:var(--biu-font-weight-medium);line-height:var(--biu-space-5);white-space:nowrap;cursor:pointer}
+span.fsdb-scope-tag{cursor:default}
 .fsdb-page .tasks-table th.fsdb-action-col,.fsdb-page .tasks-table td.fsdb-action-col,.fsdb-page .tasks-table th[data-col-key="actions"],.fsdb-page .tasks-table td[data-col-key="actions"]{width:1%;white-space:nowrap}
 .fsdb-page .tasks-row-actions{display:inline-flex;flex-wrap:nowrap;align-items:center;gap:2px;width:max-content;max-width:100%}
 .fsdb-scope-tag svg{width:var(--biu-size-icon,14px);height:var(--biu-size-icon,14px);flex:none;display:block}

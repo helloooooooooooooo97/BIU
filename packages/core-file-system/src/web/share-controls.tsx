@@ -6,8 +6,8 @@ import { useFloatingPosition } from '@biu/biu-ui/floating-position'
 import { HeadlessDismiss } from '@biu/biu-ui/headless-dismiss'
 import { OVERLAY_Z, overlayPortalRoot, overlayZ } from '@biu/biu-ui/overlay-portal'
 import { emitFsdbChange } from '@biu/type-file-system'
+import { roleActionLabel as roleLabel } from '../shared/authz-labels.ts'
 import { VIEWS_COLLECTION_PATH } from './database-path.ts'
-import { roleLabel } from './share-chain-detail.tsx'
 
 export type ShareRole = 'viewer' | 'commenter' | 'editor' | 'manager'
 
