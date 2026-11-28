@@ -1512,7 +1512,7 @@ test('sidebar uses hide/leave/unfollow menus, breadcrumb toggles thread follow, 
     </MemoryRouter>,
   )
 
-  // 1. 私聊侧栏 ⋯ 菜单显示「隐藏对话」（而非「删除」），点击隐藏仅移除自身侧栏
+  // 1. 私聊侧栏 ⋯ 菜单包含置顶、免打扰、隐藏对话（且不含解散/删除），点击隐藏仅移除自身侧栏
   const moreBtns = await waitFor(() => {
     const btns = view.getAllByTestId('sidebar-row-more')
     assert.ok(btns.length >= 2)
@@ -1521,13 +1521,28 @@ test('sidebar uses hide/leave/unfollow menus, breadcrumb toggles thread follow, 
   const dmMoreBtn = moreBtns.find((b) => b.getAttribute('aria-label') === 'Bob 更多操作')!
   fireEvent.click(dmMoreBtn)
   const hideDmItem = await waitFor(() => view.getByTestId('sidebar-row-menu-hide'))
+  assert.ok(view.getByTestId('sidebar-row-menu-pin'))
+  assert.ok(view.getByTestId('sidebar-row-menu-mute'))
   assert.equal(hideDmItem.textContent?.includes('隐藏对话'), true)
   assert.equal(view.queryByTestId('sidebar-row-menu-delete'), null)
+  assert.equal(view.queryByTestId('sidebar-row-menu-disband'), null)
   fireEvent.click(hideDmItem)
   await waitFor(() => {
     assert.equal(hiddenCalled, true)
     assert.equal(view.getByTestId('sidebar-channels-section').textContent?.includes('Bob'), false)
   })
+
+  // 1.5 群主在多人聊天侧栏 ⋯ 菜单可见置顶、免打扰、隐藏聊天与「解散聊天」（点解散先弹二次确认框，不直接删）
+  const grpMoreBtn = view.getAllByTestId('sidebar-row-more').find((b) => b.getAttribute('aria-label') === '产品讨论组 更多操作')!
+  fireEvent.click(grpMoreBtn)
+  assert.ok(await waitFor(() => view.getByTestId('sidebar-row-menu-pin')))
+  assert.ok(view.getByTestId('sidebar-row-menu-mute'))
+  assert.ok(view.getByTestId('sidebar-row-menu-hide'))
+  fireEvent.click(view.getByTestId('sidebar-row-menu-disband'))
+  assert.ok(await waitFor(() => view.getByTestId('sidebar-disband-confirm-dialog')))
+  assert.equal(disbandCalled, false)
+  fireEvent.click(view.getByText('取消'))
+  await waitFor(() => assert.equal(view.queryByTestId('sidebar-disband-confirm-dialog'), null))
 
   // 2. 二级面包屑顶栏「已关注」按钮可切换取消关注，并同步从侧栏移除子讨论串
   const followBtn = await waitFor(() => view.getByTestId('channel-thread-follow-btn'))
