@@ -249,7 +249,7 @@ test('collapsed data icon rail follows the expanded sidebar order (core -> publi
     { id: 'mcp', path: '/mcp', kind: 'collection', label: 'MCP', view: null },
     { id: 'plugins', path: '/plugins', kind: 'collection', label: '插件', view: null },
   ]
-  const expected = ['代理', '页面', '插件', 'MCP', '技能', '标签', '成员', '回收站']
+  const expected = ['代理', '页面', '标签', '插件', '技能', 'MCP', '成员', '回收站']
 
   const sidebar = render(
     <DataSidebar
