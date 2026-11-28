@@ -9,14 +9,16 @@ export function scopeTone(scope: string) {
   return normalizeAuthzScope(scope) ?? 'personal'
 }
 
+export function ScopeIcon({ scope, className = 'size-[14px]' }: { scope: string; className?: string }) {
+  const text = scopeLabel(scope)
+  if (text === '共享') return <UsersIcon aria-hidden className={className} />
+  if (text === '空间') return <UserGroupIcon aria-hidden className={className} />
+  return <UserIcon aria-hidden className={className} />
+}
+
 export function ScopeMark({ scope }: { scope: string }) {
   const text = scopeLabel(scope)
-  const icon = text === '共享'
-    ? <UsersIcon aria-hidden className="size-[14px]" />
-    : text === '空间'
-      ? <UserGroupIcon aria-hidden className="size-[14px]" />
-      : <UserIcon aria-hidden className="size-[14px]" />
-  return <>{icon}{text}</>
+  return <><ScopeIcon scope={text} />{text}</>
 }
 
 /** 胶囊占位。点开后再拉归属链路。 */

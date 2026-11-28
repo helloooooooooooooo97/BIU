@@ -254,6 +254,7 @@ test('list projection keeps visible columns plus title, emoji, and parent', () =
   assert.equal(keys.includes('parentChain'), true)
   assert.equal(keys.includes('usageParts'), true)
   assert.equal(keys.includes('builtin'), true)
+  assert.equal(keys.includes('shareScope'), true)
   assert.equal(keys.includes('shareRole'), true)
   assert.equal(keys.includes('dueAt'), false)
   const withTag = listProjectionKeys({ schema: { ...schema, fields: { ...schema.fields, tag: { type: 'tag' } } }, columns: [nested] })

@@ -19,7 +19,7 @@ import { DefaultCell, FieldGlyph } from './fsdb-cells.tsx'
 import { SchemaChips } from './schema-field.tsx'
 import { loadTags } from './tag-catalog.ts'
 import { RecordMark } from './record-mark.tsx'
-import { TitleRoleIcon } from './browser-row-title.tsx'
+import { TitleMetaIcons } from './browser-row-title.tsx'
 import { crumbRecordLabel } from './sidebar-preview.ts'
 import type { SavedView } from './saved-view.ts'
 
@@ -216,7 +216,7 @@ export function ShareListTable({
                         <span className="fsdb-title-text">
                           {chrome?.Title ? <chrome.Title record={row} label={crumbRecordLabel(row, labelKey)} /> : cell}
                         </span>
-                        <TitleRoleIcon role={row.shareRole} />
+                        <TitleMetaIcons row={row} />
                       </span>
                     ) : (
                       <span className="fsdb-cell">{cell}</span>
