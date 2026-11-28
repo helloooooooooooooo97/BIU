@@ -24,7 +24,11 @@ import {
 } from '@biu/web-session-view'
 import { SIDEBAR_ROW_MAIN_CLASS, SidebarRow } from '@biu/web-session-view/sidebar-row'
 import { TrashGlyph } from '@biu/web-session-view/trash-glyph'
-import { buildDefaultChannelName, type ChannelAccessMode } from '../shared/channel-types.ts'
+import {
+  buildDefaultChannelName,
+  type ChannelAccessMode,
+  type ChannelAgentContextMode,
+} from '../shared/channel-types.ts'
 import {
   createChannel,
   deleteChannel,
@@ -329,6 +333,7 @@ function CreateChannelDialog({
   )
   const [search, setSearch] = useState('')
   const [accessMode, setAccessMode] = useState<ChannelAccessMode>('private')
+  const [agentContextMode, setAgentContextMode] = useState<ChannelAgentContextMode>('summary')
   const [pickedMembers, setPickedMembers] = useState<string[]>([])
   const [pickedAgents, setPickedAgents] = useState<string[]>([])
   const [submitting, setSubmitting] = useState(false)
@@ -376,6 +381,7 @@ function CreateChannelDialog({
         accessMode,
         memberAccountIds: pickedMembers,
         agentIds: pickedAgents,
+        ...(pickedAgents.length > 0 ? { agentContextMode } : {}),
       })
       onCreated(detail.channel.id)
     } catch (err) {
@@ -537,6 +543,33 @@ function CreateChannelDialog({
                     ))}
                   </ul>
                 )}
+                {pickedAgents.length > 0 ? (
+                  <div className="scfg-field mt-2" data-testid="create-channel-agent-context-mode">
+                    <div className="flex gap-2">
+                      <Button
+                        variant={agentContextMode === 'summary' ? 'default' : 'secondary'}
+                        className="h-7 flex-1 text-[12px]"
+                        data-testid="create-context-mode-summary"
+                        onClick={() => setAgentContextMode('summary')}
+                      >
+                        同步工作摘要（只读）
+                      </Button>
+                      <Button
+                        variant={agentContextMode === 'isolated' ? 'default' : 'secondary'}
+                        className="h-7 flex-1 text-[12px]"
+                        data-testid="create-context-mode-isolated"
+                        onClick={() => setAgentContextMode('isolated')}
+                      >
+                        仅群聊隔离
+                      </Button>
+                    </div>
+                    <span className="scfg-hint">
+                      {agentContextMode === 'summary'
+                        ? '单向只读投影项目与近期工作要点，群聊对话绝不写回你的 1v1 主工作台。'
+                        : '仅看当前聊天消息，不带入 1v1 主工作台背景。'}
+                    </span>
+                  </div>
+                ) : null}
               </div>
             ) : null}
 

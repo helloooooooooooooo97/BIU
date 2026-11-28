@@ -516,6 +516,7 @@ CREATE TABLE IF NOT EXISTS channel_members (
   member_type TEXT NOT NULL,
   member_id TEXT NOT NULL,
   role TEXT NOT NULL DEFAULT 'member',
+  context_mode TEXT NOT NULL DEFAULT 'summary',
   added_by TEXT NOT NULL DEFAULT '',
   added_at INTEGER NOT NULL,
   PRIMARY KEY (channel_id, member_type, member_id)
