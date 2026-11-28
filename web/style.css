@@ -6441,6 +6441,18 @@ html.dark .composer-model-flyout {
   min-width: 0;
 }
 
+/* 群聊/私聊右侧悬浮头像胶囊轨（right: 12px + 宽 38px = 50px）左右对称安全留白：
+   无论窗口宽度变化或右侧检查器展开，消息区与底部输入框都保持至少 72px 对称边距，避免悬浮头像遮挡消息 */
+[data-testid="channel-stage"] [data-testid="agent-center"][data-has-floating-rail="true"] .chat-stage,
+[data-testid="channel-stage"] [data-testid="agent-center"][data-has-floating-rail="true"] .chat-composer-dock {
+  padding-left: max(var(--biu-pad-page), 72px);
+  padding-right: max(var(--biu-pad-page), 72px);
+}
+
+[data-testid="channel-stage"] [data-testid="agent-center"][data-has-floating-rail="true"] .composer-pill {
+  min-width: 0;
+}
+
 .app-shell-agent>main {
   grid-column: 2;
   min-width: 0;
