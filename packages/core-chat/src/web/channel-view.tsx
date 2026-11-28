@@ -1585,6 +1585,18 @@ export const ChannelStage = memo(function ChannelStage({
                               </span>
                             )}
 
+                            {msg.traceId && (isAgent || isSystemAgent) ? (
+                              <button
+                                type="button"
+                                className="inline-flex shrink-0 cursor-pointer items-center gap-0.5 rounded-md border border-transparent bg-transparent px-1.5 py-0.5 text-(length:--biu-chat-ui-font-size) leading-none text-(--biu-color-text-muted) hover:bg-(--biu-color-bg-hover) hover:text-(--biu-color-text)"
+                                data-testid={isAgent ? `channel-msg-trace-${msg.traceId}` : `channel-sys-trace-${msg.traceId}`}
+                                onClick={() => openChannelRunTrace(channelId, msg.traceId)}
+                              >
+                                <ChevronRightIcon className="size-3.5" />
+                                <span>Details</span>
+                              </button>
+                            ) : null}
+
                             {isEphemeral ? (
                               <span className="inline-flex shrink-0 items-center gap-1 rounded bg-(--biu-color-bg-muted) px-1.5 py-0.5 text-[11px] text-(--biu-color-text-subtle)">
                                 <EyeIcon className="size-3" />
@@ -1631,18 +1643,6 @@ export const ChannelStage = memo(function ChannelStage({
                                   <EllipsisHorizontalIcon className="size-3.5" />
                                 </button>
                               </div>
-                            ) : null}
-
-                            {msg.traceId && (isAgent || isSystemAgent) ? (
-                              <button
-                                type="button"
-                                className="inline-flex shrink-0 cursor-pointer items-center gap-0.5 rounded-md border border-transparent bg-transparent px-1.5 py-0.5 text-(length:--biu-chat-ui-font-size) leading-none text-(--biu-color-text-muted) hover:bg-(--biu-color-bg-hover) hover:text-(--biu-color-text)"
-                                data-testid={isAgent ? `channel-msg-trace-${msg.traceId}` : `channel-sys-trace-${msg.traceId}`}
-                                onClick={() => openChannelRunTrace(channelId, msg.traceId)}
-                              >
-                                <ChevronRightIcon className="size-3.5" />
-                                <span>Details</span>
-                              </button>
                             ) : null}
                           </div>
 
