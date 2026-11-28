@@ -2349,8 +2349,13 @@ function ChannelMembersModal({
   const [savingPref, setSavingPref] = useState(false)
   const [confirmDisband, setConfirmDisband] = useState(false)
   const [disbanding, setDisbanding] = useState(false)
-  const canLeaveGroup = channel.kind !== 'dm' && channel.createdBy !== myAccountId && myAccountId !== 'local'
-  const canDisbandGroup = channel.kind !== 'dm' && canManageMembers
+  const [addMemberOpen, setAddMemberOpen] = useState(false)
+  const [memberSearch, setMemberSearch] = useState('')
+  const [addAgentOpen, setAddAgentOpen] = useState(false)
+  const [agentSearch, setAgentSearch] = useState('')
+  const isDm = channel.kind === 'dm'
+  const canLeaveGroup = !isDm && channel.createdBy !== myAccountId && myAccountId !== 'local'
+  const canDisbandGroup = !isDm && canManageMembers
 
   useEffect(() => {
     const params = new URLSearchParams({ path: '/workspace-members', limit: '200', columns: 'title,email,avatar' })
@@ -2376,9 +2381,19 @@ function ChannelMembersModal({
   const inHumans = new Set(members.filter((m) => m.memberType === 'account').map((m) => m.memberId))
   const inAgents = new Set(members.filter((m) => m.memberType === 'agent').map((m) => m.memberId))
   const addableHumans = wsMembers.filter((m) => !inHumans.has(m.id))
+  const filteredAddableHumans = useMemo(() => {
+    const q = memberSearch.trim().toLowerCase()
+    if (!q) return addableHumans
+    return addableHumans.filter((m) => m.name.toLowerCase().includes(q))
+  }, [addableHumans, memberSearch])
   const myAddableAgents = allSessions.filter(
     (s) => !inAgents.has(s.id) && (!myAccountId || myAccountId === 'local' || !s.createdBy || s.createdBy === myAccountId),
   )
+  const filteredAddableAgents = useMemo(() => {
+    const q = agentSearch.trim().toLowerCase()
+    if (!q) return myAddableAgents
+    return myAddableAgents.filter((a) => a.title.toLowerCase().includes(q))
+  }, [agentSearch, myAddableAgents])
 
   const handleAdd = async (type: 'account' | 'agent', id: string) => {
     setError('')
@@ -2518,8 +2533,70 @@ function ChannelMembersModal({
             <div className="scfg-section">
               <div className="scfg-tools-head">
                 <span className="scfg-label">群内 Agent</span>
-                <span className="scfg-hint">{members.filter((m) => m.memberType === 'agent').length} 个</span>
+                <div className="flex items-center gap-2">
+                  <span className="scfg-hint">{members.filter((m) => m.memberType === 'agent').length} 个</span>
+                  <button
+                    type="button"
+                    data-testid="channel-open-add-agent"
+                    className={`inline-flex h-6 cursor-pointer items-center gap-1 rounded-md border-0 px-2 text-[11.5px] font-medium transition-colors ${
+                      addAgentOpen
+                        ? 'bg-(--biu-color-bg-muted) text-(--biu-color-text)'
+                        : 'bg-transparent text-(--biu-color-text-muted) hover:bg-(--biu-color-bg-hover) hover:text-(--biu-color-text)'
+                    }`}
+                    onClick={() => setAddAgentOpen((v) => !v)}
+                  >
+                    <UserPlusIcon className="size-3.5 shrink-0" />
+                    <span>{addAgentOpen ? '收起' : '添加 Agent'}</span>
+                  </button>
+                </div>
               </div>
+              {addAgentOpen ? (
+                <div
+                  className="mb-2 flex flex-col gap-2 rounded-lg bg-(--biu-color-bg-subtle) p-2.5"
+                  data-testid="channel-add-agent-panel"
+                >
+                  {myAddableAgents.length > 0 ? (
+                    <>
+                      <input
+                        type="text"
+                        value={agentSearch}
+                        onChange={(e) => setAgentSearch(e.target.value)}
+                        placeholder="搜索我创建的 Agent…"
+                        data-testid="channel-add-agent-search"
+                        className="h-7 w-full rounded-md border-0 bg-(--biu-color-bg-muted) px-2.5 text-[12px] text-(--biu-color-text) outline-none placeholder:text-(--biu-color-text-subtle)"
+                      />
+                      {filteredAddableAgents.length > 0 ? (
+                        <div className="flex flex-wrap gap-1.5">
+                          {filteredAddableAgents.slice(0, 20).map((a) => (
+                            <Button
+                              key={a.id}
+                              variant="secondary"
+                              className="h-7 px-2.5 text-[12px]"
+                              data-testid={`channel-add-agent-${a.id}`}
+                              onClick={() => void handleAdd('agent', a.id)}
+                            >
+                              <SidebarMascot
+                                size={15}
+                                sessionId={a.id}
+                                identity={resolveSessionMascot(a.id, a.mascot)}
+                                animate={false}
+                                title=""
+                              />
+                              <span>{a.title}</span>
+                            </Button>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="text-[11.5px] text-(--biu-color-text-subtle)">未找到匹配的 Agent</div>
+                      )}
+                    </>
+                  ) : (
+                    <div className="text-[11.5px] leading-relaxed text-(--biu-color-text-subtle)">
+                      你创建的 Agent 已全部在该聊天中（他人的 Agent 需由归属人本人拉入）。
+                    </div>
+                  )}
+                </div>
+              ) : null}
               {members.filter((m) => m.memberType === 'agent').length === 0 ? (
                 <div className="scfg-hint">暂无 Agent 入群</div>
               ) : (
@@ -2586,33 +2663,72 @@ function ChannelMembersModal({
                     })}
                 </ul>
               )}
-
-              {myAddableAgents.length > 0 ? (
-                <div className="scfg-field">
-                  <span className="scfg-hint">拉入我创建的 Agent</span>
-                  <div className="flex flex-wrap gap-1.5">
-                    {myAddableAgents.slice(0, 15).map((a) => (
-                      <Button
-                        key={a.id}
-                        variant="secondary"
-                        className="h-7 px-2.5 text-[12px]"
-                        onClick={() => void handleAdd('agent', a.id)}
-                      >
-                        <UserPlusIcon className="size-3.5 opacity-75" />
-                        <span>{a.title}</span>
-                      </Button>
-                    ))}
-                  </div>
-                </div>
-              ) : null}
             </div>
 
             {/* 当前在群人类成员 */}
             <div className="scfg-section">
               <div className="scfg-tools-head">
                 <span className="scfg-label">成员</span>
-                <span className="scfg-hint">{members.filter((m) => m.memberType === 'account').length} 人</span>
+                <div className="flex items-center gap-2">
+                  <span className="scfg-hint">{members.filter((m) => m.memberType === 'account').length} 人</span>
+                  {!isDm ? (
+                    <button
+                      type="button"
+                      data-testid="channel-open-add-member"
+                      className={`inline-flex h-6 cursor-pointer items-center gap-1 rounded-md border-0 px-2 text-[11.5px] font-medium transition-colors ${
+                        addMemberOpen
+                          ? 'bg-(--biu-color-bg-muted) text-(--biu-color-text)'
+                          : 'bg-transparent text-(--biu-color-text-muted) hover:bg-(--biu-color-bg-hover) hover:text-(--biu-color-text)'
+                      }`}
+                      onClick={() => setAddMemberOpen((v) => !v)}
+                    >
+                      <UserPlusIcon className="size-3.5 shrink-0" />
+                      <span>{addMemberOpen ? '收起' : '添加成员'}</span>
+                    </button>
+                  ) : null}
+                </div>
               </div>
+              {!isDm && addMemberOpen ? (
+                <div
+                  className="mb-2 flex flex-col gap-2 rounded-lg bg-(--biu-color-bg-subtle) p-2.5"
+                  data-testid="channel-add-member-panel"
+                >
+                  {addableHumans.length > 0 ? (
+                    <>
+                      <input
+                        type="text"
+                        value={memberSearch}
+                        onChange={(e) => setMemberSearch(e.target.value)}
+                        placeholder="搜索空间成员…"
+                        data-testid="channel-add-member-search"
+                        className="h-7 w-full rounded-md border-0 bg-(--biu-color-bg-muted) px-2.5 text-[12px] text-(--biu-color-text) outline-none placeholder:text-(--biu-color-text-subtle)"
+                      />
+                      {filteredAddableHumans.length > 0 ? (
+                        <div className="flex flex-wrap gap-1.5">
+                          {filteredAddableHumans.map((h) => (
+                            <Button
+                              key={h.id}
+                              variant="secondary"
+                              className="h-7 px-2.5 text-[12px]"
+                              data-testid={`channel-add-member-${h.id}`}
+                              onClick={() => void handleAdd('account', h.id)}
+                            >
+                              <MemberAvatar avatar={resolveAvatar(h.id, h.avatar)} seed={h.id} size={15} />
+                              <span>{h.name}</span>
+                            </Button>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="text-[11.5px] text-(--biu-color-text-subtle)">未找到匹配的空间成员</div>
+                      )}
+                    </>
+                  ) : (
+                    <div className="text-[11.5px] leading-relaxed text-(--biu-color-text-subtle)">
+                      当前空间的全部成员均已在该聊天中。
+                    </div>
+                  )}
+                </div>
+              ) : null}
               <ul className="scfg-tools-list">
                 {members
                   .filter((m) => m.memberType === 'account')
@@ -2637,23 +2753,9 @@ function ChannelMembersModal({
                     </li>
                   ))}
               </ul>
-
-              {canManageMembers && addableHumans.length > 0 ? (
-                <div className="scfg-field">
-                  <span className="scfg-hint">邀请空间成员入群</span>
-                  <div className="flex flex-wrap gap-1.5">
-                    {addableHumans.map((h) => (
-                      <Button
-                        key={h.id}
-                        variant="secondary"
-                        className="h-7 px-2.5 text-[12px]"
-                        onClick={() => void handleAdd('account', h.id)}
-                      >
-                        <MemberAvatar avatar={resolveAvatar(h.id, h.avatar)} seed={h.id} size={15} />
-                        <span>{h.name}</span>
-                      </Button>
-                    ))}
-                  </div>
+              {isDm ? (
+                <div className="mt-1 text-[11.5px] text-(--biu-color-text-subtle)">
+                  1v1 私聊不支持添加第 3 位成员，如需多人协作请新建群聊。
                 </div>
               ) : null}
             </div>

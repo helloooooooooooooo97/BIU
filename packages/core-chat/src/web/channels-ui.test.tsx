@@ -1554,8 +1554,12 @@ test('sidebar uses hide/leave/unfollow menus, breadcrumb toggles thread follow, 
     assert.equal(view.queryByTestId('sidebar-thread-m-root-f'), null)
   })
 
-  // 3. 群主解散聊天需在「群成员与 Agent」弹窗底部二次确认
+  // 3. 群成员弹窗常驻「添加成员 / 添加 Agent」入口（无候选人时展示明确提示而非隐身），群主解散需二次确认
   fireEvent.click(view.getByTestId('channel-manage-members'))
+  fireEvent.click(await waitFor(() => view.getByTestId('channel-open-add-member')))
+  assert.ok(await waitFor(() => view.getByTestId('channel-add-member-panel').textContent?.includes('全部成员均已在该聊天中')))
+  fireEvent.click(view.getByTestId('channel-open-add-agent'))
+  assert.ok(await waitFor(() => view.getByTestId('channel-add-agent-panel').textContent?.includes('已全部在该聊天中')))
   fireEvent.click(await waitFor(() => view.getByTestId('channel-disband-btn')))
   assert.equal(disbandCalled, false)
   fireEvent.click(await waitFor(() => view.getByTestId('channel-disband-confirm-btn')))

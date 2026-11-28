@@ -1364,8 +1364,8 @@ export class ChannelService {
     if (!cleanId) throw new Error('成员 ID 不能为空')
 
     if (memberType === 'account') {
-      if (!this.canManageChannel(row, accountId)) {
-        throw new Error('permission denied: 仅群主或管理员可邀请新成员')
+      if (row.kind === 'dm') {
+        throw new Error('1v1 私聊不支持添加新成员，请新建群聊')
       }
       if (row.workspace_id && accountId !== 'local') {
         const store = this.accountStore()
@@ -1383,16 +1383,20 @@ export class ChannelService {
 
     const now = Date.now()
     const safeMode = normalizeAgentContextMode(contextMode)
-    this.db()
-      .prepare(
-        `INSERT OR IGNORE INTO channel_members (channel_id, member_type, member_id, role, context_mode, added_by, added_at)
-         VALUES (?, ?, ?, 'member', ?, ?, ?)`,
-      )
-      .run(channelId, memberType, cleanId, safeMode, accountId, now)
-    this.db().prepare(`UPDATE channels SET updated_at = ? WHERE id = ?`).run(now, channelId)
+    const db = this.db()
+    db.prepare(
+      `INSERT INTO channel_members (channel_id, member_type, member_id, role, context_mode, added_by, added_at)
+       VALUES (?, ?, ?, 'member', ?, ?, ?)
+       ON CONFLICT(channel_id, member_type, member_id) DO UPDATE SET hidden_at = 0`,
+    ).run(channelId, memberType, cleanId, safeMode, accountId, now)
+    db.prepare(`UPDATE channels SET updated_at = ? WHERE id = ?`).run(now, channelId)
 
     const members = this.listMembers(channelId, accountId, row.workspace_id)
     this.broadcastToChannel(channelId, row.workspace_id, 'channel/members', { channelId, members })
+    if (memberType === 'account') {
+      const invitedSummary = this.toSummary(row, cleanId)
+      this.broadcastToAccounts([cleanId], row.workspace_id, 'channel/updated', { channel: invitedSummary })
+    }
     return members
   }
 
