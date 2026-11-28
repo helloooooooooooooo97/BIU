@@ -7,6 +7,7 @@ import { ChannelSidebarSections } from './channel-sidebar.tsx'
 import { ChannelStage } from './channel-view.tsx'
 import { MemberDmAction, MemberIcon, membersChrome } from './members-chrome.tsx'
 import { resetChannelStore } from './channel-store.ts'
+import type { ChannelMessageView } from '../shared/channel-types.ts'
 
 beforeEach(() => {
   resetChannelStore()
@@ -1768,5 +1769,323 @@ test('ChannelStage renders webhook messages with badge and manages webhooks in-p
   fireEvent.click(stage.getByTestId('channel-webhook-delete-wh-1'))
   await waitFor(() => {
     assert.equal(Boolean(stage.queryByTestId('channel-webhook-row-wh-1')), false)
+  })
+})
+
+test('sidebar create dialog supports announcement/forum modes and Announcement channel renders read-only dock for non-admins', async () => {
+  const now = Date.now()
+  let createdPayload: Record<string, unknown> | null = null
+  const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = new URL(String(input), 'http://test.local')
+    if (url.pathname === '/api/channels' && (!init?.method || init.method === 'GET')) {
+      return new Response(
+        JSON.stringify({
+          channels: [
+            {
+              id: 'ch-ann',
+              workspaceId: 'ws-1',
+              kind: 'announcement',
+              dmKey: '',
+              name: '发版公告',
+              topic: '',
+              accessMode: 'workspace',
+              createdBy: 'acc-alice',
+              createdAt: now,
+              updatedAt: now,
+              memberCount: 2,
+              agentCount: 0,
+              lastMessageAt: now,
+              lastMessageText: 'v3.0 上线',
+              canManage: false,
+              canPost: false,
+            },
+            {
+              id: 'ch-forum',
+              workspaceId: 'ws-1',
+              kind: 'forum',
+              dmKey: '',
+              name: '方案讨论',
+              topic: '',
+              accessMode: 'workspace',
+              createdBy: 'acc-alice',
+              createdAt: now,
+              updatedAt: now,
+              memberCount: 2,
+              agentCount: 0,
+              lastMessageAt: now,
+              lastMessageText: '设计评审',
+              canManage: true,
+              canPost: true,
+            },
+          ],
+        }),
+        { status: 200 },
+      )
+    }
+    if (url.pathname === '/api/channels' && init?.method === 'POST') {
+      createdPayload = JSON.parse(String(init.body ?? '{}')) as Record<string, unknown>
+      return new Response(
+        JSON.stringify({
+          channel: {
+            id: 'ch-new-ann',
+            workspaceId: 'ws-1',
+            kind: createdPayload.kind ?? 'announcement',
+            dmKey: '',
+            name: createdPayload.name ?? '发版公告',
+            topic: '',
+            accessMode: createdPayload.accessMode ?? 'private',
+            createdBy: 'acc-bob',
+            createdAt: now,
+            updatedAt: now,
+            memberCount: 1,
+            agentCount: 0,
+            lastMessageAt: now,
+            lastMessageText: '',
+            canManage: true,
+            canPost: true,
+          },
+          members: [],
+          messages: [],
+          activities: [],
+          myAccountId: 'acc-bob',
+          canManageMembers: true,
+        }),
+        { status: 200 },
+      )
+    }
+    if (url.pathname === '/api/channels/ch-ann') {
+      return new Response(
+        JSON.stringify({
+          channel: {
+            id: 'ch-ann',
+            workspaceId: 'ws-1',
+            kind: 'announcement',
+            dmKey: '',
+            name: '发版公告',
+            topic: '',
+            accessMode: 'workspace',
+            createdBy: 'acc-alice',
+            createdAt: now,
+            updatedAt: now,
+            memberCount: 2,
+            agentCount: 0,
+            lastMessageAt: now,
+            lastMessageText: 'v3.0 上线',
+            canManage: false,
+            canPost: false,
+          },
+          members: [
+            { channelId: 'ch-ann', memberType: 'account', memberId: 'acc-alice', role: 'owner', addedBy: 'acc-alice', addedAt: now, name: 'Alice', isOwn: false },
+            { channelId: 'ch-ann', memberType: 'account', memberId: 'acc-bob', role: 'member', addedBy: 'acc-alice', addedAt: now, name: 'Bob', isOwn: true },
+          ],
+          messages: [
+            {
+              id: 'm-ann-1',
+              channelId: 'ch-ann',
+              seq: 1,
+              senderType: 'account',
+              senderId: 'acc-alice',
+              senderName: 'Alice',
+              replyToId: '',
+              text: 'v3.0 正式上线！',
+              mentions: [],
+              traceId: '',
+              ephemeralTo: '',
+              createdAt: now,
+            },
+          ],
+          activities: [],
+          myAccountId: 'acc-bob',
+          canManageMembers: false,
+        }),
+        { status: 200 },
+      )
+    }
+    if (url.pathname === '/api/account/workspace-profile') {
+      return new Response(JSON.stringify({ accountId: 'acc-bob' }), { status: 200 })
+    }
+    return new Response(JSON.stringify({ items: [] }), { status: 200 })
+  })
+  vi.stubGlobal('fetch', fetchMock)
+
+  const view = render(
+    <MemoryRouter initialEntries={['/channels/ch-ann']}>
+      <ChannelSidebarSections routeChannelId="ch-ann" />
+      <ChannelStage channelId="ch-ann" />
+    </MemoryRouter>,
+  )
+
+  await waitFor(() => {
+    assert.ok(view.queryByTestId('sidebar-channel-icon-announcement-ch-ann'))
+    assert.ok(view.queryByTestId('sidebar-channel-icon-forum-ch-forum'))
+    assert.ok(view.queryByTestId('channel-announcement-banner'))
+    assert.ok(view.queryByTestId('channel-announcement-badge-m-ann-1'))
+    assert.ok(view.queryByTestId('channel-announcement-readonly-bar'))
+  })
+
+  // 打开新建聊天弹窗并创建一个公告频道（无需强制选人即可直接创建）
+  fireEvent.click(view.getByTestId('sidebar-create-channel'))
+  fireEvent.click(await waitFor(() => view.getByTestId('create-channel-kind-announcement')))
+  fireEvent.change(view.getByTestId('create-channel-name'), { target: { value: '全员通知' } })
+  fireEvent.click(view.getByTestId('create-channel-submit'))
+
+  await waitFor(() => {
+    assert.equal(createdPayload?.kind, 'announcement')
+    assert.equal(createdPayload?.name, '全员通知')
+  })
+})
+
+test('Forum channel renders board, creates new posts, filters by status, and toggles post status in thread detail', async () => {
+  const now = Date.now()
+  let posts: ChannelMessageView[] = [
+    {
+      id: 'post-1',
+      channelId: 'ch-forum',
+      seq: 1,
+      senderType: 'account',
+      senderId: 'acc-alice',
+      senderName: 'Alice',
+      replyToId: '',
+      text: '计划下周重构缓存层，请大家评审。',
+      mentions: [],
+      traceId: '',
+      ephemeralTo: '',
+      meta: { postTitle: '缓存层重构方案', postTags: ['方案'], postStatus: 'open' },
+      threadSummary: { replyCount: 1, lastReplyAt: now + 1000, participantNames: ['Bob'], following: true },
+      createdAt: now,
+    },
+  ]
+
+  const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = new URL(String(input), 'http://test.local')
+    if (url.pathname === '/api/channels/ch-forum' && (!init?.method || init.method === 'GET')) {
+      return new Response(
+        JSON.stringify({
+          channel: {
+            id: 'ch-forum',
+            workspaceId: 'ws-1',
+            kind: 'forum',
+            dmKey: '',
+            name: '架构讨论区',
+            topic: '',
+            accessMode: 'workspace',
+            forumTags: ['讨论', '问题', '方案'],
+            createdBy: 'acc-alice',
+            createdAt: now,
+            updatedAt: now,
+            memberCount: 2,
+            agentCount: 0,
+            lastMessageAt: now,
+            lastMessageText: '缓存层重构方案',
+            canManage: true,
+            canPost: true,
+          },
+          members: [
+            { channelId: 'ch-forum', memberType: 'account', memberId: 'acc-alice', role: 'owner', addedBy: 'acc-alice', addedAt: now, name: 'Alice', isOwn: true },
+          ],
+          messages: posts,
+          activities: [],
+          myAccountId: 'acc-alice',
+          canManageMembers: true,
+        }),
+        { status: 200 },
+      )
+    }
+    if (url.pathname === '/api/channels/ch-forum/messages' && init?.method === 'POST') {
+      const body = JSON.parse(String(init.body ?? '{}')) as { text?: string; postTitle?: string; postTags?: string[] }
+      const created = {
+        id: 'post-2',
+        channelId: 'ch-forum',
+        seq: 2,
+        senderType: 'account' as const,
+        senderId: 'acc-alice',
+        senderName: 'Alice',
+        replyToId: '',
+        text: body.text ?? '',
+        mentions: [],
+        traceId: '',
+        ephemeralTo: '',
+        meta: { postTitle: body.postTitle ?? '未命名帖子', postTags: body.postTags ?? [], postStatus: 'open' as const },
+        createdAt: now + 2000,
+      }
+      posts = [...posts, created]
+      return new Response(JSON.stringify({ message: created, triggeredRunIds: [] }), { status: 200 })
+    }
+    if (url.pathname === '/api/channels/ch-forum/threads/post-1') {
+      return new Response(
+        JSON.stringify({
+          channelId: 'ch-forum',
+          root: posts[0],
+          replies: [
+            {
+              id: 'reply-1',
+              channelId: 'ch-forum',
+              seq: 3,
+              senderType: 'account',
+              senderId: 'acc-bob',
+              senderName: 'Bob',
+              replyToId: '',
+              threadRootId: 'post-1',
+              text: '同意这个方案！',
+              mentions: [],
+              traceId: '',
+              ephemeralTo: '',
+              createdAt: now + 1000,
+            },
+          ],
+          following: true,
+        }),
+        { status: 200 },
+      )
+    }
+    if (url.pathname === '/api/channels/ch-forum/messages/post-1' && init?.method === 'PATCH') {
+      const body = JSON.parse(String(init.body ?? '{}')) as { postStatus?: 'open' | 'resolved' | 'closed' }
+      posts = posts.map((p) =>
+        p.id === 'post-1' ? { ...p, meta: { ...p.meta, postStatus: body.postStatus ?? p.meta?.postStatus } } : p,
+      )
+      return new Response(JSON.stringify({ message: posts[0] }), { status: 200 })
+    }
+    if (url.pathname === '/api/account/workspace-profile') {
+      return new Response(JSON.stringify({ accountId: 'acc-alice' }), { status: 200 })
+    }
+    return new Response(JSON.stringify({ items: [] }), { status: 200 })
+  })
+  vi.stubGlobal('fetch', fetchMock)
+
+  const stage = render(
+    <MemoryRouter initialEntries={['/channels/ch-forum']}>
+      <ChannelStage channelId="ch-forum" />
+    </MemoryRouter>,
+  )
+
+  // 1. 论坛主视图展示帖子卡片
+  await waitFor(() => {
+    assert.ok(stage.queryByTestId('channel-forum-board'))
+    assert.ok(stage.queryByTestId('forum-post-card-post-1'))
+    assert.ok(stage.container.textContent?.includes('缓存层重构方案'))
+  })
+
+  // 2. 新建一篇帖子
+  fireEvent.click(stage.getByTestId('forum-new-post-btn'))
+  fireEvent.change(stage.getByTestId('forum-post-title-input'), { target: { value: '搜索慢查询排查' } })
+  fireEvent.change(stage.getByTestId('forum-post-body-input'), { target: { value: '需要加复合索引' } })
+  fireEvent.click(stage.getByTestId('forum-draft-tag-问题'))
+  fireEvent.click(stage.getByTestId('forum-post-submit'))
+
+  await waitFor(() => {
+    assert.ok(stage.queryByTestId('forum-post-card-post-2'))
+    assert.ok(stage.container.textContent?.includes('搜索慢查询排查'))
+  })
+
+  // 3. 点击帖子进入详情并关闭帖子 -> 展示已关闭只读条
+  fireEvent.click(stage.getByTestId('forum-post-card-post-1'))
+  await waitFor(() => {
+    assert.ok(stage.queryByTestId('forum-post-detail-header'))
+    assert.ok(stage.container.textContent?.includes('同意这个方案！'))
+  })
+
+  fireEvent.click(stage.getByTestId('forum-thread-toggle-closed'))
+  await waitFor(() => {
+    assert.ok(stage.queryByTestId('forum-post-closed-bar'))
   })
 })

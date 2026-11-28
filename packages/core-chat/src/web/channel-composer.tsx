@@ -37,6 +37,7 @@ import { SidebarMascot, resolveSessionMascot } from '@biu/public-mascot'
 import { focusComposerEditor, isComposerFocusPending } from '@biu/web-app-shell/chat-overlay'
 import type {
   ChannelAttachment,
+  ChannelKind,
   ChannelMemberView,
   ChannelMention,
   ChannelMessageView,
@@ -102,6 +103,7 @@ export type ChannelComposerProps = {
   channelId: string
   threadRootId?: string | null
   isDm: boolean
+  channelKind?: ChannelKind
   members: ChannelMemberView[]
   resolveAvatar: (accountId?: string, serverAvatar?: string) => string | undefined
   replyTo: ChannelMessageView | null
@@ -147,7 +149,7 @@ function collectClipboardFiles(clipboard: DataTransfer | null | undefined): File
 
 export const ChannelComposer = memo(
   forwardRef<ChannelComposerHandle, ChannelComposerProps>(function ChannelComposer(
-    { channelId, threadRootId, isDm, members, resolveAvatar, replyTo, onClearReplyTo, onError, pick },
+    { channelId, threadRootId, isDm, channelKind, members, resolveAvatar, replyTo, onClearReplyTo, onError, pick },
     ref,
   ) {
     const draftKey = threadRootId ? `${channelId}:thread:${threadRootId}` : channelId
@@ -200,15 +202,25 @@ export const ChannelComposer = memo(
     const placeholderText = useMemo(() => {
       const hasAgents = members.some((m) => m.memberType === 'agent')
       if (threadRootId) {
+        if (channelKind === 'forum') {
+          return hasAgents
+            ? '在帖子中参与讨论… 输入 @ 提及成员、Agent 或引用页面'
+            : '在帖子中参与讨论… 输入 @ 提及成员或引用页面'
+        }
         return hasAgents
           ? '在讨论串中回复… 输入 @ 提及成员、Agent 或引用页面'
           : '在讨论串中回复… 输入 @ 提及成员或引用页面'
       }
       if (isDm) return '发送私聊消息… 输入 @ 引用页面或粘贴截图'
+      if (channelKind === 'announcement') {
+        return hasAgents
+          ? '发布新公告… 输入 @ 提及成员、Agent 或引用页面'
+          : '发布新公告… 输入 @ 提及成员或引用页面'
+      }
       return hasAgents
         ? '发送消息… 输入 @ 提及成员、Agent 或引用页面'
         : '发送消息… 输入 @ 提及成员或引用页面'
-    }, [isDm, members, threadRootId])
+    }, [channelKind, isDm, members, threadRootId])
     const placeholderRef = useRef(placeholderText)
     placeholderRef.current = placeholderText
 

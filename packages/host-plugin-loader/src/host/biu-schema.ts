@@ -504,6 +504,7 @@ CREATE TABLE IF NOT EXISTS channels (
   name TEXT NOT NULL,
   topic TEXT NOT NULL DEFAULT '',
   access_mode TEXT NOT NULL DEFAULT 'private',
+  config_json TEXT NOT NULL DEFAULT '{}',
   created_by TEXT NOT NULL DEFAULT '',
   created_at INTEGER NOT NULL,
   updated_at INTEGER NOT NULL
@@ -813,6 +814,7 @@ export function ensureChannelsSchema(db: DatabaseSync) {
   }
   addColumnIfMissing('channels', 'kind', `TEXT NOT NULL DEFAULT 'channel'`)
   addColumnIfMissing('channels', 'dm_key', `TEXT NOT NULL DEFAULT ''`)
+  addColumnIfMissing('channels', 'config_json', `TEXT NOT NULL DEFAULT '{}'`)
   addColumnIfMissing('channel_members', 'context_mode', `TEXT NOT NULL DEFAULT 'summary'`)
   addColumnIfMissing('channel_members', 'last_read_seq', `INTEGER NOT NULL DEFAULT 0`)
   addColumnIfMissing('channel_members', 'muted', `INTEGER NOT NULL DEFAULT 0`)

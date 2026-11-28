@@ -26,6 +26,11 @@ import { runWithToolPolicy, type AgentToolMode } from '@biu/host-tools'
 import type { SessionMascot } from '@biu/type-session'
 import {
   buildDefaultChannelName,
+  DEFAULT_FORUM_TAGS,
+  normalizeChannelKind,
+  normalizeForumPostStatus,
+  normalizeForumTags,
+  normalizeGroupChannelKind,
   type ChannelAccessMode,
   type ChannelAgentActivity,
   type ChannelAgentContextMode,
@@ -50,6 +55,8 @@ import {
   type ChannelThreadPayload,
   type ChannelThreadSummary,
   type ChannelWebhookView,
+  type ForumPostStatus,
+  type GroupChannelKind,
 } from '../shared/channel-types.ts'
 
 export const MAX_CHANNEL_HANDOFF_HOPS = 3
@@ -81,6 +88,22 @@ function guessMime(name: string, rawMime?: string): string {
   return MIME_BY_EXT[ext] ?? 'application/octet-stream'
 }
 
+type ChannelConfigJson = {
+  forumTags?: string[]
+}
+
+function deriveForumPostTitle(rawTitle: unknown, text: string, attachments: ChannelAttachment[]): string {
+  const explicit = String(rawTitle ?? '').replace(/\s+/g, ' ').trim().slice(0, 80)
+  if (explicit) return explicit
+  const firstLine = String(text ?? '')
+    .split(/\r?\n/)
+    .map((line) => line.replace(/[#>*`[\]()]/g, ' ').replace(/\s+/g, ' ').trim())
+    .find(Boolean)
+  if (firstLine) return firstLine.slice(0, 80)
+  if (attachments[0]?.name) return attachments[0].name.slice(0, 80)
+  return '未命名帖子'
+}
+
 type ChannelRow = {
   id: string
   workspace_id: string
@@ -89,6 +112,7 @@ type ChannelRow = {
   name: string
   topic: string
   access_mode: string
+  config_json?: string
   created_by: string
   created_at: number
   updated_at: number
@@ -625,6 +649,10 @@ export class ChannelService {
     const conn = this.dbOverride ?? openAndMigrateBiu(join(dataDir(), 'biu.sqlite'))
     if (!this.schemaReady.has(conn)) {
       ensureChannelsSchema(conn)
+      const cols = (conn.prepare(`PRAGMA table_info(channels)`).all() as Array<{ name: string }>).map((c) => c.name)
+      if (!cols.includes('config_json')) {
+        conn.exec(`ALTER TABLE channels ADD COLUMN config_json TEXT NOT NULL DEFAULT '{}'`)
+      }
       this.schemaReady.add(conn)
     }
     return conn
@@ -873,11 +901,11 @@ export class ChannelService {
       .get(row.id) as { humans?: number | null; agents?: number | null } | undefined
     const last = db
       .prepare(
-        `SELECT text, attachments_json, deleted_at, created_at FROM channel_messages
+        `SELECT text, attachments_json, meta_json, deleted_at, created_at FROM channel_messages
          WHERE channel_id = ? AND ephemeral_to = '' AND thread_root_id = ''
          ORDER BY seq DESC LIMIT 1`,
       )
-      .get(row.id) as { text?: string; attachments_json?: string; deleted_at?: number; created_at?: number } | undefined
+      .get(row.id) as { text?: string; attachments_json?: string; meta_json?: string; deleted_at?: number; created_at?: number } | undefined
     const viewerMember = db
       .prepare(
         `SELECT last_read_seq, muted, pinned, hidden_at FROM channel_members
@@ -901,21 +929,30 @@ export class ChannelService {
       }
     }
 
+    const kind: ChannelKind = normalizeChannelKind(row.kind)
+    const config = safeJsonParse<ChannelConfigJson>(row.config_json, {})
+    const configuredForumTags = normalizeForumTags(config.forumTags, 12)
+    const forumTags = kind === 'forum' ? (configuredForumTags.length > 0 ? configuredForumTags : [...DEFAULT_FORUM_TAGS]) : undefined
+
     let lastPreview = ''
     if (last) {
       if (Number(last.deleted_at ?? 0) > 0) {
         lastPreview = '此消息已撤回'
-      } else if (String(last.text ?? '').trim()) {
-        lastPreview = String(last.text ?? '').slice(0, 120)
       } else {
-        const atts = safeJsonParse<ChannelAttachment[]>(last.attachments_json, [])
-        if (atts.length > 0) {
-          lastPreview = atts[0]!.kind === 'image' ? `[图片] ${atts[0]!.name}` : `[文件] ${atts[0]!.name}`
+        const lastMeta = safeJsonParse<ChannelMessageMeta>(last.meta_json, {})
+        if (kind === 'forum' && lastMeta.postTitle) {
+          lastPreview = String(lastMeta.postTitle).slice(0, 120)
+        } else if (String(last.text ?? '').trim()) {
+          lastPreview = String(last.text ?? '').slice(0, 120)
+        } else {
+          const atts = safeJsonParse<ChannelAttachment[]>(last.attachments_json, [])
+          if (atts.length > 0) {
+            lastPreview = atts[0]!.kind === 'image' ? `[图片] ${atts[0]!.name}` : `[文件] ${atts[0]!.name}`
+          }
         }
       }
     }
 
-    const kind: ChannelKind = row.kind === 'dm' ? 'dm' : 'channel'
     let peerAccountId: string | undefined
     let peerName: string | undefined
     let peerAvatar: string | undefined
@@ -934,6 +971,8 @@ export class ChannelService {
       }
     }
     const sidebarThreads = this.listSidebarThreads(row.id, viewerAccountId)
+    const canManage = this.canManageChannel(row, viewerAccountId)
+    const canPost = kind === 'announcement' ? canManage : true
     return {
       id: row.id,
       workspaceId: row.workspace_id,
@@ -958,7 +997,9 @@ export class ChannelService {
       muted: Boolean(viewerMember?.muted),
       pinned: Boolean(viewerMember?.pinned),
       ...(Number(viewerMember?.hidden_at ?? 0) > 0 ? { hidden: true } : {}),
-      canManage: this.canManageChannel(row, viewerAccountId),
+      canManage,
+      canPost,
+      ...(forumTags ? { forumTags } : {}),
       ...(sidebarThreads.length > 0 ? { threads: sidebarThreads } : {}),
     }
   }
@@ -1030,7 +1071,8 @@ export class ChannelService {
            COUNT(*) AS reply_count,
            MAX(r.created_at) AS last_reply_at,
            root.text AS root_text,
-           root.attachments_json AS root_attachments
+           root.attachments_json AS root_attachments,
+           root.meta_json AS root_meta
          FROM channel_messages r
          JOIN channel_messages root ON root.id = r.thread_root_id
          LEFT JOIN channel_thread_follows f
@@ -1065,12 +1107,17 @@ export class ChannelService {
       last_reply_at: number
       root_text?: string
       root_attachments?: string
+      root_meta?: string
     }>
     return rows.map((r) => {
-      const cleanLine = String(r.root_text ?? '')
-        .replace(/[#>*`[\]()]/g, ' ')
-        .replace(/\s+/g, ' ')
-        .trim()
+      const rootMeta = safeJsonParse<ChannelMessageMeta>(r.root_meta, {})
+      const postTitle = String(rootMeta.postTitle ?? '').trim()
+      const cleanLine =
+        postTitle ||
+        String(r.root_text ?? '')
+          .replace(/[#>*`[\]()]/g, ' ')
+          .replace(/\s+/g, ' ')
+          .trim()
       let title = cleanLine.slice(0, 28)
       if (!title) {
         const atts = safeJsonParse<ChannelAttachment[]>(r.root_attachments, [])
@@ -1220,12 +1267,15 @@ export class ChannelService {
   createChannel(input: {
     name?: string
     topic?: string
+    kind?: GroupChannelKind
     accessMode?: ChannelAccessMode
+    forumTags?: string[]
     memberAccountIds?: string[]
     agentIds?: string[]
     agentContextMode?: ChannelAgentContextMode
   }): ChannelDetailPayload {
     const { accountId, workspaceId } = this.currentActorIds()
+    const kind = normalizeGroupChannelKind(input.kind)
     const agentContextMode = normalizeAgentContextMode(input.agentContextMode)
     const cleanHumanIds: string[] = []
     for (const memberId of input.memberAccountIds ?? []) {
@@ -1245,21 +1295,27 @@ export class ChannelService {
       cleanAgentIds.push(clean)
     }
     const providedName = String(input.name ?? '').trim().slice(0, 80)
-    const name =
-      providedName ||
-      buildDefaultChannelName(
-        [this.accountLabel(accountId, workspaceId), ...cleanHumanIds.map((m) => this.accountLabel(m, workspaceId))],
-        cleanAgentIds.map((a) => this.agentMeta(a).name),
-      )
+    const fallbackByKind =
+      kind === 'announcement'
+        ? '新公告频道'
+        : kind === 'forum'
+          ? '新论坛频道'
+          : buildDefaultChannelName(
+              [this.accountLabel(accountId, workspaceId), ...cleanHumanIds.map((m) => this.accountLabel(m, workspaceId))],
+              cleanAgentIds.map((a) => this.agentMeta(a).name),
+            )
+    const name = providedName || fallbackByKind
     const topic = String(input.topic ?? '').trim().slice(0, 240)
     const accessMode: ChannelAccessMode = input.accessMode === 'workspace' ? 'workspace' : 'private'
+    const forumTags = normalizeForumTags(input.forumTags, 12)
+    const configJson = JSON.stringify(forumTags.length > 0 ? { forumTags } : {})
     const id = allocateRecordId()
     const now = Date.now()
     const db = this.db()
     db.prepare(
-      `INSERT INTO channels (id, workspace_id, name, topic, access_mode, created_by, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-    ).run(id, workspaceId, name, topic, accessMode, accountId, now, now)
+      `INSERT INTO channels (id, workspace_id, kind, name, topic, access_mode, config_json, created_by, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    ).run(id, workspaceId, kind, name, topic, accessMode, configJson, accountId, now, now)
 
     const addMemberStmt = db.prepare(
       `INSERT OR IGNORE INTO channel_members (channel_id, member_type, member_id, role, context_mode, added_by, added_at)
@@ -1371,22 +1427,47 @@ export class ChannelService {
     ).catch(() => undefined)
   }
 
-  updateChannel(channelId: string, patch: { name?: string; topic?: string; accessMode?: ChannelAccessMode }): ChannelSummary {
+  updateChannel(
+    channelId: string,
+    patch: {
+      name?: string
+      topic?: string
+      accessMode?: ChannelAccessMode
+      kind?: GroupChannelKind
+      forumTags?: string[]
+    },
+  ): ChannelSummary {
     const { accountId } = this.currentActorIds()
     const row = this.requireChannelRow(channelId, accountId)
     if (!this.canManageChannel(row, accountId)) throw new Error('permission denied: 仅群主或管理员可修改群信息')
+    if (row.kind === 'dm' && patch.kind !== undefined) {
+      throw new Error('私聊不支持切换频道模式')
+    }
     const nextName = patch.name !== undefined ? String(patch.name).trim().slice(0, 80) : row.name
     if (!nextName) throw new Error('群聊名称不能为空')
     const nextTopic = patch.topic !== undefined ? String(patch.topic).trim().slice(0, 240) : row.topic
     const nextMode: ChannelAccessMode =
       patch.accessMode !== undefined ? (patch.accessMode === 'workspace' ? 'workspace' : 'private') : (row.access_mode === 'workspace' ? 'workspace' : 'private')
+    const nextKind: ChannelKind =
+      row.kind === 'dm'
+        ? 'dm'
+        : patch.kind !== undefined
+          ? normalizeGroupChannelKind(patch.kind)
+          : normalizeChannelKind(row.kind)
+    const prevConfig = safeJsonParse<ChannelConfigJson>(row.config_json, {})
+    const nextConfig: ChannelConfigJson = { ...prevConfig }
+    if (patch.forumTags !== undefined) {
+      const cleaned = normalizeForumTags(patch.forumTags, 12)
+      if (cleaned.length > 0) nextConfig.forumTags = cleaned
+      else delete nextConfig.forumTags
+    }
     const now = Date.now()
     this.db()
-      .prepare(`UPDATE channels SET name = ?, topic = ?, access_mode = ?, updated_at = ? WHERE id = ?`)
-      .run(nextName, nextTopic, nextMode, now, channelId)
-    const updated = this.toSummary(this.requireChannelRow(channelId, accountId))
-    this.broadcastToChannel(channelId, row.workspace_id, 'channel/updated', { channel: updated })
-    return updated
+      .prepare(`UPDATE channels SET kind = ?, name = ?, topic = ?, access_mode = ?, config_json = ?, updated_at = ? WHERE id = ?`)
+      .run(nextKind, nextName, nextTopic, nextMode, JSON.stringify(nextConfig), now, channelId)
+    const updatedRow = this.requireChannelRow(channelId, accountId)
+    this.broadcastChannelSummaryPerViewer(updatedRow)
+    return this.toSummary(updatedRow, accountId)
   }
 
   deleteChannel(channelId: string): { ok: true; id: string } {
@@ -2227,6 +2308,63 @@ export class ChannelService {
     return view
   }
 
+  updateForumPost(
+    channelId: string,
+    messageId: string,
+    patch: {
+      text?: string
+      postTitle?: string
+      postTags?: string[]
+      postStatus?: ForumPostStatus
+    },
+  ): ChannelMessageView {
+    const { accountId } = this.currentActorIds()
+    const ch = this.requireChannelRow(channelId, accountId)
+    const db = this.db()
+    const row = db
+      .prepare(`SELECT * FROM channel_messages WHERE id = ? AND channel_id = ?`)
+      .get(messageId, channelId) as MessageRow | undefined
+    if (!row || row.ephemeral_to) throw new Error('未找到对应的帖子')
+    if (Number(row.deleted_at ?? 0) > 0) throw new Error('已撤回的帖子无法编辑')
+    if (String(row.thread_root_id ?? '').trim()) throw new Error('仅论坛顶层帖子支持修改标题、标签或状态')
+    const isSelf = row.sender_type === 'account' && (accountId === 'local' || row.sender_id === accountId)
+    const isManager = this.canManageChannel(ch, accountId)
+    if (!isSelf && !isManager) {
+      throw new Error('permission denied: 仅帖子作者或频道管理员可修改帖子信息')
+    }
+    const nextText = patch.text !== undefined ? String(patch.text).trim() : row.text
+    if (patch.text !== undefined) {
+      if (!isSelf) throw new Error('permission denied: 仅帖子作者可编辑帖子正文')
+      if (!nextText) throw new Error('消息内容不能为空')
+    }
+    const prevMeta = safeJsonParse<ChannelMessageMeta>(row.meta_json, {})
+    const nextMeta: ChannelMessageMeta = { ...prevMeta }
+    if (patch.postTitle !== undefined) {
+      const cleanTitle = String(patch.postTitle).replace(/\s+/g, ' ').trim().slice(0, 80)
+      if (!cleanTitle) throw new Error('帖子标题不能为空')
+      nextMeta.postTitle = cleanTitle
+    }
+    if (patch.postTags !== undefined) {
+      nextMeta.postTags = normalizeForumTags(patch.postTags, 5)
+    }
+    if (patch.postStatus !== undefined) {
+      nextMeta.postStatus = normalizeForumPostStatus(patch.postStatus)
+    }
+    const now = Date.now()
+    const nextEditedAt = patch.text !== undefined ? now : Number(row.edited_at ?? 0)
+    db.prepare(`UPDATE channel_messages SET text = ?, meta_json = ?, edited_at = ? WHERE id = ?`).run(
+      nextText,
+      JSON.stringify(nextMeta),
+      nextEditedAt,
+      messageId,
+    )
+    const updatedRow = db.prepare(`SELECT * FROM channel_messages WHERE id = ?`).get(messageId) as MessageRow
+    const view = this.hydrateMessage(updatedRow, undefined, ch.workspace_id, accountId)
+    this.broadcastToChannel(channelId, ch.workspace_id, 'channel/message-updated', { message: view })
+    this.broadcastChannelSummaryPerViewer(ch)
+    return view
+  }
+
   recallMessage(channelId: string, messageId: string): ChannelMessageView {
     const { accountId } = this.currentActorIds()
     const ch = this.requireChannelRow(channelId, accountId)
@@ -2730,6 +2868,19 @@ export class ChannelService {
         .prepare(`UPDATE channel_webhooks SET last_used_at = ?, updated_at = ? WHERE id = ?`)
         .run(now, now, webhook.id)
 
+      const channelKind = normalizeChannelKind(channel.kind)
+      const webhookMeta: ChannelMessageMeta = {
+        kind: 'info',
+        webhookId: webhook.id,
+        webhookName: displayName,
+        ...(channelKind === 'forum' && !threadRootId
+          ? {
+              postTitle: deriveForumPostTitle(payload.title, text, []),
+              postStatus: 'open' as ForumPostStatus,
+            }
+          : {}),
+      }
+
       const message = this.insertMessage({
         channelId: channel.id,
         senderType: 'webhook',
@@ -2737,11 +2888,7 @@ export class ChannelService {
         threadRootId,
         text,
         mentions: [],
-        meta: {
-          kind: 'info',
-          webhookId: webhook.id,
-          webhookName: displayName,
-        },
+        meta: webhookMeta,
       })
 
       const triggeredRunIds: string[] = []
@@ -2754,13 +2901,14 @@ export class ChannelService {
           .get(channel.id, autoAgentId)
         if (agentInChannel) {
           const invokerId = webhook.created_by || channel.created_by || 'local'
+          const effectiveThreadRootId = threadRootId || (channelKind === 'forum' ? message.id : '')
           const runId = this.enqueueAgentRun({
             channelId: channel.id,
             workspaceId: channel.workspace_id,
             agentId: autoAgentId,
             invokerId,
             originMessageId: message.id,
-            ...(threadRootId ? { threadRootId } : {}),
+            ...(effectiveThreadRootId ? { threadRootId: effectiveThreadRootId } : {}),
             senderName: `Webhook · ${displayName}`,
             text,
             hopCount: 0,
@@ -2786,6 +2934,10 @@ export class ChannelService {
       threadRootId?: string
       mentions?: ChannelMention[]
       attachments?: ChannelAttachment[]
+      /** 论坛频道发新帖时的结构化字段 */
+      postTitle?: string
+      postTags?: string[]
+      postStatus?: ForumPostStatus
       /** Agent 经文件系统替当前用户代发时传入自身 sessionId，界面会同时显示用户与该 Agent。 */
       viaAgentId?: string
       /** Agent 代发时默认不二次唤醒群内其他 Agent，避免递归互唤死循环。 */
@@ -2794,14 +2946,31 @@ export class ChannelService {
   ): { message: ChannelMessageView; triggeredRunIds: string[] } {
     const { accountId } = this.currentActorIds()
     const channel = this.requireChannelRow(channelId, accountId)
+    const channelKind = normalizeChannelKind(channel.kind)
     const text = String(input.text ?? '').trim()
     let threadRootId = String(input.threadRootId ?? '').trim()
     if (threadRootId) {
       const rootRow = this.db()
-        .prepare(`SELECT id, thread_root_id, ephemeral_to FROM channel_messages WHERE id = ? AND channel_id = ?`)
-        .get(threadRootId, channelId) as { id?: string; thread_root_id?: string; ephemeral_to?: string } | undefined
+        .prepare(`SELECT id, thread_root_id, ephemeral_to, meta_json FROM channel_messages WHERE id = ? AND channel_id = ?`)
+        .get(threadRootId, channelId) as
+        | { id?: string; thread_root_id?: string; ephemeral_to?: string; meta_json?: string }
+        | undefined
       if (!rootRow || rootRow.ephemeral_to) throw new Error('未找到对应的话题根消息')
       threadRootId = rootRow.thread_root_id?.trim() || rootRow.id!
+      if (channelKind === 'forum') {
+        const canonicalRoot =
+          threadRootId === rootRow.id
+            ? rootRow
+            : (this.db()
+                .prepare(`SELECT meta_json FROM channel_messages WHERE id = ? AND channel_id = ?`)
+                .get(threadRootId, channelId) as { meta_json?: string } | undefined)
+        const rootMeta = safeJsonParse<ChannelMessageMeta>(canonicalRoot?.meta_json, {})
+        if (rootMeta.postStatus === 'closed') {
+          throw new Error('该帖子已关闭，重新打开后可继续回复')
+        }
+      }
+    } else if (channelKind === 'announcement' && !this.canManageChannel(channel, accountId)) {
+      throw new Error('permission denied: 公告频道仅群主或管理员可发布公告，请在公告下方的讨论串中回复')
     }
     const attachments: ChannelAttachment[] = Array.isArray(input.attachments)
       ? input.attachments
@@ -2816,7 +2985,10 @@ export class ChannelService {
             kind: a.kind === 'image' ? 'image' : 'file',
           }))
       : []
-    if (!text && attachments.length === 0) throw new Error('消息内容不能为空')
+    const cleanPostTitle = String(input.postTitle ?? '').replace(/\s+/g, ' ').trim().slice(0, 80)
+    if (!text && attachments.length === 0 && !(channelKind === 'forum' && !threadRootId && cleanPostTitle)) {
+      throw new Error('消息内容不能为空')
+    }
 
     // 若是空间群，首次发消息自动加入人类成员表（便于群成员列表与 RoomFloor 计算）
     if (channel.access_mode === 'workspace' && !this.isChannelMember(channelId, accountId)) {
@@ -2839,6 +3011,17 @@ export class ChannelService {
 
     const viaAgentId = String(input.viaAgentId ?? '').trim()
     const viaMeta = viaAgentId ? this.agentMeta(viaAgentId) : null
+    const messageMeta: ChannelMessageMeta = {}
+    if (viaAgentId) {
+      messageMeta.viaAgentId = viaAgentId
+      messageMeta.viaAgentName = viaMeta?.name || viaAgentId
+    }
+    if (channelKind === 'forum' && !threadRootId) {
+      messageMeta.postTitle = deriveForumPostTitle(cleanPostTitle, text, attachments)
+      const postTags = normalizeForumTags(input.postTags, 5)
+      if (postTags.length > 0) messageMeta.postTags = postTags
+      messageMeta.postStatus = input.postStatus ? normalizeForumPostStatus(input.postStatus) : 'open'
+    }
     const message = this.insertMessage({
       channelId,
       senderType: 'account',
@@ -2848,21 +3031,15 @@ export class ChannelService {
       text,
       mentions,
       attachments,
-      ...(viaAgentId
-        ? {
-            meta: {
-              viaAgentId,
-              viaAgentName: viaMeta?.name || viaAgentId,
-            },
-          }
-        : {}),
+      ...(Object.keys(messageMeta).length > 0 ? { meta: messageMeta } : {}),
     })
 
     this.notifyMentionedHumans(channel, message, mentions, channelHumans)
 
-    // 严格 Slack 逻辑：仅显式 @Agent 或 @所有人 时触发回复；Agent 通过文件系统代发时默认不触发链式互唤
+    // 严格 Slack 逻辑：仅显式 @Agent 或 @所有人 时触发回复；论坛发新帖时若 @Agent，自动回复到该帖子讨论串下，避免新建独立帖子
     const triggeredRunIds: string[] = []
     if (!input.suppressAgentTrigger) {
+      const effectiveThreadRootId = threadRootId || (channelKind === 'forum' ? message.id : '')
       for (const agentId of agentIds) {
         if (viaAgentId && agentId === viaAgentId) continue
         const runId = this.enqueueAgentRun({
@@ -2871,9 +3048,9 @@ export class ChannelService {
           agentId,
           invokerId: accountId,
           originMessageId: message.id,
-          ...(threadRootId ? { threadRootId } : {}),
+          ...(effectiveThreadRootId ? { threadRootId: effectiveThreadRootId } : {}),
           senderName: message.senderName,
-          text: text || attachments.map((a) => `[附件: ${a.name}]`).join(' '),
+          text: text || cleanPostTitle || attachments.map((a) => `[附件: ${a.name}]`).join(' '),
           hopCount: 0,
           visitedAgents: new Set(),
         })
@@ -3142,9 +3319,22 @@ export class ChannelService {
           )
           .all(job.channelId, MAX_CHANNEL_HISTORY_MESSAGES) as MessageRow[])
 
+    const channelKind = normalizeChannelKind(channel.kind)
+    const channelModeHint =
+      channelKind === 'forum'
+        ? job.threadRootId
+          ? '的一个论坛帖子讨论串'
+          : '（论坛频道）'
+        : channelKind === 'announcement'
+          ? job.threadRootId
+            ? '一条公告下方的讨论串'
+            : '（公告频道）'
+          : job.threadRootId
+            ? '的一个聚焦讨论串（Thread）'
+            : ''
     const channelSystemPrompt = [
       meta.systemPrompt ? `${meta.systemPrompt.trim()}\n` : '',
-      `你当前在 BIU 聊天「#${channel.name}」${job.threadRootId ? '的一个聚焦讨论串（Thread）' : ''}中，你的名字是「${meta.name}」（归属人：${ownerName}）。`,
+      `你当前在 BIU 聊天「#${channel.name}」${channelModeHint}中，你的名字是「${meta.name}」（归属人：${ownerName}）。`,
       channel.topic ? `主题：${channel.topic}` : '',
       `人类成员：${humanNames.join('、') || '（无）'}`,
       `群内 Agent：${agentNames.join('、') || meta.name}`,
@@ -3166,7 +3356,9 @@ export class ChannelService {
     for (const row of historyRows) {
       const atts = safeJsonParse<ChannelAttachment[]>(row.attachments_json, [])
       const attNote = atts.length > 0 ? ` ${atts.map((a) => `[附件: ${a.name}]`).join(' ')}` : ''
-      const content = `${row.text}${attNote}`.trim()
+      const rowMeta = safeJsonParse<ChannelMessageMeta>(row.meta_json, {})
+      const titlePrefix = rowMeta.postTitle ? `【帖子：${rowMeta.postTitle}】\n` : ''
+      const content = `${titlePrefix}${row.text}${attNote}`.trim()
       if (!content) continue
       if (row.sender_type === 'agent' && row.sender_id === job.agentId) {
         llmMessages.push({ role: 'assistant', content })
@@ -3635,7 +3827,9 @@ export function registerChannelRoutes(ctx: Context, resolveLlm: (sessionId?: str
       const body = (await route.json()) as {
         name?: string
         topic?: string
+        kind?: GroupChannelKind
         accessMode?: ChannelAccessMode
+        forumTags?: string[]
         memberAccountIds?: string[]
         agentIds?: string[]
         agentContextMode?: ChannelAgentContextMode
@@ -3643,7 +3837,9 @@ export function registerChannelRoutes(ctx: Context, resolveLlm: (sessionId?: str
       route.send(200, service.createChannel({
         name: body?.name ?? '',
         topic: body?.topic,
+        kind: body?.kind,
         accessMode: body?.accessMode,
+        forumTags: body?.forumTags,
         memberAccountIds: body?.memberAccountIds,
         agentIds: body?.agentIds,
         agentContextMode: body?.agentContextMode,
@@ -3700,7 +3896,13 @@ export function registerChannelRoutes(ctx: Context, resolveLlm: (sessionId?: str
 
   ctx.http.route('PATCH', '/api/channels/:id', async (route) => {
     try {
-      const body = (await route.json()) as { name?: string; topic?: string; accessMode?: ChannelAccessMode }
+      const body = (await route.json()) as {
+        name?: string
+        topic?: string
+        accessMode?: ChannelAccessMode
+        kind?: GroupChannelKind
+        forumTags?: string[]
+      }
       route.send(200, { channel: service.updateChannel(route.params.id, body ?? {}) })
     } catch (error) {
       sendError(route, error)
@@ -3879,6 +4081,9 @@ export function registerChannelRoutes(ctx: Context, resolveLlm: (sessionId?: str
         threadRootId?: string
         mentions?: ChannelMention[]
         attachments?: ChannelAttachment[]
+        postTitle?: string
+        postTags?: string[]
+        postStatus?: ForumPostStatus
       }
       route.send(200, service.sendMessage(route.params.id, {
         text: body?.text ?? '',
@@ -3886,6 +4091,9 @@ export function registerChannelRoutes(ctx: Context, resolveLlm: (sessionId?: str
         threadRootId: body?.threadRootId,
         mentions: body?.mentions,
         attachments: body?.attachments,
+        postTitle: body?.postTitle,
+        postTags: body?.postTags,
+        postStatus: body?.postStatus,
       }))
     } catch (error) {
       sendError(route, error)
@@ -3921,8 +4129,22 @@ export function registerChannelRoutes(ctx: Context, resolveLlm: (sessionId?: str
 
   ctx.http.route('PATCH', '/api/channels/:id/messages/:msgId', async (route) => {
     try {
-      const body = (await route.json()) as { text?: string }
-      const message = service.editMessage(route.params.id, route.params.msgId, body?.text ?? '')
+      const body = (await route.json()) as {
+        text?: string
+        postTitle?: string
+        postTags?: string[]
+        postStatus?: ForumPostStatus
+      }
+      const isForumPatch =
+        body?.postTitle !== undefined || body?.postTags !== undefined || body?.postStatus !== undefined
+      const message = isForumPatch
+        ? service.updateForumPost(route.params.id, route.params.msgId, {
+            ...(body?.text !== undefined ? { text: body.text } : {}),
+            ...(body?.postTitle !== undefined ? { postTitle: body.postTitle } : {}),
+            ...(body?.postTags !== undefined ? { postTags: body.postTags } : {}),
+            ...(body?.postStatus !== undefined ? { postStatus: body.postStatus } : {}),
+          })
+        : service.editMessage(route.params.id, route.params.msgId, body?.text ?? '')
       route.send(200, { message })
     } catch (error) {
       sendError(route, error)

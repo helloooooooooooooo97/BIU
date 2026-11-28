@@ -11,10 +11,13 @@ import {
   CheckIcon,
   Cog6ToothIcon,
   DocumentDuplicateIcon,
+  HashtagIcon,
   MagnifyingGlassIcon,
   MapPinIcon,
+  MegaphoneIcon,
   PaperAirplaneIcon,
   PlusIcon,
+  RectangleStackIcon,
   ArrowPathIcon,
   SparklesIcon,
   StarIcon,
@@ -39,6 +42,7 @@ import type {
   ChannelSearchHit,
   ChannelSummary,
   ChannelWebhookView,
+  GroupChannelKind,
 } from '../shared/channel-types.ts'
 import {
   addChannelMember,
@@ -51,6 +55,7 @@ import {
   rotateChannelWebhook,
   syncChannelToAgent,
   testChannelWebhook,
+  updateChannel,
   updateChannelAgentContextMode,
   updateChannelPreferences,
   updateChannelWebhook,
@@ -1383,6 +1388,48 @@ export const ChannelFloatingSidebar = memo(function ChannelFloatingSidebar({
               {syncNotice ? (
                 <div className="rounded-[9px] bg-emerald-500/12 px-2.5 py-2 text-[11.5px] text-emerald-400">
                   {syncNotice}
+                </div>
+              ) : null}
+
+              {/* 频道模式切换（仅群主/管理员可改：群聊 / 公告 / 论坛，底层数据完全复用） */}
+              {!isDm && canManageMembers ? (
+                <div className="space-y-1.5 rounded-[10px] bg-(--biu-color-bg-muted)/45 p-2" data-testid="channel-mode-switcher">
+                  <div className="px-0.5 text-[11px] font-medium text-(--biu-color-text-subtle)">频道模式</div>
+                  <div className="grid grid-cols-3 gap-1">
+                    {(
+                      [
+                        { id: 'channel', label: '群聊', Icon: HashtagIcon },
+                        { id: 'announcement', label: '公告', Icon: MegaphoneIcon },
+                        { id: 'forum', label: '论坛', Icon: RectangleStackIcon },
+                      ] as const
+                    ).map(({ id, label, Icon }) => {
+                      const active = (channel.kind || 'channel') === id
+                      return (
+                        <button
+                          key={id}
+                          type="button"
+                          disabled={savingPref}
+                          data-testid={`channel-mode-btn-${id}`}
+                          className={`inline-flex h-7 cursor-pointer items-center justify-center gap-1 rounded-[7px] border-0 px-2 text-[11.5px] font-medium transition-colors disabled:opacity-50 ${
+                            active
+                              ? 'bg-(--biu-color-bg-elevated) text-(--biu-color-text) shadow-xs'
+                              : 'bg-transparent text-(--biu-color-text-muted) hover:bg-(--biu-color-bg-popover-hover) hover:text-(--biu-color-text)'
+                          }`}
+                          onClick={() => {
+                            if (!channelId || active) return
+                            setSavingPref(true)
+                            setManageError('')
+                            void updateChannel(channelId, { kind: id as GroupChannelKind })
+                              .catch((err) => setManageError(err instanceof Error ? err.message : String(err)))
+                              .finally(() => setSavingPref(false))
+                          }}
+                        >
+                          <Icon className="size-3 shrink-0" />
+                          <span>{label}</span>
+                        </button>
+                      )
+                    })}
+                  </div>
                 </div>
               ) : null}
 
