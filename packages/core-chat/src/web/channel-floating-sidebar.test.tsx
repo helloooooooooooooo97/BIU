@@ -111,6 +111,15 @@ test('ChannelFloatingSidebar collapses to avatar rail, expands on hover, persist
   assert.equal(Boolean(view.queryByTestId('channel-floating-rail')), true)
   assert.equal(Boolean(view.queryByTestId('channel-floating-panel')), false)
 
+  // 胶囊轨中 Agent 头像槽位尺寸大于槽位（28px > 24px），必须用 flex 居中而非 CSS Grid 默认 start 轨道，避免向右下偏移
+  const railAgentSlot = view.getByTestId('channel-floating-rail-agent-ag-1')
+  assert.equal(railAgentSlot.classList.contains('flex'), true)
+  assert.equal(railAgentSlot.classList.contains('items-center'), true)
+  assert.equal(railAgentSlot.classList.contains('justify-center'), true)
+  assert.equal(railAgentSlot.classList.contains('grid'), false)
+  const railAgentMascot = railAgentSlot.querySelector('.sidebar-mascot')
+  assert.equal(Boolean(railAgentMascot?.classList.contains('shrink-0')), true)
+
   // 鼠标悬停展开悬浮面板，可见所有成员与 Agent，且成员在 Agent 上方
   fireEvent.mouseEnter(view.getByTestId('channel-floating-sidebar'))
   assert.equal(Boolean(view.queryByTestId('channel-floating-panel')), true)

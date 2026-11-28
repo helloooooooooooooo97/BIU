@@ -678,7 +678,7 @@ export const ChannelFloatingSidebar = memo(function ChannelFloatingSidebar({
                             className="group/row flex items-center gap-2 rounded-[9px] px-2 py-1.5 transition-colors hover:bg-(--biu-color-bg-popover-hover)"
                           >
                             <span
-                              className="relative grid shrink-0 place-items-center"
+                              className="relative flex shrink-0 items-center justify-center"
                               style={{ width: ROW_SLOT_PX, height: ROW_SLOT_PX }}
                             >
                               <RosterAvatar
@@ -771,7 +771,7 @@ export const ChannelFloatingSidebar = memo(function ChannelFloatingSidebar({
                               onClick={() => onAgentClick(ag.memberId)}
                             >
                               <span
-                                className="relative grid shrink-0 place-items-center overflow-visible"
+                                className="relative flex shrink-0 items-center justify-center overflow-visible"
                                 style={{ width: ROW_SLOT_PX, height: ROW_SLOT_PX }}
                               >
                                 <SidebarMascot
@@ -780,6 +780,7 @@ export const ChannelFloatingSidebar = memo(function ChannelFloatingSidebar({
                                   identity={resolveSessionMascot(ag.memberId, ag.mascot)}
                                   busy={busy}
                                   animate={false}
+                                  className="shrink-0"
                                   title=""
                                 />
                               </span>
@@ -1327,7 +1328,7 @@ export const ChannelFloatingSidebar = memo(function ChannelFloatingSidebar({
                         <div key={a.memberId} className="rounded-[10px] bg-(--biu-color-bg-muted)/40 px-2.5 py-2">
                           <div className="flex items-center gap-2">
                             <span
-                              className="grid shrink-0 place-items-center overflow-visible"
+                              className="flex shrink-0 items-center justify-center overflow-visible"
                               style={{ width: ROW_SLOT_PX, height: ROW_SLOT_PX }}
                             >
                               <SidebarMascot
@@ -1335,6 +1336,7 @@ export const ChannelFloatingSidebar = memo(function ChannelFloatingSidebar({
                                 sessionId={a.memberId}
                                 identity={resolveSessionMascot(a.memberId, a.mascot)}
                                 animate={false}
+                                className="shrink-0"
                                 title=""
                               />
                             </span>
@@ -1450,7 +1452,7 @@ export const ChannelFloatingSidebar = memo(function ChannelFloatingSidebar({
                   {humanMembers.map((h) => (
                     <div key={h.memberId} className="flex items-center gap-2 rounded-[10px] bg-(--biu-color-bg-muted)/40 px-2.5 py-1.5">
                       <span
-                        className="grid shrink-0 place-items-center"
+                        className="flex shrink-0 items-center justify-center"
                         style={{ width: ROW_SLOT_PX, height: ROW_SLOT_PX }}
                       >
                         <RosterAvatar avatar={resolveAvatar(h.memberId, h.avatar)} seed={h.memberId} size={ROW_HUMAN_PX} />
@@ -1541,7 +1543,7 @@ export const ChannelFloatingSidebar = memo(function ChannelFloatingSidebar({
             <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-3 pt-1 pb-3" data-testid="channel-agent-card">
               <div className="flex items-center gap-3 rounded-[10px] bg-(--biu-color-bg-muted)/45 p-2.5">
                 <span
-                  className="grid shrink-0 place-items-center overflow-visible"
+                  className="flex shrink-0 items-center justify-center overflow-visible"
                   style={{ width: 36, height: 36 }}
                 >
                   <SidebarMascot
@@ -1549,6 +1551,7 @@ export const ChannelFloatingSidebar = memo(function ChannelFloatingSidebar({
                     sessionId={inspectedAgentCard.memberId}
                     identity={resolveSessionMascot(inspectedAgentCard.memberId, inspectedAgentCard.mascot)}
                     animate={false}
+                    className="shrink-0"
                     title=""
                   />
                 </span>
@@ -1598,7 +1601,8 @@ export const ChannelFloatingSidebar = memo(function ChannelFloatingSidebar({
             m.memberType === 'agent' ? (
               <span
                 key={`rail:agent:${m.memberId}`}
-                className="relative grid shrink-0 place-items-center overflow-visible"
+                data-testid={`channel-floating-rail-agent-${m.memberId}`}
+                className="relative flex shrink-0 items-center justify-center overflow-visible"
                 style={{ width: RAIL_SLOT_PX, height: RAIL_SLOT_PX }}
                 title={`${m.name}（Agent）`}
               >
@@ -1608,13 +1612,15 @@ export const ChannelFloatingSidebar = memo(function ChannelFloatingSidebar({
                   identity={resolveSessionMascot(m.memberId, m.mascot)}
                   busy={busyAgentIds.has(m.memberId)}
                   animate={false}
+                  className="shrink-0"
                   title=""
                 />
               </span>
             ) : (
               <span
                 key={`rail:account:${m.memberId}`}
-                className="relative grid shrink-0 place-items-center"
+                data-testid={`channel-floating-rail-account-${m.memberId}`}
+                className="relative flex shrink-0 items-center justify-center"
                 style={{ width: RAIL_SLOT_PX, height: RAIL_SLOT_PX }}
                 title={m.name}
               >
