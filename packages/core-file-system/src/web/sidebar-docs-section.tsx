@@ -1,5 +1,4 @@
 import { memo, useCallback, useEffect, useMemo, useState, useSyncExternalStore, type MouseEvent } from 'react'
-import { useLocation, useNavigate } from 'react-router-dom'
 import {
   ChevronRightIcon,
   PlusIcon,
@@ -17,10 +16,10 @@ import { useSidebarCollapseStore } from '@biu/web-session-view'
 import { SidebarRow, SidebarRowMain, type SidebarRowMenuItem } from '@biu/web-session-view/sidebar-row'
 import { TrashGlyph } from '@biu/web-session-view/trash-glyph'
 import { PAGES_COLLECTION_PATH } from '../paths.ts'
-import { databaseRecordPath } from './database-path.ts'
 import { invalidateListReads, listCollection, readJson } from './db-client.ts'
 import { treeChildren } from './fields.ts'
-import { showRecordInInspector } from './inspector-db-route.ts'
+import { getInspectorDbPath, showRecordInInspector, subscribeInspectorDbPath } from './inspector-db-route.ts'
+import { pickDomAttrs, recordPickKind } from './pick-dom.ts'
 import { RecordMark } from './record-mark.tsx'
 import { recordPreviewEmoji, recordPreviewLabel } from './sidebar-preview.ts'
 import {
@@ -49,6 +48,8 @@ const DOC_SCOPES: ReadonlyArray<{
 const SECTION_COLLAPSE_KEY = 'chat.section.docs'
 const SCOPE_COLLAPSE_PREFIX = 'chat.docs.scope.'
 const DOC_COLUMNS = ['title', 'emoji', 'parentId', 'shareScope', 'updatedAt']
+const PAGE_INSPECTOR_PANE = `database:${PAGES_COLLECTION_PATH}`
+const PAGE_PICK_KIND = recordPickKind('pages')
 
 export function docScopeOf(row: DbRecord): DocScopeKey {
   const raw = typeof row.shareScope === 'string' ? row.shareScope.trim() : ''
@@ -97,17 +98,21 @@ export const SidebarDocsSection = memo(function SidebarDocsSection({
   iconRail = false,
   popoverClose,
 }: SidebarDocsSectionProps) {
-  const navigate = useNavigate()
-  const location = useLocation()
   const collapsedMap = useSidebarCollapseStore((s) => s.collapsed)
   const toggleCollapse = useSidebarCollapseStore((s) => s.toggle)
 
   const [docs, setDocs] = useState<DbRecord[]>([])
   const [openKids, setOpenKids] = useState<Record<string, boolean>>({})
+  const [activeDocId, setActiveDocId] = useState<string | null>(null)
 
   useSyncExternalStore(subscribeStarredRecords, getStarredRecordsVersion, () => 0)
   const starredRecords = getStarredRecords()
-  const activeRecordId = activePageRecordId(location.pathname)
+  const inspectorPagesPath = useSyncExternalStore(
+    subscribeInspectorDbPath,
+    () => getInspectorDbPath(PAGE_INSPECTOR_PANE) || getInspectorDbPath(),
+    () => '',
+  )
+  const activeRecordId = activeDocId ?? activePageRecordId(inspectorPagesPath)
 
   const refreshDocs = useCallback((fresh = false) => {
     void listCollection({
@@ -153,14 +158,15 @@ export const SidebarDocsSection = memo(function SidebarDocsSection({
   const grouped = useMemo(() => groupDocsByScope(docs), [docs])
 
   const openDoc = useCallback(
-    (row: DbRecord) => {
+    (row: DbRecord, opts?: { newTab?: boolean }) => {
       rememberRecords(PAGES_COLLECTION_PATH, [
         { id: row.id, label: recordPreviewLabel(row), emoji: recordPreviewEmoji(row) },
       ])
+      setActiveDocId(row.id)
       popoverClose?.()
-      navigate(databaseRecordPath(PAGES_COLLECTION_PATH, row.id))
+      showRecordInInspector(PAGES_COLLECTION_PATH, row.id, undefined, opts)
     },
-    [navigate, popoverClose],
+    [popoverClose],
   )
 
   const createDoc = useCallback(
@@ -247,13 +253,10 @@ export const SidebarDocsSection = memo(function SidebarDocsSection({
       )
       const menuItems: SidebarRowMenuItem[] = [
         {
-          id: 'open-inspector',
-          label: '在右侧栏打开',
+          id: 'open-inspector-tab',
+          label: '在右侧新标签打开',
           icon: <ViewColumnsIcon className="size-4 shrink-0" />,
-          onSelect: () => {
-            popoverClose?.()
-            showRecordInInspector(PAGES_COLLECTION_PATH, row.id)
-          },
+          onSelect: () => openDoc(row, { newTab: true }),
         },
       ]
 
@@ -263,6 +266,7 @@ export const SidebarDocsSection = memo(function SidebarDocsSection({
             active={activeRecordId === row.id}
             pinned={starred}
             onClick={onDocRowClick}
+            attrs={pickDomAttrs(PAGE_PICK_KIND, row.id, label)}
             main={
               <SidebarRowMain>
                 {hasKids ? (

@@ -6,6 +6,7 @@ import { MemoryRouter, useLocation } from 'react-router-dom'
 import type { DbRecord } from '@biu/type-file-system'
 import { useSidebarCollapseStore } from '@biu/web-session-view'
 import { invalidateListReads } from './db-client.ts'
+import { getInspectorDbPath, resetInspectorDbPathMemory, snapshotInspectorDbPaths } from './inspector-db-route.ts'
 import { docScopeOf, groupDocsByScope, SidebarDocsSection } from './sidebar-docs-section.tsx'
 
 function LocationProbe() {
@@ -16,6 +17,7 @@ function LocationProbe() {
 beforeEach(() => {
   localStorage.clear()
   invalidateListReads()
+  resetInspectorDbPathMemory()
   useSidebarCollapseStore.setState({ collapsed: {} })
 })
 
@@ -104,17 +106,25 @@ test('SidebarDocsSection renders 个人/共享/空间 scopes with tree hierarchy
   // 跨作用域孤儿节点直接作为本作用域根节点展示
   assert.equal(workspace.contains(view.getByTestId('sidebar-doc-open-ws-orphan')), true)
 
-  // 展开子文档并点击跳转
+  // 每个文档行都携带 data-biu-kind="page" / data-biu-id / data-biu-label，支持 Pick 点击与框选
+  const rootRow = view.getByTestId('sidebar-doc-node-root-p').querySelector('.chat-session-row')
+  assert.equal(rootRow?.getAttribute('data-biu-kind'), 'page')
+  assert.equal(rootRow?.getAttribute('data-biu-id'), 'root-p')
+  assert.equal(rootRow?.getAttribute('data-biu-label'), '个人根目录')
+
+  // 展开子文档并点击：只在右侧边栏（检查器）打开，不离开当前会话路由
   fireEvent.click(view.getByTestId('sidebar-doc-toggle-root-p'))
   assert.equal(view.getByTestId('sidebar-doc-toggle-root-p').getAttribute('aria-expanded'), 'true')
   fireEvent.click(view.getByTestId('sidebar-doc-open-child-p'))
-  assert.equal(view.getByTestId('location-probe').textContent, '/database/pages/record/child-p')
+  assert.equal(view.getByTestId('location-probe').textContent, '/agents/s1')
+  assert.equal(getInspectorDbPath('database:/pages'), '/database/pages/record/child-p')
 
-  // 在空间下点击 + 新建文档应携带 scope: 'workspace' 并自动跳转
+  // 在空间下点击 + 新建文档应携带 scope: 'workspace' 并在右侧边栏打开
   fireEvent.click(view.getByTestId('sidebar-docs-create-workspace'))
   await waitFor(() => {
-    assert.equal(view.getByTestId('location-probe').textContent, '/database/pages/record/new-ws-doc')
+    assert.equal(Object.values(snapshotInspectorDbPaths()).includes('/database/pages/record/new-ws-doc'), true)
   })
+  assert.equal(view.getByTestId('location-probe').textContent, '/agents/s1')
   assert.equal(createdRequests.length, 1)
   assert.equal(createdRequests[0]?.scope, 'workspace')
 })
