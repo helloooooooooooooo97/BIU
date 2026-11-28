@@ -9225,6 +9225,18 @@ html:not(.dark) .composer-plus {
   background: var(--biu-color-bg-hover);
 }
 
+.composer-pill-left {
+  grid-area: plus;
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 6px;
+}
+
+.composer-pill-left .composer-plus {
+  grid-area: auto;
+}
+
 .composer-editor {
   grid-area: editor;
   position: relative;

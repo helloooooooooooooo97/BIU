@@ -11,9 +11,12 @@ import { filePickFromPath, pickKey, textPickFromPlain, usePickState, type PickSe
 import { HeadlessDismiss } from '@biu/biu-ui'
 import { composerDocExtensions } from './composer-kit.ts'
 import {
+  COMPOSER_LINE_PX,
+  COMPOSER_PASTE_PICK_CHARS,
   collectPickKeys,
   deletePlainRange,
   editorCaretPlain,
+  editorWrapsInCompactRow,
   insertPickChips,
   jsonFromDraft,
   composerEditorReady,
@@ -36,42 +39,7 @@ import { getChatConfig } from './chat-config.ts'
 /** 按键不驱动受控 value；仅防抖更新发送按钮可用态，避免每个字符打穿 React 渲染。 */
 const INPUT_DEBOUNCE_MS = 120
 
-/** 胶囊行：左右 padding 10+10、两段 gap 8、与 CSS `.composer-pill-row` 一致。 */
-const COMPACT_ROW_PAD_X = 20
-const COMPACT_ROW_GAP_X = 16
-const COMPOSER_LINE_PX = 28
-/** 粘贴超过这个字数时改成 pick 芯片，括号里显示字数。 */
-export const COMPOSER_PASTE_PICK_CHARS = 160
-
-/** 用「按钮还在同一行时」的编辑器宽度测是否折行，避免变方后变宽又缩回导致闪跳。 */
-function editorWrapsInCompactRow(form: HTMLElement, editorDom: HTMLElement) {
-  const plus = form.querySelector('.composer-plus') as HTMLElement | null
-  const right = form.querySelector('.composer-pill-right') as HTMLElement | null
-  const compactW =
-    form.clientWidth -
-    COMPACT_ROW_PAD_X -
-    COMPACT_ROW_GAP_X -
-    (plus?.offsetWidth ?? 28) -
-    (right?.offsetWidth ?? 80)
-  if (compactW <= 0) return false
-  const probe = editorDom.cloneNode(true) as HTMLElement
-  probe.removeAttribute('contenteditable')
-  probe.style.cssText = [
-    'position:absolute',
-    'left:-9999px',
-    'top:0',
-    `width:${compactW}px`,
-    'height:auto',
-    'max-height:none',
-    'overflow:visible',
-    `line-height:${COMPOSER_LINE_PX}px`,
-    'word-break:break-word',
-  ].join(';')
-  document.body.append(probe)
-  const wraps = probe.scrollHeight > COMPOSER_LINE_PX + 4
-  probe.remove()
-  return wraps
-}
+export { COMPOSER_PASTE_PICK_CHARS }
 
 /** 草稿持久化：跟随 session 存 localStorage，停止输入该时长后写入。草稿内容完整保存、完整恢复，不限制长度。 */
 const DRAFT_KEY = 'chat.draft'

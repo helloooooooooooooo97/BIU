@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useMemo, useRef, useState, type ClipboardEvent, type DragEvent, type FormEvent } from 'react'
+import { Fragment, memo, useCallback, useEffect, useMemo, useRef, useState, type DragEvent, type FormEvent } from 'react'
 import { createPortal } from 'react-dom'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import {
@@ -23,9 +23,7 @@ import {
   HashtagIcon,
   LockClosedIcon,
   MagnifyingGlassIcon,
-  PaperClipIcon,
   PencilSquareIcon,
-  PlusIcon,
   ShieldCheckIcon,
   SparklesIcon,
   Square2StackIcon,
@@ -41,11 +39,11 @@ import { apiFetch } from '@biu/biu-ui/api-client'
 import { onAppEvents } from '@biu/biu-ui/app-events'
 import { ChatDockStack, ChatStage as BiuChatStage } from '@biu/biu-ui/chat-pane'
 import { useWorkspaceProfile } from '@biu/biu-ui/use-workspace-profile'
+import { PickChip, splitPickStream, type PickService } from '@biu/core-pick/web'
 import { SidebarMascot, resolveSessionMascot } from '@biu/public-mascot'
 import { bindSessionView, channelAppPath, sessionAppPath, type SessionViewService } from '@biu/web-session-view'
 import type {
   ChannelAgentContextMode,
-  ChannelAttachment,
   ChannelMemberView,
   ChannelMention,
   ChannelMessageView,
@@ -53,6 +51,7 @@ import type {
   ChannelSearchHit,
   ChannelSummary,
 } from '../shared/channel-types.ts'
+import { ChannelComposer, type ChannelComposerHandle } from './channel-composer.tsx'
 import { MarkdownBody } from './markdown.tsx'
 import {
   addChannelMember,
@@ -68,7 +67,6 @@ import {
   loadOlderChannelMessages,
   loadSavedChannelMessages,
   markChannelRead,
-  notifyChannelTyping,
   openChannelRunTrace,
   recallChannelMessage,
   removeChannelMember,
@@ -84,20 +82,10 @@ import {
   toggleChannelSaveMessage,
   updateChannelAgentContextMode,
   updateChannelPreferences,
-  uploadChannelAttachment,
   useChannelStore,
 } from './channel-store.ts'
 
 const QUICK_REACTION_EMOJIS = ['👍', '👀', '✅', '🎉', '❤️', '😂', '🔥', '🤔'] as const
-
-type MentionOption = {
-  kind: 'everyone' | 'agent' | 'account'
-  id: string
-  label: string
-  sub?: string
-  avatar?: string
-  mascot?: ChannelMemberView['mascot']
-}
 
 function formatSentAt(ts: number) {
   if (!ts) return ''
@@ -178,6 +166,69 @@ export function formatChannelMessageMarkdown(text: string, mentions: ChannelMent
     })
     .join('')
 }
+
+/** 渲染已发送的用户频道消息：无 Pick 芯片时直通 MarkdownBody；含 Pick 芯片时行内混排 PickChip 与 @ 提及。 */
+const ChannelMessageBody = memo(function ChannelMessageBody({
+  text,
+  mentions,
+}: {
+  text: string
+  mentions: ChannelMention[]
+}) {
+  const parts = useMemo(() => splitPickStream(text), [text])
+  const hasPick = parts.some((p) => p.type === 'pick')
+  if (!hasPick) {
+    return (
+      <div className="chat-assistant-body">
+        <MarkdownBody text={formatChannelMessageMarkdown(text, mentions)} />
+      </div>
+    )
+  }
+  const labels = [...new Set(mentions.map((m) => m.label.trim()).filter(Boolean))].sort((a, b) => b.length - a.length)
+  const mentionRe =
+    labels.length > 0
+      ? new RegExp(`(@(?:${labels.map((l) => l.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|')}))`, 'g')
+      : null
+
+  return (
+    <div className="composer-tiptap is-readonly">
+      {parts.map((part, index) => {
+        if (part.type === 'pick') {
+          return (
+            <span key={`p${index}`} className="composer-inline-chip">
+              <PickChip pick={part.ref} />
+            </span>
+          )
+        }
+        const lines = part.value.split('\n')
+        return (
+          <Fragment key={`t${index}`}>
+            {lines.map((line, lineIndex) => {
+              const tokens = mentionRe ? line.split(mentionRe) : [line]
+              return (
+                <Fragment key={lineIndex}>
+                  {lineIndex > 0 ? <br /> : null}
+                  {tokens.map((tok, tokIdx) =>
+                    mentionRe && tokIdx % 2 === 1 ? (
+                      <span
+                        key={tokIdx}
+                        className="inline-block rounded bg-(--biu-color-bg-muted) px-1 py-0.5 text-[0.92em] font-medium text-(--biu-color-text)"
+                      >
+                        {tok}
+                      </span>
+                    ) : (
+                      <Fragment key={tokIdx}>{tok}</Fragment>
+                    ),
+                  )}
+                </Fragment>
+              )
+            })}
+          </Fragment>
+        )
+      })}
+    </div>
+  )
+})
 
 /** 与侧边栏账户及成员表完全一致的头像渲染（优先工作区头像，回退同 seed AiAvatar）。 */
 export function MemberAvatar({
@@ -301,6 +352,7 @@ export const ChannelStage = memo(function ChannelStage({
   toggleInspector,
   useSessionView,
   sessionView,
+  pick,
 }: {
   channelId: string
   leftHidden?: boolean
@@ -309,6 +361,7 @@ export const ChannelStage = memo(function ChannelStage({
   toggleInspector?: () => void
   useSessionView?: ReturnType<typeof bindSessionView>
   sessionView?: SessionViewService
+  pick?: PickService
 }) {
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
@@ -317,17 +370,12 @@ export const ChannelStage = memo(function ChannelStage({
   const workspaceProfile = useWorkspaceProfile()
   const { resolveAvatar, isOnline } = useLiveWorkspaceAvatars()
   const [loading, setLoading] = useState(false)
-  const [text, setText] = useState('')
-  const [mentions, setMentions] = useState<ChannelMention[]>([])
-  const [attachments, setAttachments] = useState<ChannelAttachment[]>([])
-  const [uploadingFiles, setUploadingFiles] = useState(0)
   const [dragOver, setDragOver] = useState(false)
   const [lightboxImage, setLightboxImage] = useState<{ url: string; name: string } | null>(null)
   const [replyTo, setReplyTo] = useState<ChannelMessageView | null>(null)
   const [editingMsgId, setEditingMsgId] = useState<string | null>(null)
   const [editingDraft, setEditingDraft] = useState('')
   const [savingEdit, setSavingEdit] = useState(false)
-  const [sending, setSending] = useState(false)
   const [error, setError] = useState('')
   const [membersModalOpen, setMembersModalOpen] = useState(false)
   const [pinsModalOpen, setPinsModalOpen] = useState(false)
@@ -353,10 +401,7 @@ export const ChannelStage = memo(function ChannelStage({
   const [savedPageNotice, setSavedPageNotice] = useState<{ id: string; title: string } | null>(null)
   const [typingTick, setTypingTick] = useState(0)
   const [agentCard, setAgentCard] = useState<ChannelMemberView | null>(null)
-  const [mentionQuery, setMentionQuery] = useState<string | null>(null)
-  const [mentionIdx, setMentionIdx] = useState(0)
   const [decidingApproval, setDecidingApproval] = useState<string | null>(null)
-  const [composerExpanded, setComposerExpanded] = useState(false)
   const [namingTitle, setNamingTitle] = useState(false)
   const [editingTitle, setEditingTitle] = useState(false)
   const [titleDraft, setTitleDraft] = useState('')
@@ -366,14 +411,12 @@ export const ChannelStage = memo(function ChannelStage({
   const [pendingNewCount, setPendingNewCount] = useState(0)
 
   const scrollRef = useRef<HTMLDivElement>(null)
-  const inputRef = useRef<HTMLTextAreaElement>(null)
-  const fileInputRef = useRef<HTMLInputElement>(null)
+  const composerRef = useRef<ChannelComposerHandle>(null)
   const titleInputRef = useRef<HTMLInputElement>(null)
   const nearBottomRef = useRef(true)
   const prevMsgCountRef = useRef(0)
   const prevLastMsgIdRef = useRef('')
   const unreadAnchorCapturedRef = useRef('')
-  const lastTypingSentRef = useRef(0)
 
   useEffect(() => {
     setActiveChannelId(channelId)
@@ -383,11 +426,11 @@ export const ChannelStage = memo(function ChannelStage({
   useEffect(() => {
     setLoading(true)
     setError('')
+    setReplyTo(null)
     setUnreadDividerSeq(null)
     setPendingNewCount(0)
     setEditingMsgId(null)
     setActiveThreadRootId(null)
-    setAttachments([])
     nearBottomRef.current = true
     prevMsgCountRef.current = 0
     prevLastMsgIdRef.current = ''
@@ -642,57 +685,13 @@ export const ChannelStage = memo(function ChannelStage({
     if (latestSeq > 0) void markChannelRead(channelId, latestSeq)
   }, [channelId, messages])
 
-  const uploadFiles = useCallback(
-    async (files: FileList | File[]) => {
-      const list = Array.from(files).filter((f) => f && f.size > 0)
-      if (list.length === 0) return
-      setError('')
-      setUploadingFiles((c) => c + list.length)
-      try {
-        for (const file of list) {
-          try {
-            const uploaded = await uploadChannelAttachment(channelId, file)
-            setAttachments((prev) => [...prev, uploaded].slice(0, 12))
-          } catch (err) {
-            setError(err instanceof Error ? err.message : String(err))
-          }
-        }
-      } finally {
-        setUploadingFiles((c) => Math.max(0, c - list.length))
-      }
-    },
-    [channelId],
-  )
-
-  const handlePaste = useCallback(
-    (event: ClipboardEvent<HTMLTextAreaElement>) => {
-      const items = event.clipboardData?.items
-      if (!items) return
-      const files: File[] = []
-      for (const item of Array.from(items)) {
-        if (item.kind === 'file') {
-          const f = item.getAsFile()
-          if (f) files.push(f)
-        }
-      }
-      if (files.length > 0) {
-        event.preventDefault()
-        void uploadFiles(files)
-      }
-    },
-    [uploadFiles],
-  )
-
-  const handleDrop = useCallback(
-    (event: DragEvent<HTMLDivElement>) => {
-      event.preventDefault()
-      setDragOver(false)
-      if (event.dataTransfer?.files?.length) {
-        void uploadFiles(event.dataTransfer.files)
-      }
-    },
-    [uploadFiles],
-  )
+  const handleDrop = useCallback((event: DragEvent<HTMLDivElement>) => {
+    event.preventDefault()
+    setDragOver(false)
+    if (event.dataTransfer?.files?.length) {
+      void composerRef.current?.uploadFiles(event.dataTransfer.files)
+    }
+  }, [])
 
   const commitEditMessage = useCallback(
     async (msgId: string) => {
@@ -726,144 +725,13 @@ export const ChannelStage = memo(function ChannelStage({
     [channelId, editingMsgId],
   )
 
-  // 自动伸缩 textarea 高度，并与 .composer-pill.is-expanded 保持一致
-  const syncTextareaHeight = useCallback((el: HTMLTextAreaElement | null) => {
-    if (!el) return
-    el.style.height = 'auto'
-    const nextH = Math.min(el.scrollHeight, 8 * 28)
-    el.style.height = `${Math.max(28, nextH)}px`
-    setComposerExpanded(el.value.includes('\n') || el.scrollHeight > 36)
-  }, [])
-
-  useEffect(() => {
-    syncTextareaHeight(inputRef.current)
-  }, [text, syncTextareaHeight])
-
   const memberById = useMemo(() => {
     const map = new Map<string, ChannelMemberView>()
     for (const m of members) map.set(`${m.memberType}:${m.memberId}`, m)
     return map
   }, [members])
 
-  const mentionOptions = useMemo<MentionOption[]>(() => {
-    const agents = members.filter((m) => m.memberType === 'agent')
-    const humans = members.filter((m) => m.memberType === 'account')
-    const base: MentionOption[] = []
-    if (agents.length > 0) {
-      base.push({ kind: 'everyone', id: 'everyone', label: '所有人', sub: `唤醒群内全部 ${agents.length} 个 Agent` })
-    }
-    for (const a of agents) {
-      base.push({
-        kind: 'agent',
-        id: a.memberId,
-        label: a.name,
-        sub: a.ownerName ? `Agent · 归属 ${a.ownerName}` : 'Agent',
-        mascot: a.mascot,
-      })
-    }
-    for (const h of humans) {
-      base.push({
-        kind: 'account',
-        id: h.memberId,
-        label: h.name,
-        sub: '成员',
-        avatar: resolveAvatar(h.memberId, h.avatar),
-      })
-    }
-    if (!mentionQuery) return base
-    const q = mentionQuery.toLowerCase()
-    return base.filter((opt) => opt.label.toLowerCase().includes(q) || (opt.sub?.toLowerCase().includes(q) ?? false))
-  }, [members, mentionQuery, resolveAvatar])
-
-  const handleTextChange = (next: string) => {
-    setText(next)
-    if (next.trim() && Date.now() - lastTypingSentRef.current > 2500) {
-      lastTypingSentRef.current = Date.now()
-      void notifyChannelTyping(channelId)
-    }
-    const caret = inputRef.current?.selectionStart ?? next.length
-    const before = next.slice(0, caret)
-    const match = before.match(/(?:^|\s)@([^\s@]*)$/)
-    if (match) {
-      setMentionQuery(match[1] ?? '')
-      setMentionIdx(0)
-    } else {
-      setMentionQuery(null)
-    }
-  }
-
-  const openMentionPicker = () => {
-    const el = inputRef.current
-    if (!el) return
-    const caret = el.selectionStart ?? text.length
-    const before = text.slice(0, caret)
-    const after = text.slice(caret)
-    const needsSpace = before.length > 0 && !/\s$/.test(before) && !before.endsWith('@')
-    const insert = before.endsWith('@') ? '' : needsSpace ? ' @' : '@'
-    const next = `${before}${insert}${after}`
-    setText(next)
-    setMentionQuery('')
-    setMentionIdx(0)
-    requestAnimationFrame(() => {
-      el.focus()
-      const pos = before.length + insert.length
-      el.setSelectionRange(pos, pos)
-    })
-  }
-
-  const pickMention = (opt: MentionOption) => {
-    const caret = inputRef.current?.selectionStart ?? text.length
-    const before = text.slice(0, caret)
-    const after = text.slice(caret)
-    const replaced = before.replace(/@[^\s@]*$/, `@${opt.label} `)
-    setText(`${replaced}${after}`)
-    setMentions((prev) => {
-      if (prev.some((m) => m.kind === opt.kind && m.id === opt.id)) return prev
-      return [...prev, { kind: opt.kind, id: opt.id, label: opt.label }]
-    })
-    setMentionQuery(null)
-    requestAnimationFrame(() => {
-      const el = inputRef.current
-      if (!el) return
-      el.focus()
-      el.setSelectionRange(replaced.length, replaced.length)
-    })
-  }
-
-  const handleSend = useCallback(async () => {
-    const body = text.trim()
-    if ((!body && attachments.length === 0) || sending || uploadingFiles > 0) return
-    setSending(true)
-    setError('')
-    try {
-      await sendChannelMessage(channelId, {
-        text: body,
-        ...(replyTo ? { replyToId: replyTo.id } : {}),
-        mentions,
-        ...(attachments.length > 0 ? { attachments } : {}),
-      })
-      setText('')
-      setMentions([])
-      setAttachments([])
-      setReplyTo(null)
-      setMentionQuery(null)
-      setComposerExpanded(false)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err))
-    } finally {
-      setSending(false)
-    }
-  }, [attachments, channelId, mentions, replyTo, sending, text, uploadingFiles])
-
-  const onFormSubmit = (event: FormEvent) => {
-    event.preventDefault()
-    if (mentionQuery !== null && mentionOptions.length > 0) {
-      const hit = mentionOptions[mentionIdx] ?? mentionOptions[0]
-      if (hit) pickMention(hit)
-      return
-    }
-    void handleSend()
-  }
+  const clearReplyTo = useCallback(() => setReplyTo(null), [])
 
   const handleAgentClick = (agentId: string) => {
     const member = memberById.get(`agent:${agentId}`)
@@ -892,7 +760,6 @@ export const ChannelStage = memo(function ChannelStage({
   const humanMembers = members.filter((m) => m.memberType === 'account')
   const peerAvatar = resolveAvatar(channel?.peerAccountId, channel?.peerAvatar)
   const peerOnline = isDm && isOnline(channel?.peerAccountId)
-  const hasChips = Boolean(replyTo) || attachments.length > 0 || uploadingFiles > 0
 
   const handleAutoName = async () => {
     if (isDm || namingTitle) return
@@ -1366,9 +1233,7 @@ export const ChannelStage = memo(function ChannelStage({
                                     {msg.text}
                                   </div>
                                 ) : (
-                                  <div className="chat-assistant-body">
-                                    <MarkdownBody text={formatChannelMessageMarkdown(msg.text, msg.mentions)} />
-                                  </div>
+                                  <ChannelMessageBody text={msg.text} mentions={msg.mentions} />
                                 )
                               ) : null}
 
@@ -1603,7 +1468,7 @@ export const ChannelStage = memo(function ChannelStage({
                                   className="inline-flex shrink-0 cursor-pointer items-center gap-1 rounded-md border border-transparent bg-transparent px-1.5 py-0.5 text-(length:--biu-chat-ui-font-size) leading-none text-(--biu-color-text-subtle) opacity-0 transition-opacity hover:bg-(--biu-color-bg-hover) hover:text-(--biu-color-text) group-hover:opacity-100"
                                   onClick={() => {
                                     setReplyTo(msg)
-                                    inputRef.current?.focus()
+                                    composerRef.current?.focus()
                                   }}
                                 >
                                   <ArrowUturnLeftIcon className="size-3" />
@@ -1810,187 +1675,17 @@ export const ChannelStage = memo(function ChannelStage({
                     </div>
                   ) : null}
 
-                  <form
-                    className={`composer-pill${composerExpanded ? ' is-expanded' : ''}${hasChips ? ' has-chips' : ''}`}
-                    onSubmit={onFormSubmit}
-                  >
-                    {/* @ 自动补全弹层：复用 .composer-slash 样式 */}
-                    {mentionQuery !== null && mentionOptions.length > 0 ? (
-                      <div
-                        className="composer-slash"
-                        role="listbox"
-                        aria-label="提及成员与 Agent"
-                        data-testid="channel-mention-menu"
-                      >
-                        <div className="composer-slash-head">提及成员或 Agent · 输入过滤 · Enter 选用</div>
-                        {mentionOptions.map((opt, idx) => (
-                          <button
-                            key={`${opt.kind}:${opt.id}`}
-                            type="button"
-                            role="option"
-                            aria-selected={idx === mentionIdx}
-                            className={`composer-slash-item !flex items-center gap-2${idx === mentionIdx ? ' is-active' : ''}`}
-                            onMouseEnter={() => setMentionIdx(idx)}
-                            onMouseDown={(e) => {
-                              e.preventDefault()
-                              pickMention(opt)
-                            }}
-                          >
-                            {opt.kind === 'agent' ? (
-                              <SidebarMascot
-                                size={18}
-                                sessionId={opt.id}
-                                identity={resolveSessionMascot(opt.id, opt.mascot)}
-                                animate={false}
-                                title=""
-                              />
-                            ) : opt.kind === 'account' ? (
-                              <MemberAvatar avatar={opt.avatar} seed={opt.id} size={18} />
-                            ) : (
-                              <UserGroupIcon className="size-4 shrink-0 text-(--biu-color-icon)" />
-                            )}
-                            <span className="composer-slash-name !font-sans font-medium">@{opt.label}</span>
-                            {opt.sub ? <span className="composer-slash-desc ml-auto">{opt.sub}</span> : null}
-                          </button>
-                        ))}
-                      </div>
-                    ) : null}
-
-                    {/* 引用回复 & 待发附件 chip */}
-                    {replyTo || attachments.length > 0 || uploadingFiles > 0 ? (
-                      <div className="composer-tool-chips flex-wrap" aria-label="附件与引用">
-                        {replyTo ? (
-                          <button
-                            type="button"
-                            className="composer-tool-chip max-w-full"
-                            title="取消引用回复"
-                            onClick={() => setReplyTo(null)}
-                          >
-                            <ArrowUturnLeftIcon className="size-3 shrink-0" />
-                            <span className="truncate">
-                              回复 {replyTo.senderName}：{replyTo.text.slice(0, 60)}
-                            </span>
-                            <span aria-hidden>×</span>
-                          </button>
-                        ) : null}
-                        {attachments.map((att) => (
-                          <span
-                            key={att.id}
-                            className="composer-tool-chip max-w-[220px]"
-                            data-testid={`composer-attachment-${att.id}`}
-                          >
-                            {att.kind === 'image' ? (
-                              <img src={att.url} alt="" className="size-4 shrink-0 rounded object-cover" />
-                            ) : (
-                              <DocumentIcon className="size-3.5 shrink-0" />
-                            )}
-                            <span className="truncate">{att.name}</span>
-                            <button
-                              type="button"
-                              className="cursor-pointer border-0 bg-transparent p-0 leading-none text-current opacity-70 hover:opacity-100"
-                              aria-label={`移除附件 ${att.name}`}
-                              onClick={() => setAttachments((prev) => prev.filter((x) => x.id !== att.id))}
-                            >
-                              ×
-                            </button>
-                          </span>
-                        ))}
-                        {uploadingFiles > 0 ? (
-                          <span className="composer-tool-chip text-(--biu-color-text-subtle)">
-                            正在上传 {uploadingFiles} 个文件…
-                          </span>
-                        ) : null}
-                      </div>
-                    ) : null}
-
-                    <input
-                      ref={fileInputRef}
-                      type="file"
-                      multiple
-                      className="hidden"
-                      data-testid="channel-file-input"
-                      onChange={(e) => {
-                        if (e.target.files?.length) void uploadFiles(e.target.files)
-                        e.target.value = ''
-                      }}
-                    />
-
-                    <div className="composer-pill-row">
-                      <button
-                        type="button"
-                        className="composer-plus"
-                        title="提及成员或 Agent (@)"
-                        aria-label="提及成员或 Agent"
-                        onClick={openMentionPicker}
-                      >
-                        <PlusIcon className="size-4" />
-                      </button>
-
-                      <button
-                        type="button"
-                        className="composer-plus"
-                        title="上传图片或文件（也支持粘贴或拖拽）"
-                        aria-label="上传图片或文件"
-                        data-testid="channel-upload-btn"
-                        onClick={() => fileInputRef.current?.click()}
-                      >
-                        <PaperClipIcon className="size-3.5" />
-                      </button>
-
-                      <div className="composer-editor">
-                        <textarea
-                          ref={inputRef}
-                          rows={1}
-                          value={text}
-                          onChange={(e) => handleTextChange(e.target.value)}
-                          onPaste={handlePaste}
-                          data-testid="channel-composer-input"
-                          className="composer-tiptap block w-full resize-none border-0 bg-transparent p-0 outline-none placeholder:text-(--biu-color-text-placeholder)"
-                          onKeyDown={(e) => {
-                            if (mentionQuery !== null && mentionOptions.length > 0) {
-                              if (e.key === 'ArrowDown') {
-                                e.preventDefault()
-                                setMentionIdx((i) => (i + 1) % mentionOptions.length)
-                                return
-                              }
-                              if (e.key === 'ArrowUp') {
-                                e.preventDefault()
-                                setMentionIdx((i) => (i - 1 + mentionOptions.length) % mentionOptions.length)
-                                return
-                              }
-                              if (e.key === 'Enter' || e.key === 'Tab') {
-                                e.preventDefault()
-                                pickMention(mentionOptions[mentionIdx]!)
-                                return
-                              }
-                              if (e.key === 'Escape') {
-                                e.preventDefault()
-                                setMentionQuery(null)
-                                return
-                              }
-                            }
-                            if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
-                              e.preventDefault()
-                              void handleSend()
-                            }
-                          }}
-                        />
-                      </div>
-
-                      <div className="composer-pill-right">
-                        <button
-                          type="submit"
-                          disabled={(!text.trim() && attachments.length === 0) || sending || uploadingFiles > 0}
-                          data-testid="channel-composer-send"
-                          className="composer-send"
-                          aria-label="发送消息"
-                          title="发送"
-                        >
-                          <ArrowUpIcon className="size-3.5" aria-hidden />
-                        </button>
-                      </div>
-                    </div>
-                  </form>
+                  <ChannelComposer
+                    ref={composerRef}
+                    channelId={channelId}
+                    isDm={isDm}
+                    members={members}
+                    resolveAvatar={resolveAvatar}
+                    replyTo={replyTo}
+                    onClearReplyTo={clearReplyTo}
+                    onError={setError}
+                    pick={pick}
+                  />
                 </div>
               </ChatDockStack>
             </div>
