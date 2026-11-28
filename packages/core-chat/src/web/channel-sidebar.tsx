@@ -8,6 +8,7 @@ import {
   BookmarkIcon,
   ChatBubbleBottomCenterTextIcon,
   ChatBubbleLeftRightIcon,
+  ChatBubbleOvalLeftIcon,
   CheckIcon,
   ChevronRightIcon,
   ClockIcon,
@@ -44,6 +45,7 @@ import { SIDEBAR_ROW_MAIN_CLASS, SidebarRow, SidebarRowMain, type SidebarRowMenu
 import {
   buildDefaultChannelName,
   computeChannelShareScope,
+  normalizeChannelKind,
   type ChannelAccessMode,
   type ChannelAgentContextMode,
   type GroupChannelKind,
@@ -354,8 +356,7 @@ export const ChannelSidebarSections = memo(function ChannelSidebarSections({
 
   const visibleChannels = useMemo(() => {
     const filtered = channels.filter((ch) => {
-      if (channelPrefs.kind === 'dm' && ch.kind !== 'dm') return false
-      if (channelPrefs.kind === 'channel' && ch.kind === 'dm') return false
+      if (channelPrefs.kind !== 'all' && normalizeChannelKind(ch.kind) !== channelPrefs.kind) return false
       if (channelPrefs.status === 'unread' && !((ch.unreadCount ?? 0) > 0 && ch.id !== routeChannelId)) return false
       if (channelPrefs.status === 'pinned' && !ch.pinned) return false
       return true
@@ -375,10 +376,14 @@ export const ChannelSidebarSections = memo(function ChannelSidebarSections({
     if (channelPrefs.groupBy === 'none') return null
     if (channelPrefs.groupBy === 'kind') {
       const dms = visibleChannels.filter((ch) => ch.kind === 'dm')
-      const rooms = visibleChannels.filter((ch) => ch.kind !== 'dm')
+      const rooms = visibleChannels.filter((ch) => normalizeChannelKind(ch.kind) === 'channel')
+      const announcements = visibleChannels.filter((ch) => ch.kind === 'announcement')
+      const forums = visibleChannels.filter((ch) => ch.kind === 'forum')
       return [
         ...(dms.length ? [{ key: 'kind:dm', label: '私聊', rows: dms }] : []),
         ...(rooms.length ? [{ key: 'kind:channel', label: '群聊', rows: rooms }] : []),
+        ...(announcements.length ? [{ key: 'kind:announcement', label: '公告', rows: announcements }] : []),
+        ...(forums.length ? [{ key: 'kind:forum', label: '论坛', rows: forums }] : []),
       ]
     }
     const now = Date.now()
@@ -715,6 +720,8 @@ export const ChannelSidebarSections = memo(function ChannelSidebarSections({
                   { value: 'all', label: '全部' },
                   { value: 'dm', label: '仅私聊' },
                   { value: 'channel', label: '仅群聊' },
+                  { value: 'announcement', label: '仅公告' },
+                  { value: 'forum', label: '仅论坛' },
                 ],
                 onChange: (value) => patchChannelPrefs({ kind: value }),
               },
@@ -788,6 +795,10 @@ export const ChannelSidebarSections = memo(function ChannelSidebarSections({
                                   {isTime ? (
                                     <ClockIcon className="size-4 shrink-0" />
                                   ) : group.key === 'kind:dm' ? (
+                                    <ChatBubbleOvalLeftIcon className="size-4 shrink-0" />
+                                  ) : group.key === 'kind:announcement' ? (
+                                    <MegaphoneIcon className="size-4 shrink-0" />
+                                  ) : group.key === 'kind:forum' ? (
                                     <ChatBubbleLeftRightIcon className="size-4 shrink-0" />
                                   ) : (
                                     <UserGroupIcon className="size-4 shrink-0" />
