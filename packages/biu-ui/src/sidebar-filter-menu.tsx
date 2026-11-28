@@ -156,9 +156,17 @@ function ChevronRightGlyph({ open }: { open: boolean }) {
   )
 }
 
+const BRIGHT_EMPHASIS_COLOR = 'color-mix(in srgb, var(--biu-color-emphasis) 72%, #ffffff)'
+
 function CheckGlyph() {
   return (
-    <svg viewBox="0 0 16 16" fill="none" aria-hidden="true" className="size-3.5 shrink-0 text-(--biu-color-emphasis)">
+    <svg
+      viewBox="0 0 16 16"
+      fill="none"
+      aria-hidden="true"
+      className="size-3.5 shrink-0"
+      style={{ color: BRIGHT_EMPHASIS_COLOR }}
+    >
       <path
         d="M3.5 8.5 6.5 11.5 12.5 4.75"
         stroke="currentColor"
@@ -273,7 +281,11 @@ export function SidebarFilterMenu({
           <span className="truncate font-normal">{row.label}</span>
           <span className="flex shrink-0 items-center gap-1.5">
             {showDot && isActive ? (
-              <span className="size-1.5 rounded-full bg-(--biu-color-emphasis)" aria-hidden="true" />
+              <span
+                className="size-1.5 rounded-full"
+                style={{ backgroundColor: BRIGHT_EMPHASIS_COLOR }}
+                aria-hidden="true"
+              />
             ) : !showDot ? (
               <span className="text-[12px] text-(--biu-color-text-muted)">{currentLabel}</span>
             ) : null}
@@ -324,9 +336,10 @@ export function SidebarFilterMenu({
         aria-expanded={open}
         className={`grid size-6 shrink-0 cursor-pointer place-items-center rounded-md border-0 bg-transparent p-0 transition-colors hover:bg-(--biu-color-bg-hover) ${
           open || hasNonDefaultView
-            ? 'text-(--biu-color-emphasis)'
+            ? ''
             : 'text-(--biu-color-text-muted) hover:text-(--biu-color-text)'
         }`}
+        style={open || hasNonDefaultView ? { color: BRIGHT_EMPHASIS_COLOR } : undefined}
         onClick={(event) => {
           event.stopPropagation()
           setOpen((prev) => !prev)

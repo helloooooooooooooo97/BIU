@@ -1055,7 +1055,7 @@ export const ChannelFloatingSidebar = memo(function ChannelFloatingSidebar({
                   <button
                     type="button"
                     data-testid="channel-floating-pref-pin"
-                    title={channel?.pinned ? '取消置顶聊天' : '置顶聊天到侧栏顶部'}
+                    title={channel?.pinned ? '取消收藏聊天' : '收藏聊天'}
                     className={`inline-flex h-6 cursor-pointer items-center gap-1 rounded-[7px] border-0 px-2 text-[11px] transition-colors ${
                       channel?.pinned
                         ? 'bg-(--biu-color-bg-elevated) font-medium text-(--biu-color-text) shadow-xs'
@@ -1063,8 +1063,8 @@ export const ChannelFloatingSidebar = memo(function ChannelFloatingSidebar({
                     }`}
                     onClick={onToggleChannelPinned}
                   >
-                    <BookmarkIcon className="size-3" />
-                    <span>{channel?.pinned ? '已置顶' : '置顶会话'}</span>
+                    <StarIcon className="size-3" />
+                    <span>{channel?.pinned ? '已收藏' : '收藏'}</span>
                   </button>
                   <button
                     type="button"
@@ -1595,8 +1595,8 @@ export const ChannelFloatingSidebar = memo(function ChannelFloatingSidebar({
                       .finally(() => setSavingPref(false))
                   }}
                 >
-                  <BookmarkIcon className="size-3.5" />
-                  <span>{channel.pinned ? '已置顶聊天' : '置顶聊天'}</span>
+                  <StarIcon className="size-3.5" />
+                  <span>{channel.pinned ? '已收藏聊天' : '收藏聊天'}</span>
                 </button>
                 <button
                   type="button"

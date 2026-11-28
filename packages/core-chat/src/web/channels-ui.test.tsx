@@ -1643,16 +1643,16 @@ test('sidebar uses hide/leave/unfollow menus, breadcrumb toggles thread follow, 
     </MemoryRouter>,
   )
 
-  // 1. 私聊侧栏 ⋯ 菜单包含置顶、免打扰、隐藏对话（且不含解散/删除），点击隐藏仅移除自身侧栏
+  // 1. 私聊侧栏统一提供星标「收藏」按钮，⋯ 菜单包含免打扰、隐藏对话（且不含解散/删除），点击隐藏仅移除自身侧栏
   const moreBtns = await waitFor(() => {
     const btns = view.getAllByTestId('sidebar-row-more')
     assert.ok(btns.length >= 2)
     return btns
   })
+  assert.ok(view.getByRole('button', { name: '收藏 Bob' }))
   const dmMoreBtn = moreBtns.find((b) => b.getAttribute('aria-label') === 'Bob 更多操作')!
   fireEvent.click(dmMoreBtn)
   const hideDmItem = await waitFor(() => view.getByTestId('sidebar-row-menu-hide'))
-  assert.ok(view.getByTestId('sidebar-row-menu-pin'))
   assert.ok(view.getByTestId('sidebar-row-menu-mute'))
   assert.equal(hideDmItem.textContent?.includes('隐藏对话'), true)
   assert.equal(view.queryByTestId('sidebar-row-menu-delete'), null)
@@ -1665,9 +1665,9 @@ test('sidebar uses hide/leave/unfollow menus, breadcrumb toggles thread follow, 
 
   // 1.5 群主在多人聊天侧栏 ⋯ 菜单可见置顶、免打扰、隐藏聊天与「解散聊天」（点解散先弹二次确认框，不直接删）
   const grpMoreBtn = view.getAllByTestId('sidebar-row-more').find((b) => b.getAttribute('aria-label') === '产品讨论组 更多操作')!
+  assert.ok(view.getByRole('button', { name: '收藏 产品讨论组' }))
   fireEvent.click(grpMoreBtn)
-  assert.ok(await waitFor(() => view.getByTestId('sidebar-row-menu-pin')))
-  assert.ok(view.getByTestId('sidebar-row-menu-mute'))
+  assert.ok(await waitFor(() => view.getByTestId('sidebar-row-menu-mute')))
   assert.ok(view.getByTestId('sidebar-row-menu-hide'))
   fireEvent.click(view.getByTestId('sidebar-row-menu-disband'))
   assert.ok(await waitFor(() => view.getByTestId('sidebar-disband-confirm-dialog')))

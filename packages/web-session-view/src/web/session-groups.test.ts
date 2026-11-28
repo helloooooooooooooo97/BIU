@@ -89,31 +89,31 @@ test('mostRecentSessionId ignores pins and breaks ties by id', () => {
   assert.equal(mostRecentSessionId([]), undefined)
 })
 
-test('buildSidebarSections puts pinned rows in their own section above projects', () => {
+test('buildSidebarSections keeps starred rows inside the agents section without a duplicate favorites section', () => {
   const sections = buildSidebarSections([
     item({ id: 'a', updatedAt: 2, pinned: true, project: { name: 'x', path: '/x', boundAt: 1 } }),
     item({ id: 'b', updatedAt: 9, project: { name: 'x', path: '/x', boundAt: 1 } }),
   ])
   assert.deepEqual(
     sections.map((section) => section.kind),
-    ['pinned', 'project'],
+    ['project'],
   )
+  assert.equal(sections[0]?.label, '代理')
   assert.deepEqual(
-    sections[0]?.sessions?.map((row) => row.id),
-    ['a'],
-  )
-  assert.equal(sections[0]?.label, '收藏')
-  // 收藏行仍然留在项目分组里，无未分组会话时不出现空的「未分组」
-  assert.deepEqual(
-    sections[1]?.groups?.map((group) => group.key),
+    sections[0]?.groups?.map((group) => group.key),
     ['/x'],
+  )
+  assert.deepEqual(
+    sections[0]?.groups?.[0]?.sessions.map((row) => row.id),
+    ['a', 'b'],
   )
 })
 
-test('buildSidebarSections has no pinned section when nothing is pinned', () => {
+test('buildSidebarSections returns a single agents section when nothing is starred', () => {
   const sections = buildSidebarSections([item({ id: 'a', updatedAt: 2 })])
   assert.deepEqual(
     sections.map((section) => section.kind),
     ['project'],
   )
+  assert.equal(sections[0]?.label, '代理')
 })
