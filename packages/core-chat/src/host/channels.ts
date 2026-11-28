@@ -26,6 +26,7 @@ import { runWithToolPolicy, type AgentToolMode } from '@biu/host-tools'
 import type { SessionMascot } from '@biu/type-session'
 import {
   buildDefaultChannelName,
+  computeChannelShareScope,
   DEFAULT_FORUM_TAGS,
   normalizeChannelKind,
   normalizeForumPostStatus,
@@ -864,6 +865,25 @@ export class ChannelService {
     return role === 'owner' || role === 'admin'
   }
 
+  /** 对齐 AuthorizationService：仅空间内部成员（member_kind === 'member'）可享受/开启「空间全员」通用访问，external 与 guest 必须显式受邀。 */
+  private isInternalWorkspaceMember(accountId: string, workspaceId: string): boolean {
+    if (!workspaceId || accountId === 'local') return true
+    const store = this.accountStore()
+    if (store?.isMember && !store.isMember(accountId, workspaceId)) return false
+    const kind = store?.authorization?.membershipKind?.(accountId, workspaceId)
+    if (kind === 'external' || kind === 'guest') return false
+    return true
+  }
+
+  /** 对齐 AuthorizationService：空间 viewer 与 guest 封顶只读，不可新建频道或绕过权限发言。 */
+  private isReadOnlyWorkspaceAccount(accountId: string, workspaceId: string): boolean {
+    if (!workspaceId || accountId === 'local') return false
+    const auth = this.accountStore()?.authorization
+    const role = auth?.membership?.(accountId, workspaceId)
+    const kind = auth?.membershipKind?.(accountId, workspaceId)
+    return role === 'viewer' || kind === 'guest'
+  }
+
   private isChannelMember(channelId: string, accountId: string): MemberRow | null {
     const row = this.db()
       .prepare(`SELECT * FROM channel_members WHERE channel_id = ? AND member_type = 'account' AND member_id = ?`)
@@ -874,19 +894,24 @@ export class ChannelService {
   private canReadChannel(channel: ChannelRow, accountId: string): boolean {
     if (accountId === 'local' || !channel.workspace_id) return true
     if (channel.access_mode === 'workspace') {
-      const store = this.accountStore()
-      if (store?.isMember && !store.isMember(accountId, channel.workspace_id)) return false
-      return true
+      // 空间内部成员自动可见；外部协作者 / 访客仅在显式受邀（channel_members）时可见
+      if (this.isInternalWorkspaceMember(accountId, channel.workspace_id)) return true
+      return Boolean(this.isChannelMember(channel.id, accountId))
     }
     return Boolean(this.isChannelMember(channel.id, accountId))
   }
 
   private canManageChannel(channel: ChannelRow, accountId: string): boolean {
     if (accountId === 'local' || !channel.workspace_id) return true
+    if (this.isReadOnlyWorkspaceAccount(accountId, channel.workspace_id)) return false
     if (channel.created_by === accountId) return true
     const mem = this.isChannelMember(channel.id, accountId)
     if (mem && (mem.role === 'owner' || mem.role === 'admin')) return true
-    return this.isWorkspaceAdmin(accountId, channel.workspace_id)
+    // 对齐 AuthorizationService：仅「空间全员」频道由空间管理员默认继承管理权；「仅受邀人员（含私人与共享）」频道不越权接管
+    if (channel.access_mode === 'workspace') {
+      return this.isWorkspaceAdmin(accountId, channel.workspace_id)
+    }
+    return false
   }
 
   private toSummary(row: ChannelRow, viewerAccountId = this.currentActorIds().accountId): ChannelSummary {
@@ -971,8 +996,13 @@ export class ChannelService {
       }
     }
     const sidebarThreads = this.listSidebarThreads(row.id, viewerAccountId)
+    const accessMode: ChannelAccessMode = row.access_mode === 'workspace' ? 'workspace' : 'private'
+    const humanCount = Number(counts?.humans ?? 0)
+    const shareScope = computeChannelShareScope(accessMode, humanCount, kind)
     const canManage = this.canManageChannel(row, viewerAccountId)
-    const canPost = kind === 'announcement' ? canManage : true
+    const isReadOnly = this.isReadOnlyWorkspaceAccount(viewerAccountId, row.workspace_id)
+    const canPost = isReadOnly ? false : kind === 'announcement' ? canManage : true
+    const canChangeAccessMode = canManage && this.isInternalWorkspaceMember(viewerAccountId, row.workspace_id)
     return {
       id: row.id,
       workspaceId: row.workspace_id,
@@ -983,11 +1013,12 @@ export class ChannelService {
       ...(peerAvatar ? { peerAvatar } : {}),
       name: displayName,
       topic: row.topic,
-      accessMode: row.access_mode === 'workspace' ? 'workspace' : 'private',
+      accessMode,
+      shareScope,
       createdBy: row.created_by,
       createdAt: row.created_at,
       updatedAt: row.updated_at,
-      memberCount: Number(counts?.humans ?? 0),
+      memberCount: humanCount,
       agentCount: Number(counts?.agents ?? 0),
       lastMessageAt: Number(last?.created_at ?? row.updated_at),
       lastMessageText: lastPreview,
@@ -998,6 +1029,7 @@ export class ChannelService {
       pinned: Boolean(viewerMember?.pinned),
       ...(Number(viewerMember?.hidden_at ?? 0) > 0 ? { hidden: true } : {}),
       canManage,
+      canChangeAccessMode,
       canPost,
       ...(forumTags ? { forumTags } : {}),
       ...(sidebarThreads.length > 0 ? { threads: sidebarThreads } : {}),
@@ -1275,7 +1307,14 @@ export class ChannelService {
     agentContextMode?: ChannelAgentContextMode
   }): ChannelDetailPayload {
     const { accountId, workspaceId } = this.currentActorIds()
+    if (this.isReadOnlyWorkspaceAccount(accountId, workspaceId)) {
+      throw new Error('permission denied: 只读成员或访客无法新建聊天')
+    }
     const kind = normalizeGroupChannelKind(input.kind)
+    const accessMode: ChannelAccessMode = input.accessMode === 'workspace' ? 'workspace' : 'private'
+    if (accessMode === 'workspace' && !this.isInternalWorkspaceMember(accountId, workspaceId)) {
+      throw new Error('permission denied: 仅空间内部成员可创建空间全员可见的聊天')
+    }
     const agentContextMode = normalizeAgentContextMode(input.agentContextMode)
     const cleanHumanIds: string[] = []
     for (const memberId of input.memberAccountIds ?? []) {
@@ -1306,7 +1345,6 @@ export class ChannelService {
             )
     const name = providedName || fallbackByKind
     const topic = String(input.topic ?? '').trim().slice(0, 240)
-    const accessMode: ChannelAccessMode = input.accessMode === 'workspace' ? 'workspace' : 'private'
     const forumTags = normalizeForumTags(input.forumTags, 12)
     const configJson = JSON.stringify(forumTags.length > 0 ? { forumTags } : {})
     const id = allocateRecordId()
@@ -1448,6 +1486,13 @@ export class ChannelService {
     const nextTopic = patch.topic !== undefined ? String(patch.topic).trim().slice(0, 240) : row.topic
     const nextMode: ChannelAccessMode =
       patch.accessMode !== undefined ? (patch.accessMode === 'workspace' ? 'workspace' : 'private') : (row.access_mode === 'workspace' ? 'workspace' : 'private')
+    if (row.kind === 'dm' && patch.accessMode === 'workspace') {
+      throw new Error('私聊不支持设为空间全员可见')
+    }
+    if (nextMode === 'workspace' && !this.isInternalWorkspaceMember(accountId, row.workspace_id)) {
+      throw new Error('permission denied: 仅空间内部成员可将聊天设为空间全员可见')
+    }
+    const prevAudience = this.channelHumanAccountIds(channelId, row.workspace_id, row.access_mode === 'workspace')
     const nextKind: ChannelKind =
       row.kind === 'dm'
         ? 'dm'
@@ -1466,7 +1511,13 @@ export class ChannelService {
       .prepare(`UPDATE channels SET kind = ?, name = ?, topic = ?, access_mode = ?, config_json = ?, updated_at = ? WHERE id = ?`)
       .run(nextKind, nextName, nextTopic, nextMode, JSON.stringify(nextConfig), now, channelId)
     const updatedRow = this.requireChannelRow(channelId, accountId)
-    this.broadcastChannelSummaryPerViewer(updatedRow)
+    const nextAudience = this.channelHumanAccountIds(channelId, updatedRow.workspace_id, nextMode === 'workspace')
+    const nextSet = new Set(nextAudience)
+    const removedAudience = prevAudience.filter((id) => !nextSet.has(id))
+    if (removedAudience.length > 0) {
+      this.broadcastToAccounts(removedAudience, updatedRow.workspace_id, 'channel/deleted', { id: channelId })
+    }
+    this.broadcastChannelSummaryPerViewer(updatedRow, nextAudience)
     return this.toSummary(updatedRow, accountId)
   }
 
@@ -1537,8 +1588,7 @@ export class ChannelService {
     const members = this.listMembers(channelId, accountId, row.workspace_id)
     this.broadcastToChannel(channelId, row.workspace_id, 'channel/members', { channelId, members })
     if (memberType === 'account') {
-      const invitedSummary = this.toSummary(row, cleanId)
-      this.broadcastToAccounts([cleanId], row.workspace_id, 'channel/updated', { channel: invitedSummary })
+      this.broadcastChannelSummaryPerViewer(row)
     }
     return members
   }
@@ -1624,10 +1674,7 @@ export class ChannelService {
     if (addedIds.length > 0) {
       this.broadcastToChannel(channelId, row.workspace_id, 'channel/members', { channelId, members })
       if (memberType === 'account') {
-        for (const invitedId of addedIds) {
-          const invitedSummary = this.toSummary(row, invitedId)
-          this.broadcastToAccounts([invitedId], row.workspace_id, 'channel/updated', { channel: invitedSummary })
-        }
+        this.broadcastChannelSummaryPerViewer(row)
       }
     }
     return { members, addedIds, skippedExistingIds, skippedForbiddenIds }
@@ -1762,6 +1809,12 @@ export class ChannelService {
     }
     const members = this.listMembers(channelId, accountId)
     this.broadcastToChannel(channelId, row.workspace_id, 'channel/members', { channelId, members })
+    if (memberType === 'account') {
+      if (row.access_mode === 'private' || !this.isInternalWorkspaceMember(cleanId, row.workspace_id)) {
+        this.broadcastToAccounts([cleanId], row.workspace_id, 'channel/deleted', { id: channelId })
+      }
+      this.broadcastChannelSummaryPerViewer(row)
+    }
     return members
   }
 
@@ -3036,6 +3089,9 @@ export class ChannelService {
   ): { message: ChannelMessageView; triggeredRunIds: string[] } {
     const { accountId } = this.currentActorIds()
     const channel = this.requireChannelRow(channelId, accountId)
+    if (this.isReadOnlyWorkspaceAccount(accountId, channel.workspace_id)) {
+      throw new Error('permission denied: 只读成员或访客无权在聊天中发言')
+    }
     const channelKind = normalizeChannelKind(channel.kind)
     const text = String(input.text ?? '').trim()
     let threadRootId = String(input.threadRootId ?? '').trim()
@@ -3813,7 +3869,11 @@ export class ChannelService {
         .prepare(`SELECT account_id FROM workspace_members WHERE workspace_id = ?`)
         .all(workspaceId) as Array<{ account_id: string }>
       for (const row of wsMembers) {
-        if (row.account_id) all.add(row.account_id)
+        if (!row.account_id) continue
+        // 对齐 AuthorizationService：空间全员频道仅自动包含内部成员，external / guest 需显式受邀进入 channel_members
+        if (this.isInternalWorkspaceMember(row.account_id, workspaceId)) {
+          all.add(row.account_id)
+        }
       }
     } catch {
       /* ignore */

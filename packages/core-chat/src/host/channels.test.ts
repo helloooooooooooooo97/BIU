@@ -1738,4 +1738,96 @@ describe('Slack-style Group Channels: RBAC, Mention Dispatch, Per-Invoker Queue,
       rmSync(dir, { recursive: true, force: true })
     }
   })
+
+  it('aligns channel shareScope (personal/shared/workspace), external/guest isolation, private-channel admin boundary, and viewer read-only rules with AuthorizationService', () => {
+    const env = makeFakeEnv({
+      agents: [{ id: 'ag-solo', title: '个人助手', ownerAccountId: '' }],
+    })
+    const { alice, bob, carol, ws, store, db, service: svc, asUser } = env
+    asUser(alice.id, () => store.attach(ws.id, '/agents', 'ag-solo', Date.now(), { accessMode: 'private' }))
+    const ext = store.register('ExtUser', Date.now(), 'pass123456', 'ext@example.com')
+    const guest = store.register('GuestUser', Date.now(), 'pass123456', 'guest@example.com')
+    const viewer = store.register('ViewerUser', Date.now(), 'pass123456', 'viewer@example.com')
+    store.addMemberByEmail(alice.id, ws.id, 'ext@example.com')
+    store.addMemberByEmail(alice.id, ws.id, 'guest@example.com')
+    store.addMemberByEmail(alice.id, ws.id, 'viewer@example.com')
+    db.prepare(`UPDATE workspace_members SET member_kind = 'external' WHERE workspace_id = ? AND account_id = ?`).run(ws.id, ext.id)
+    db.prepare(`UPDATE workspace_members SET member_kind = 'guest' WHERE workspace_id = ? AND account_id = ?`).run(ws.id, guest.id)
+    db.prepare(`UPDATE workspace_members SET role = 'viewer' WHERE workspace_id = ? AND account_id = ?`).run(ws.id, viewer.id)
+
+    try {
+      // 1. shareScope 自动计算：仅自己+自己 Agent -> personal；拉入他人 -> shared；移出他人 -> 回到 personal；切换空间全员 -> workspace
+      const solo = asUser(alice.id, () =>
+        svc.createChannel({ name: '我的多Agent工作群', accessMode: 'private', agentIds: ['ag-solo'] }),
+      )
+      assert.equal(solo.channel.shareScope, 'personal')
+      assert.equal(solo.channel.canChangeAccessMode, true)
+
+      asUser(alice.id, () => svc.addMember(solo.channel.id, 'account', bob.id))
+      assert.equal(asUser(alice.id, () => svc.getChannelDetail(solo.channel.id)).channel.shareScope, 'shared')
+
+      asUser(alice.id, () => svc.removeMember(solo.channel.id, 'account', bob.id))
+      assert.equal(asUser(alice.id, () => svc.getChannelDetail(solo.channel.id)).channel.shareScope, 'personal')
+
+      const wsWide = asUser(alice.id, () => svc.updateChannel(solo.channel.id, { accessMode: 'workspace' }))
+      assert.equal(wsWide.shareScope, 'workspace')
+
+      // 2. 空间全员频道严格仅对内部成员可见：carol(member) 可见，ext(external) 与 guest(guest) 不可见，除非显式受邀
+      assert.ok(asUser(carol.id, () => svc.listChannels()).some((c) => c.id === solo.channel.id))
+      assert.equal(asUser(ext.id, () => svc.listChannels()).some((c) => c.id === solo.channel.id), false)
+      assert.equal(asUser(guest.id, () => svc.listChannels()).some((c) => c.id === solo.channel.id), false)
+      assert.throws(() => asUser(ext.id, () => svc.getChannelDetail(solo.channel.id)), /unknown channel/)
+
+      // 外部协作者与访客不得创建或切换为「空间全员」
+      assert.throws(
+        () => asUser(ext.id, () => svc.createChannel({ name: '外部试图公开', accessMode: 'workspace' })),
+        /permission denied.*内部成员/,
+      )
+      const extPrivate = asUser(ext.id, () => svc.createChannel({ name: '外部定向群', accessMode: 'private' }))
+      assert.equal(extPrivate.channel.canChangeAccessMode, false)
+      assert.throws(
+        () => asUser(ext.id, () => svc.updateChannel(extPrivate.channel.id, { accessMode: 'workspace' })),
+        /permission denied.*内部成员/,
+      )
+
+      // 显式邀请外部协作者进入空间频道后，外部协作者可见并可参与
+      asUser(alice.id, () => svc.addMember(solo.channel.id, 'account', ext.id))
+      assert.ok(asUser(ext.id, () => svc.listChannels()).some((c) => c.id === solo.channel.id))
+
+      // 3. 非空间全员（仅受邀）频道不让空间管理员越权接管；切换为空间全员后空间管理员才继承管理权
+      const bobShared = asUser(bob.id, () =>
+        svc.createChannel({ name: 'Bob 的定向群', accessMode: 'private', memberAccountIds: [alice.id] }),
+      )
+      assert.equal(bobShared.channel.shareScope, 'shared')
+      const aliceInBobShared = asUser(alice.id, () => svc.getChannelDetail(bobShared.channel.id))
+      assert.equal(aliceInBobShared.channel.canManage, false)
+      assert.equal(aliceInBobShared.canManageMembers, false)
+      assert.throws(
+        () => asUser(alice.id, () => svc.updateChannel(bobShared.channel.id, { name: '强行改名' })),
+        /permission denied/,
+      )
+
+      asUser(bob.id, () => svc.updateChannel(bobShared.channel.id, { accessMode: 'workspace' }))
+      const aliceAfterWs = asUser(alice.id, () => svc.getChannelDetail(bobShared.channel.id))
+      assert.equal(aliceAfterWs.channel.canManage, true)
+
+      // 4. 空间只读角色（viewer / guest）不可新建频道、不可发言，但可读取可见频道
+      assert.throws(() => asUser(viewer.id, () => svc.createChannel({ name: 'viewer尝试建群' })), /permission denied.*只读/)
+      assert.throws(() => asUser(guest.id, () => svc.createChannel({ name: 'guest尝试建群' })), /permission denied.*只读/)
+      const viewerDetail = asUser(viewer.id, () => svc.getChannelDetail(solo.channel.id))
+      assert.equal(viewerDetail.channel.canPost, false)
+      assert.throws(
+        () => asUser(viewer.id, () => svc.sendMessage(solo.channel.id, { text: 'viewer 发言' })),
+        /permission denied.*只读/,
+      )
+      asUser(alice.id, () => svc.addMember(solo.channel.id, 'account', guest.id))
+      assert.equal(asUser(guest.id, () => svc.getChannelDetail(solo.channel.id)).channel.canPost, false)
+      assert.throws(
+        () => asUser(guest.id, () => svc.sendMessage(solo.channel.id, { text: 'guest 发言' })),
+        /permission denied.*只读/,
+      )
+    } finally {
+      env.cleanup()
+    }
+  })
 })

@@ -3,6 +3,8 @@ import { currentSessionId } from '@biu/host-sessions/scope'
 import { recordBuiltinValues, type CollectionSpec, type DbRecord } from '@biu/type-file-system'
 import {
   channelKindLabel,
+  channelShareScopeLabel,
+  computeChannelShareScope,
   normalizeForumTags,
   type ChannelDetailPayload,
   type ChannelMention,
@@ -81,12 +83,14 @@ function formatChannelContent(detail: ChannelDetailPayload): string {
 }
 
 function summaryToRecord(ch: ChannelSummary, content?: string): DbRecord {
+  const scope = ch.shareScope ?? computeChannelShareScope(ch.accessMode, ch.memberCount, ch.kind)
   return {
     id: ch.id,
     title: ch.name,
     kind: ch.kind,
     topic: ch.topic ?? '',
     accessMode: ch.accessMode,
+    shareScope: channelShareScopeLabel(scope),
     peerAccountId: ch.peerAccountId ?? '',
     peerName: ch.peerName ?? '',
     memberCount: ch.memberCount,
@@ -158,7 +162,8 @@ export function channelsCollection(service: ChannelService): CollectionSpec {
         title: { type: 'string', label: '聊天名称' },
         kind: { type: 'select', label: '类型', enum: ['channel', 'dm', 'announcement', 'forum'] },
         topic: { type: 'string', label: '主题' },
-        accessMode: { type: 'select', label: '可见性', enum: ['private', 'workspace'] },
+        accessMode: { type: 'select', label: '通用访问', enum: ['private', 'workspace'] },
+        shareScope: { type: 'select', label: '可见范围', enum: ['私人', '共享', '空间'] },
         peerName: { type: 'string', label: '私聊对象' },
         memberCount: { type: 'number', label: '成员数' },
         agentCount: { type: 'number', label: 'Agent 数' },

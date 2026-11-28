@@ -2212,3 +2212,148 @@ test('Forum channel renders board, creates new posts, filters by status, and tog
     assert.ok(stage.queryByTestId('forum-post-closed-bar'))
   })
 })
+
+test('channel UI aligns with personal/shared/workspace visibility model, toggles accessMode in manage panel, and shows read-only bar for viewers', async () => {
+  const now = Date.now()
+  let currentChannel = {
+    id: 'ch-scope',
+    workspaceId: 'ws-1',
+    kind: 'channel' as const,
+    dmKey: '',
+    name: '我的多Agent工作台',
+    topic: '',
+    accessMode: 'private' as 'private' | 'workspace',
+    shareScope: 'personal' as 'personal' | 'shared' | 'workspace',
+    createdBy: 'acc-alice',
+    createdAt: now,
+    updatedAt: now,
+    memberCount: 1,
+    agentCount: 1,
+    lastMessageAt: now,
+    lastMessageText: '',
+    canManage: true,
+    canChangeAccessMode: true,
+    canPost: true,
+  }
+  let patchedAccessMode = ''
+
+  const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = new URL(String(input), 'http://test.local')
+    if (url.pathname === '/api/channels' && (!init?.method || init.method === 'GET')) {
+      return new Response(JSON.stringify({ channels: [currentChannel] }), { status: 200 })
+    }
+    if (url.pathname === '/api/channels/ch-scope' && (!init?.method || init.method === 'GET')) {
+      return new Response(
+        JSON.stringify({
+          channel: currentChannel,
+          members: [
+            { channelId: 'ch-scope', memberType: 'account', memberId: 'acc-alice', role: 'owner', addedBy: 'acc-alice', addedAt: now, name: 'Alice', isOwn: true },
+          ],
+          messages: [],
+          activities: [],
+          myAccountId: 'acc-alice',
+          canManageMembers: true,
+        }),
+        { status: 200 },
+      )
+    }
+    if (url.pathname === '/api/channels/ch-scope' && init?.method === 'PATCH') {
+      const body = JSON.parse(String(init.body ?? '{}')) as { accessMode?: 'private' | 'workspace' }
+      if (body.accessMode) {
+        patchedAccessMode = body.accessMode
+        currentChannel = {
+          ...currentChannel,
+          accessMode: body.accessMode,
+          shareScope: body.accessMode === 'workspace' ? 'workspace' : 'personal',
+        }
+      }
+      return new Response(JSON.stringify({ channel: currentChannel }), { status: 200 })
+    }
+    if (url.pathname === '/api/channels/ch-ro' && (!init?.method || init.method === 'GET')) {
+      return new Response(
+        JSON.stringify({
+          channel: {
+            ...currentChannel,
+            id: 'ch-ro',
+            name: '空间群',
+            accessMode: 'workspace',
+            shareScope: 'workspace',
+            canManage: false,
+            canChangeAccessMode: false,
+            canPost: false,
+          },
+          members: [
+            { channelId: 'ch-ro', memberType: 'account', memberId: 'acc-alice', role: 'owner', addedBy: 'acc-alice', addedAt: now, name: 'Alice', isOwn: false },
+          ],
+          messages: [],
+          activities: [],
+          myAccountId: 'acc-viewer',
+          canManageMembers: false,
+        }),
+        { status: 200 },
+      )
+    }
+    if (url.pathname === '/api/account/workspace-profile') {
+      return new Response(JSON.stringify({ accountId: 'acc-alice' }), { status: 200 })
+    }
+    if (url.pathname === '/api/db/list') {
+      return new Response(
+        JSON.stringify({
+          items: [
+            { id: 'acc-alice', title: 'Alice' },
+            { id: 'acc-bob', title: 'Bob' },
+          ],
+        }),
+        { status: 200 },
+      )
+    }
+    return new Response(JSON.stringify({ items: [] }), { status: 200 })
+  })
+  vi.stubGlobal('fetch', fetchMock)
+
+  const view = render(
+    <MemoryRouter initialEntries={['/channels/ch-scope']}>
+      <ChannelSidebarSections routeChannelId="ch-scope" />
+      <ChannelStage channelId="ch-scope" />
+    </MemoryRouter>,
+  )
+
+  // 1. 侧栏对仅自己+自己Agent 的频道显示 personal 图标；新建弹窗显示「仅受邀人员 / 空间全员」与动态可见范围提示
+  await waitFor(() => {
+    assert.ok(view.queryByTestId('sidebar-channel-icon-personal-ch-scope'))
+  })
+
+  fireEvent.click(view.getByTestId('sidebar-create-channel'))
+  await waitFor(() => {
+    assert.ok(view.getByTestId('create-channel-access-private').textContent?.includes('仅受邀人员'))
+    assert.ok(view.getByTestId('create-channel-access-workspace').textContent?.includes('空间全员'))
+    assert.ok(view.getByTestId('create-channel-scope-hint').textContent?.includes('可见范围：私人'))
+  })
+  fireEvent.click(view.getByTestId('create-channel-access-workspace'))
+  assert.ok(view.getByTestId('create-channel-scope-hint').textContent?.includes('可见范围：空间'))
+  fireEvent.click(view.getByText('取消'))
+
+  // 2. 右侧管理面板显示「可见范围：私人」，一键切换为「空间全员」后更新为「可见范围：空间」
+  fireEvent.click(view.getByTestId('channel-more-menu-btn'))
+  fireEvent.click(await waitFor(() => view.getByTestId('channel-manage-members')))
+  await waitFor(() => {
+    assert.ok(view.getByTestId('channel-share-scope-badge').textContent?.includes('可见范围：私人'))
+  })
+  fireEvent.click(view.getByTestId('channel-access-btn-workspace'))
+  await waitFor(() => {
+    assert.equal(patchedAccessMode, 'workspace')
+    assert.ok(view.getByTestId('channel-share-scope-badge').textContent?.includes('可见范围：空间'))
+  })
+
+  view.unmount()
+
+  // 3. 只读成员进入普通频道时展示只读提示条而非输入框
+  const roStage = render(
+    <MemoryRouter initialEntries={['/channels/ch-ro']}>
+      <ChannelStage channelId="ch-ro" />
+    </MemoryRouter>,
+  )
+  await waitFor(() => {
+    assert.ok(roStage.queryByTestId('channel-readonly-member-bar'))
+  })
+})

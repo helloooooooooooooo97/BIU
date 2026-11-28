@@ -73,7 +73,30 @@ export function buildDefaultChannelName(
   return joined.length > 48 ? `${joined.slice(0, 47)}…` : joined
 }
 export type ChannelAccessMode = 'private' | 'workspace'
+/** 与系统 resource_policies 一致的实时计算可见范围：私人（仅受邀且仅自己/自己 Agent）/ 共享（仅受邀且含其他成员）/ 空间（空间内部全员） */
+export type ChannelShareScope = 'personal' | 'shared' | 'workspace'
 export type ChannelMemberType = 'account' | 'agent'
+
+export function computeChannelShareScope(
+  accessMode: ChannelAccessMode,
+  humanMemberCount: number,
+  kind?: ChannelKind,
+): ChannelShareScope {
+  if (kind === 'dm') return humanMemberCount <= 1 ? 'personal' : 'shared'
+  if (accessMode === 'workspace') return 'workspace'
+  return humanMemberCount <= 1 ? 'personal' : 'shared'
+}
+
+export function channelShareScopeLabel(scope?: ChannelShareScope): string {
+  switch (scope) {
+    case 'workspace':
+      return '空间'
+    case 'shared':
+      return '共享'
+    default:
+      return '私人'
+  }
+}
 export type ChannelMemberRole = 'owner' | 'admin' | 'member'
 export type ChannelSenderType = 'account' | 'agent' | 'system' | 'webhook'
 /** 群内 Agent 上下文模式：summary=单向只读投影主工作台项目与近期摘要；isolated=仅看当前群聊 */
@@ -132,6 +155,8 @@ export interface ChannelSummary {
   name: string
   topic: string
   accessMode: ChannelAccessMode
+  /** 自动计算的可见范围：私人 / 共享 / 空间（对齐系统 shareScope） */
+  shareScope?: ChannelShareScope
   createdBy: string
   createdAt: number
   updatedAt: number
@@ -146,7 +171,9 @@ export interface ChannelSummary {
   pinned?: boolean
   hidden?: boolean
   canManage?: boolean
-  /** 公告频道仅管理员可发顶层公告，普通成员仍可在公告下回复讨论串 */
+  /** 是否允许当前用户将通用访问切换为「空间全员」（仅内部成员可切换，对齐 AuthorizationService） */
+  canChangeAccessMode?: boolean
+  /** 公告频道仅管理员可发顶层公告；空间只读成员/访客为 false */
   canPost?: boolean
   /** 论坛频道可用标签预设 */
   forumTags?: string[]
