@@ -233,19 +233,26 @@ test('ChannelStage renders IM messages, ephemeral notice, @mention popup, read-o
     fireEvent.click(view.getAllByRole('button', { name: '发布助手' })[0]!)
     assert.ok(view.getByTestId('channel-agent-card'))
 
-    // 点击「查看执行详情」→ 打开右侧 Inspector 的 channel-run 标签页
+    // 点击「Details」→ 原地打开执行详情并展示面包屑，不触发右侧检查器
     await waitFor(() => {
-    const agentRow = view.container.querySelector('[data-testid="channel-message"][data-sender-type="agent"]')
-    assert.ok(agentRow?.querySelector('.chat-user-card')?.className.includes('!w-3/4'))
-    assert.ok(agentRow?.querySelector('.chat-user-card-body .chat-assistant-body'))
-    assert.ok(agentRow?.querySelector('.user-turn-bar [data-testid="channel-msg-avatar"]'))
-    assert.ok(view.getByTestId('channel-msg-trace-run-1'))
-  })
-  fireEvent.click(view.getByTestId('channel-msg-trace-run-1'))
-    assert.deepEqual(openedTabs, ['channel-run'])
+      const agentRow = view.container.querySelector('[data-testid="channel-message"][data-sender-type="agent"]')
+      assert.ok(agentRow?.querySelector('.chat-user-card')?.className.includes('!w-3/4'))
+      assert.ok(agentRow?.querySelector('.chat-user-card-body .chat-assistant-body'))
+      assert.ok(agentRow?.querySelector('.user-turn-bar [data-testid="channel-msg-avatar"]'))
+      assert.ok(view.getByTestId('channel-msg-trace-run-1'))
+    })
+    fireEvent.click(view.getByTestId('channel-msg-trace-run-1'))
+    assert.deepEqual(openedTabs, [])
+    await waitFor(() => {
+      assert.ok(view.getByTestId('channel-stage-trace'))
+      assert.equal(view.getByTestId('channel-breadcrumb-parent').textContent?.trim(), '发布群')
+      assert.ok(view.getByTestId('channel-trace-crumb').textContent?.includes('执行详情'))
+    })
 
-    // 点击 + 按钮插入 @ 弹出统一自动补全菜单（含 @所有人、@发布助手）
+    // 点击面包屑父级返回频道主视图，继续测试输入栏 @ 补全
+    fireEvent.click(view.getByTestId('channel-breadcrumb-parent'))
     await waitFor(() => {
+      assert.equal(view.queryByTestId('channel-stage-trace'), null)
       assert.equal(Boolean(view.queryByTestId('channel-composer-input')), true)
     })
     fireEvent.click(view.getByTestId('channel-mention-btn'))
@@ -2423,4 +2430,158 @@ test('sidebar groups and filters channels across all four kinds: dm, channel, an
   assert.equal(view.getByTestId('sidebar-channels-group-kind:channel').textContent?.includes('GPU通知公告'), false)
   assert.equal(view.getByTestId('sidebar-channels-group-kind:channel').textContent?.includes('助手能力讨论'), false)
   window.localStorage.removeItem('biu.sidebar.channels.view')
+})
+
+test('ChannelStage opens run details in-place from a thread with 3-level breadcrumb navigation', async () => {
+  const now = Date.now()
+  const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+    const url = new URL(String(input), 'http://test.local')
+    if (url.pathname === '/api/channels/ch-trace') {
+      return new Response(
+        JSON.stringify({
+          channel: {
+            id: 'ch-trace',
+            kind: 'channel',
+            name: '最近的消息',
+            memberCount: 2,
+            agentCount: 1,
+            createdAt: now,
+            updatedAt: now,
+          },
+          members: [
+            { id: 'm-1', channelId: 'ch-trace', memberType: 'account', memberId: 'acc-me', role: 'owner', joinedAt: now, displayName: '97', isOwn: true },
+            { id: 'm-2', channelId: 'ch-trace', memberType: 'agent', memberId: 'ag-1', role: 'member', joinedAt: now, displayName: '栗豆新', ownerAccountId: 'acc-me', ownerName: '97', isOwn: true },
+          ],
+          messages: [
+            {
+              id: 'msg-root',
+              channelId: 'ch-trace',
+              seq: 1,
+              senderType: 'account',
+              senderId: 'acc-me',
+              senderName: '97',
+              text: '风险主题讨论',
+              mentions: [],
+              createdAt: now,
+              threadSummary: { replyCount: 1, latestReplyAt: now + 1000, participantNames: ['栗豆新'], following: false },
+            },
+          ],
+          activities: [],
+          canManageMembers: true,
+          myAccountId: 'acc-me',
+        }),
+        { status: 200 },
+      )
+    }
+    if (url.pathname === '/api/channels/ch-trace/threads/msg-root') {
+      return new Response(
+        JSON.stringify({
+          root: {
+            id: 'msg-root',
+            channelId: 'ch-trace',
+            seq: 1,
+            senderType: 'account',
+            senderId: 'acc-me',
+            senderName: '97',
+            text: '风险主题讨论',
+            mentions: [],
+            createdAt: now,
+          },
+          replies: [
+            {
+              id: 'msg-reply-1',
+              channelId: 'ch-trace',
+              seq: 2,
+              threadRootId: 'msg-root',
+              senderType: 'agent',
+              senderId: 'ag-1',
+              senderName: '栗豆新',
+              text: '已重命名这 5 个页面',
+              mentions: [],
+              traceId: 'run-thread-1',
+              createdAt: now + 1000,
+            },
+          ],
+          following: false,
+        }),
+        { status: 200 },
+      )
+    }
+    if (url.pathname === '/api/channels/ch-trace/runs/run-thread-1') {
+      return new Response(
+        JSON.stringify({
+          run: {
+            id: 'run-thread-1',
+            channelId: 'ch-trace',
+            agentId: 'ag-1',
+            agentName: '栗豆新',
+            agentOwnerId: 'acc-me',
+            agentOwnerName: '97',
+            invokerId: 'acc-me',
+            invokerName: '97',
+            viewerRole: 'owner',
+            status: 'done',
+            canCancel: false,
+            events: [{ kind: 'delta', ts: now + 1000, text: '已重命名这 5 个页面' }],
+          },
+        }),
+        { status: 200 },
+      )
+    }
+    if (url.pathname === '/api/account/workspace-profile') {
+      return new Response(JSON.stringify({ accountId: 'acc-me' }), { status: 200 })
+    }
+    return new Response(JSON.stringify({ ok: true }), { status: 200 })
+  })
+  vi.stubGlobal('fetch', fetchMock)
+
+  const openedTabs: string[] = []
+  const onTab = (e: Event) => {
+    openedTabs.push(String((e as CustomEvent<{ tabId?: string }>).detail?.tabId ?? ''))
+  }
+  window.addEventListener('biu:inspector-tab', onTab)
+
+  const view = render(
+    <MemoryRouter initialEntries={['/channels/ch-trace?thread=msg-root']}>
+      <ChannelStage channelId="ch-trace" />
+    </MemoryRouter>,
+  )
+
+  try {
+    await waitFor(() => {
+      assert.ok(view.getByTestId('channel-msg-trace-run-thread-1'))
+    })
+
+    // 在讨论串内点击 Details → 3 级面包屑（最近的消息 / 风险主题讨论 / 执行详情 · 栗豆新）且原地展示
+    fireEvent.click(view.getByTestId('channel-msg-trace-run-thread-1'))
+    assert.deepEqual(openedTabs, [])
+
+    await waitFor(() => {
+      assert.ok(view.getByTestId('channel-stage-trace'))
+      assert.ok(view.getByTestId('channel-run-inspector'))
+      assert.equal(view.getByTestId('channel-breadcrumb-parent').textContent?.trim(), '最近的消息')
+      assert.equal(view.getByTestId('channel-breadcrumb-thread').textContent?.trim(), '风险主题讨论')
+      assert.ok(view.getByTestId('channel-trace-crumb').textContent?.includes('执行详情 · 栗豆新'))
+    })
+
+    // 点击二级面包屑回到讨论串
+    fireEvent.click(view.getByTestId('channel-breadcrumb-thread'))
+    await waitFor(() => {
+      assert.equal(view.queryByTestId('channel-stage-trace'), null)
+      assert.ok(view.getByTestId('channel-thread-crumb'))
+    })
+
+    // 再次进入执行详情，点击一级面包屑直接回到频道主视图
+    fireEvent.click(view.getByTestId('channel-msg-trace-run-thread-1'))
+    await waitFor(() => {
+      assert.ok(view.getByTestId('channel-stage-trace'))
+    })
+    fireEvent.click(view.getByTestId('channel-breadcrumb-parent'))
+    await waitFor(() => {
+      assert.equal(view.queryByTestId('channel-stage-trace'), null)
+      assert.equal(view.getByTestId('channel-title').textContent, '最近的消息')
+    })
+  } finally {
+    window.removeEventListener('biu:inspector-tab', onTab)
+  }
 })
