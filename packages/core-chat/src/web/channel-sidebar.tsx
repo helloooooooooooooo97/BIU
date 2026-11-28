@@ -46,6 +46,30 @@ type WorkspaceMemberRow = {
   status?: string
 }
 
+export function formatSidebarTime(ts?: number, now = Date.now()): string {
+  if (!ts || !Number.isFinite(ts) || ts <= 0) return ''
+  const d = new Date(ts)
+  const cur = new Date(now)
+  const pad = (n: number) => String(n).padStart(2, '0')
+  if (
+    d.getFullYear() === cur.getFullYear() &&
+    d.getMonth() === cur.getMonth() &&
+    d.getDate() === cur.getDate()
+  ) {
+    return `${pad(d.getHours())}:${pad(d.getMinutes())}`
+  }
+  const yest = new Date(cur.getFullYear(), cur.getMonth(), cur.getDate() - 1)
+  if (
+    d.getFullYear() === yest.getFullYear() &&
+    d.getMonth() === yest.getMonth() &&
+    d.getDate() === yest.getDate()
+  ) {
+    return '昨天'
+  }
+  if (d.getFullYear() === cur.getFullYear()) return `${pad(d.getMonth() + 1)}/${pad(d.getDate())}`
+  return `${d.getFullYear()}/${pad(d.getMonth() + 1)}/${pad(d.getDate())}`
+}
+
 function useWorkspaceMembers() {
   const [myAccountId, setMyAccountId] = useState('')
   const [members, setMembers] = useState<WorkspaceMemberRow[]>([])
@@ -285,6 +309,7 @@ export const ChannelSidebarSections = memo(function ChannelSidebarSections({
                 const unread = !active ? (ch.unreadCount ?? 0) : 0
                 const mentions = !active ? (ch.mentionCount ?? 0) : 0
                 const hasUnreadEmphasis = unread > 0 && !ch.muted
+                const timeLabel = formatSidebarTime(ch.lastMessageAt || ch.updatedAt)
                 return (
                   <SidebarRow
                     key={ch.id}
@@ -350,6 +375,14 @@ export const ChannelSidebarSections = memo(function ChannelSidebarSections({
                             title={`${unread} 条未读消息`}
                           >
                             {unread > 99 ? '99+' : unread}
+                          </span>
+                        ) : null}
+                        {timeLabel ? (
+                          <span
+                            className="shrink-0 text-[11px] leading-none text-(--biu-color-text-subtle) tabular-nums"
+                            data-testid="sidebar-channel-time"
+                          >
+                            {timeLabel}
                           </span>
                         ) : null}
                       </Link>
