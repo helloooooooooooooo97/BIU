@@ -1,6 +1,6 @@
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type DragEvent, type ReactNode } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 import {
   SidebarMascot,
   isMascotDancing,
@@ -33,14 +33,16 @@ import {
   type SidebarSectionKind,
 } from '@biu/web-session-view'
 import { FolderGlyph } from '@biu/web-session-view/folder-glyph'
-import { SIDEBAR_ROW_MAIN_CLASS, SidebarRow } from '@biu/web-session-view/sidebar-row'
+import { SIDEBAR_ROW_MAIN_CLASS, SidebarRow, SidebarRowMain } from '@biu/web-session-view/sidebar-row'
 import { chromeIcon, chromeIconClass } from './chrome-icon.ts'
 import { isChatPagePath, openOverlayComposer } from './chat-overlay.ts'
 import {
   ChevronRightIcon,
   ClockIcon,
   FolderMinusIcon,
+  MapIcon,
   PlusIcon,
+  SignalIcon,
   StarIcon,
 } from '@heroicons/react/16/solid'
 import { TrashGlyph } from '@biu/web-session-view/trash-glyph'
@@ -156,23 +158,35 @@ function formatSessionTime(ts?: number, now = Date.now()): string {
   return `${d.getFullYear()}/${pad(d.getMonth() + 1)}/${pad(d.getDate())}`
 }
 
+type AgentSubView = '' | 'trajectory' | 'usage'
+
+const SESSION_SUB_ROWS_PX = SESSION_ROW_PX * 2 + 2
+
 const SessionRow = memo(function SessionRow({
   item,
   active,
+  activeView = '',
+  expanded = false,
+  canExpand = false,
   busy,
   dancing,
   creator,
   showTime = true,
+  onToggleExpand,
   onDelete,
   onPin,
   onOpen,
 }: {
   item: SessionListItem
   active: boolean
+  activeView?: AgentSubView
+  expanded?: boolean
+  canExpand?: boolean
   busy: boolean
   dancing: boolean
   creator?: ChatMemberInfo | null
   showTime?: boolean
+  onToggleExpand?: (id: string) => void
   onDelete: (item: SessionListItem) => void
   onPin: (item: SessionListItem) => void
   onOpen?: (item: SessionListItem) => void
@@ -196,6 +210,44 @@ const SessionRow = memo(function SessionRow({
       {label}
       {timeNode}
     </button>
+  ) : canExpand && onToggleExpand ? (
+    <SidebarRowMain>
+      <button
+        type="button"
+        className="group/fold relative grid size-6 shrink-0 cursor-pointer place-items-center border-0 bg-transparent p-0 text-inherit"
+        title={expanded ? `收起 ${item.title} 的轨迹与用量` : `展开 ${item.title} 的轨迹与用量`}
+        aria-label={expanded ? `收起 ${item.title} 的轨迹与用量` : `展开 ${item.title} 的轨迹与用量`}
+        aria-expanded={expanded}
+        data-testid={`sidebar-session-fold-${item.id}`}
+        onClick={(event) => {
+          event.preventDefault()
+          event.stopPropagation()
+          onToggleExpand(item.id)
+        }}
+      >
+        <span className="sidebar-rail-icon sidebar-group-fold">
+          <span className="sidebar-group-fold-face relative group-hover:hidden! group-hover/fold:hidden!">
+            <SessionRowMascot item={item} busy={busy} dancing={dancing} />
+          </span>
+          <span className="sidebar-group-fold-chevron group-hover:grid! group-hover/fold:grid!">
+            <ChevronRightIcon
+              className={`size-4 shrink-0 opacity-80 sidebar-chevron${expanded ? ' is-open' : ''}`}
+            />
+          </span>
+        </span>
+      </button>
+      <Link
+        to={sessionAppPath(item.id)}
+        draggable={false}
+        onDragStart={(event: DragEvent<HTMLElement>) => event.preventDefault()}
+        className="flex h-full min-w-0 flex-1 items-center gap-1.5 text-inherit no-underline"
+        data-dock-tip={item.title}
+        data-dock-tip-at="e"
+      >
+        {label}
+        {timeNode}
+      </Link>
+    </SidebarRowMain>
   ) : (
     <Link to={sessionAppPath(item.id)} {...sessionRowMainProps} data-dock-tip={item.title}>
       <SessionRowMascot item={item} busy={busy} dancing={dancing} />
@@ -213,27 +265,82 @@ const SessionRow = memo(function SessionRow({
       {creator.avatar ? <img src={creator.avatar} alt="" /> : <AiAvatar seed={creator.id} size={16} />}
     </span>
   ) : null
+  const rowActive = active && !activeView
   return (
-    <SidebarRow
-      active={active}
-      pinned={pinned}
-      main={main}
-      trail={creatorTrail}
-      onDelete={() => onDelete(item)}
-      deleteLabel={`Delete session ${item.title}`}
-      deleteIcon={<TrashGlyph {...chromeIcon} />}
-      onStar={() => onPin(item)}
-      starOn={pinned}
-      starLabel={pinned ? `取消收藏 ${item.title}` : `收藏 ${item.title}`}
-      starIcon={<StarIcon {...chromeIcon} />}
-      attrs={{
-        'data-biu-kind': 'session',
-        'data-biu-id': item.id,
-        'data-biu-label': item.title,
-        'data-dock-tip': item.title,
-        'data-dock-tip-at': 'e',
-      }}
-    />
+    <div className="min-w-0">
+      <SidebarRow
+        active={rowActive}
+        pinned={pinned}
+        main={main}
+        trail={creatorTrail}
+        onDelete={() => onDelete(item)}
+        deleteLabel={`Delete session ${item.title}`}
+        deleteIcon={<TrashGlyph {...chromeIcon} />}
+        onStar={() => onPin(item)}
+        starOn={pinned}
+        starLabel={pinned ? `取消收藏 ${item.title}` : `收藏 ${item.title}`}
+        starIcon={<StarIcon {...chromeIcon} />}
+        attrs={{
+          'data-biu-kind': 'session',
+          'data-biu-id': item.id,
+          'data-biu-label': item.title,
+          'data-dock-tip': item.title,
+          'data-dock-tip-at': 'e',
+        }}
+      />
+      {canExpand && expanded ? (
+        <SidebarFold open animate={false} className="sidebar-session-list min-w-0">
+          <div className="flex min-w-0 flex-col" data-testid={`sidebar-session-subviews-${item.id}`}>
+            <SidebarRow
+              active={active && activeView === 'trajectory'}
+              attrs={{
+                'data-biu-kind': 'trajectory',
+                'data-biu-id': item.id,
+                'data-biu-label': `${item.title} · 轨迹`,
+              }}
+              main={
+                <Link
+                  to={`${sessionAppPath(item.id)}?view=trajectory`}
+                  data-testid={`sidebar-session-trajectory-${item.id}`}
+                  className={SIDEBAR_ROW_MAIN_CLASS}
+                  title={`查看 ${item.title} 的运行轨迹`}
+                >
+                  <span className="grid size-6 shrink-0 place-items-center" aria-hidden>
+                    <span className="sidebar-rail-icon">
+                      <MapIcon className="size-3.5 opacity-75" />
+                    </span>
+                  </span>
+                  <span className="sidebar-label min-w-0 flex-1 truncate text-[13px]">轨迹</span>
+                </Link>
+              }
+            />
+            <SidebarRow
+              active={active && activeView === 'usage'}
+              attrs={{
+                'data-biu-kind': 'usage',
+                'data-biu-id': item.id,
+                'data-biu-label': `${item.title} · 用量`,
+              }}
+              main={
+                <Link
+                  to={`${sessionAppPath(item.id)}?view=usage`}
+                  data-testid={`sidebar-session-usage-${item.id}`}
+                  className={SIDEBAR_ROW_MAIN_CLASS}
+                  title={`查看 ${item.title} 的 Token 用量`}
+                >
+                  <span className="grid size-6 shrink-0 place-items-center" aria-hidden>
+                    <span className="sidebar-rail-icon">
+                      <SignalIcon className="size-3.5 opacity-75" />
+                    </span>
+                  </span>
+                  <span className="sidebar-label min-w-0 flex-1 truncate text-[13px]">用量</span>
+                </Link>
+              }
+            />
+          </div>
+        </SidebarFold>
+      ) : null}
+    </div>
   )
 })
 
@@ -263,6 +370,9 @@ const WindowedSessionList = memo(function WindowedSessionList({
   sessions,
   rowKey,
   highlightId,
+  activeView = '',
+  expandedSessions,
+  onToggleExpand,
   busySessions,
   dancing,
   creatorOf,
@@ -275,6 +385,9 @@ const WindowedSessionList = memo(function WindowedSessionList({
   sessions: SessionListItem[]
   rowKey: string
   highlightId: string | null
+  activeView?: AgentSubView
+  expandedSessions?: Record<string, boolean>
+  onToggleExpand?: (id: string) => void
   busySessions: Record<string, true>
   dancing: boolean
   creatorOf?: (item: SessionListItem) => ChatMemberInfo | null
@@ -290,14 +403,32 @@ const WindowedSessionList = memo(function WindowedSessionList({
     hostRef.current = node
     setScrollEl(node?.closest('[data-chat-scroll]') as HTMLElement | null)
   }, [])
+  const canExpand = !iconRail && !onOpen && Boolean(onToggleExpand)
+  const isRowExpanded = useCallback(
+    (id: string) => {
+      if (!canExpand) return false
+      const explicit = expandedSessions?.[id]
+      if (explicit !== undefined) return explicit
+      return Boolean(id === highlightId && activeView)
+    },
+    [activeView, canExpand, expandedSessions, highlightId],
+  )
   const count = sessions.length
   const virtualizer = useVirtualizer({
     count,
     getScrollElement: () => scrollEl,
-    estimateSize: () => (iconRail ? SESSION_RAIL_ROW_PX : SESSION_ROW_PX),
+    estimateSize: (index) => {
+      if (iconRail) return SESSION_RAIL_ROW_PX
+      const item = sessions[index]
+      if (item && isRowExpanded(item.id)) return SESSION_ROW_PX + SESSION_SUB_ROWS_PX
+      return SESSION_ROW_PX
+    },
     overscan: SESSION_WINDOW_OVERSCAN,
     scrollMargin: hostRef.current?.offsetTop ?? 0,
   })
+  useLayoutEffect(() => {
+    virtualizer.measure()
+  }, [virtualizer, expandedSessions, highlightId, activeView, iconRail])
   const items = virtualizer.getVirtualItems()
   const start = items[0]?.index ?? 0
   const end = items.length ? (items[items.length - 1]?.index ?? 0) + 1 : 0
@@ -315,9 +446,11 @@ const WindowedSessionList = memo(function WindowedSessionList({
       {items.map((row) => {
         const item = sessions[row.index]
         if (!item) return null
+        const expanded = isRowExpanded(item.id)
         return (
           <div
             key={`${rowKey}:${item.id}`}
+            data-index={row.index}
             style={{
               position: 'absolute',
               top: 0,
@@ -329,10 +462,14 @@ const WindowedSessionList = memo(function WindowedSessionList({
             <SessionRow
               item={item}
               active={item.id === highlightId}
+              activeView={item.id === highlightId ? activeView : ''}
+              expanded={expanded}
+              canExpand={canExpand}
               busy={Boolean(busySessions[item.id])}
               dancing={dancing}
               creator={creatorOf?.(item) ?? null}
               showTime={showTime}
+              onToggleExpand={onToggleExpand}
               onDelete={onDelete}
               onPin={onPin}
               onOpen={onOpen}
@@ -580,11 +717,30 @@ export const ChatSidebar = memo(function ChatSidebar({
     [isCloudSpace, myAccountId, membersById],
   )
 
+  const location = useLocation()
+  const activeAgentView: AgentSubView = useMemo(() => {
+    const raw = new URLSearchParams(location.search).get('view')
+    return raw === 'trajectory' || raw === 'usage' ? raw : ''
+  }, [location.search])
+  const [expandedSessions, setExpandedSessions] = useState<Record<string, boolean>>({})
+  const toggleSessionExpand = useCallback(
+    (id: string) => {
+      setExpandedSessions((prev) => {
+        const current = prev[id] ?? Boolean(id === highlightId && activeAgentView)
+        return { ...prev, [id]: !current }
+      })
+    },
+    [activeAgentView, highlightId],
+  )
+
   const list = (section: SidebarSection, rowKey: string, rows: SessionListItem[]) => (
     <WindowedSessionList
       sessions={rows}
       rowKey={rowKey}
       highlightId={highlightId}
+      activeView={activeAgentView}
+      expandedSessions={expandedSessions}
+      onToggleExpand={popover ? undefined : toggleSessionExpand}
       busySessions={busySessions}
       dancing={dancing}
       creatorOf={creatorOf}

@@ -1,6 +1,6 @@
 import { onAppEvents } from '@biu/biu-ui/app-events'
 import { installGlobalWorkspaceTransport, syncWorkspaceEndpoint } from '@biu/biu-ui/workspace-transport'
-import { lazy, memo, Suspense, useCallback, useEffect, useRef, useState, useSyncExternalStore, type CSSProperties, type ReactNode } from 'react'
+import { lazy, memo, Suspense, useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type CSSProperties, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import {
   getChatOverlay,
@@ -50,7 +50,7 @@ import {
 const ChatSidebar = lazy(() => import('./chat-sidebar.tsx').then((m) => ({ default: m.ChatSidebar })))
 import { ShellSidebarFrame } from './shell-sidebar-frame.tsx'
 import { ChatSessionShare, ChatSessionTitle } from './chat-session-title.tsx'
-import { BrandCornerMascot, DanceStage } from '@biu/public-mascot'
+import { BrandCornerMascot, DanceStage, SidebarMascot, resolveSessionMascot } from '@biu/public-mascot'
 import { SessionInspector } from './session-inspector.tsx'
 import { SessionConfigDialog } from '@biu/web-session-view/dialog'
 import { FolderGlyph } from '@biu/web-session-view/folder-glyph'
@@ -88,7 +88,9 @@ import {
   CircleStackIcon,
   LinkIcon,
   LockClosedIcon,
+  MapIcon,
   ShieldCheckIcon,
+  SignalIcon,
   SwatchIcon,
   UserCircleIcon,
   UserGroupIcon,
@@ -151,15 +153,19 @@ function ShellDockPins({
   return createPortal(mascot, document.body)
 }
 
-/** 主区固定聊天；轨迹改在右侧检查器。悬浮形态可挂到任意页面最顶层。 */
+type AgentMainView = 'chat' | 'trajectory' | 'usage'
+
+/** 主区承载 Agent 对话、轨迹与用量（原地切换）；悬浮形态可挂到任意页面最顶层。 */
 const AgentMainPanels = memo(function AgentMainPanels({
   renderSlot,
   header,
   showCenter,
+  agentView = 'chat',
 }: {
   renderSlot: SlotProps['renderSlot']
   header: ReactNode
   showCenter: boolean
+  agentView?: AgentMainView
 }) {
   const overlayOpen = useSyncExternalStore(subscribeChatOverlay, getChatOverlay, () => false)
   const [overlayMounted, setOverlayMounted] = useState(false)
@@ -221,15 +227,25 @@ const AgentMainPanels = memo(function AgentMainPanels({
         inert={showCenter ? undefined : true}
         data-testid="agent-center"
       >
-        <div className="absolute inset-0 z-1 flex min-h-0 overflow-hidden">
-          <div className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-            {centerStage}
-            <div className="chat-composer-dock pointer-events-none absolute inset-x-0 bottom-0 bg-transparent px-[var(--biu-pad-page)] pb-[calc(1rem+5px)]">
-              {centerDock}
-            </div>
-            {renderSlot('stage-aside')}
+        {agentView === 'trajectory' ? (
+          <div className="flex min-h-0 flex-1 flex-col overflow-hidden" data-testid="agent-stage-trajectory">
+            {renderSlot('trajectory')}
           </div>
-        </div>
+        ) : agentView === 'usage' ? (
+          <div className="min-h-0 flex-1 overflow-y-auto px-[var(--biu-pad-page)] py-4" data-testid="agent-stage-usage">
+            <div className="mx-auto w-full max-w-[920px]">{renderSlot('usage')}</div>
+          </div>
+        ) : (
+          <div className="absolute inset-0 z-1 flex min-h-0 overflow-hidden">
+            <div className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+              {centerStage}
+              <div className="chat-composer-dock pointer-events-none absolute inset-x-0 bottom-0 bg-transparent px-[var(--biu-pad-page)] pb-[calc(1rem+5px)]">
+                {centerDock}
+              </div>
+              {renderSlot('stage-aside')}
+            </div>
+          </div>
+        )}
       </div>
       {overlayNode}
     </>
@@ -749,11 +765,29 @@ function Shell(props: SlotProps) {
     }
   }, [collapseSidebar, expandSidebar])
 
-  // 工具检查 /debuginspect：打开右侧轨迹 Tab（主区不再切 Debug 页）
+  const activeAgentView: AgentMainView = useMemo(() => {
+    const raw = new URLSearchParams(location.search).get('view')
+    if (raw === 'trajectory' || raw === 'usage') return raw
+    return 'chat'
+  }, [location.search])
+
+  // 切入 Agent 原地轨迹视图时按需拉取轨迹事件
   useEffect(() => {
-    if (!focusCallId && routeView !== 'debug') return
-    applyInspector(true)
-  }, [applyInspector, focusCallId, routeView])
+    if (activeModule !== 'agent' || routeChannelId || activeAgentView !== 'trajectory') return
+    void sessionView.ensureTrajectory()
+  }, [activeAgentView, activeModule, routeChannelId, sessionId, sessionView])
+
+  // 工具检查：在当前 Agent 主区原地切入轨迹视图
+  useEffect(() => {
+    if (!focusCallId) return
+    const targetId = routeSessionId || sessionId
+    if (!targetId) return
+    void sessionView.ensureTrajectory()
+    const targetUrl = `${sessionAppPath(targetId)}?view=trajectory`
+    if (`${location.pathname}${location.search}` !== targetUrl) {
+      navigate(targetUrl)
+    }
+  }, [focusCallId, location.pathname, location.search, navigate, routeSessionId, sessionId, sessionView])
 
   // 单向：URL → sessionView。插件还没挂上时不要把 /database 当成首页。
   useEffect(() => {
@@ -809,11 +843,11 @@ function Shell(props: SlotProps) {
     if (activeModule === 'agent' && getChatOverlay()) closeChatOverlay()
   }, [activeModule])
 
-  // /debug 兼容：主区仍聊天，轨迹在右侧；URL 收成 /agents/:id
+  // /debug 兼容：直接重定向到当前 Agent 的原地轨迹视图
   useEffect(() => {
     const route = parseAppPath(location.pathname)
     if (route.kind !== 'session' || route.view !== 'debug') return
-    navigate(sessionAppPath(route.sessionId), { replace: true })
+    navigate(`${sessionAppPath(route.sessionId)}?view=trajectory`, { replace: true })
   }, [location.pathname, navigate])
 
   useEffect(() => {
@@ -833,9 +867,19 @@ function Shell(props: SlotProps) {
     }
   }, [projectView, sessionView])
 
+  const currentAgentSession = useSessionView((state) =>
+    state.sessionId ? state.sessions.find((item) => item.id === state.sessionId) ?? null : null,
+  )
+  const currentAgentTitle = currentAgentSession?.title?.trim() || '对话'
+  const closeAgentSubView = useCallback(() => {
+    sessionView.clearInspectCall()
+    const targetId = routeSessionId || sessionId
+    navigate(targetId ? sessionAppPath(targetId) : '/')
+  }, [navigate, routeSessionId, sessionId, sessionView])
+
   const chatHeader = (
     <header className="chat-view-header" data-biu-ignore>
-      <div className="chat-view-header-left">
+      <div className="chat-view-header-left min-w-0">
         {leftHidden ? (
           <button
             type="button"
@@ -848,14 +892,57 @@ function Shell(props: SlotProps) {
             <ChevronDoubleRightIcon {...chromeIcon} />
           </button>
         ) : null}
-        {project ? (
+        {activeAgentView !== 'chat' ? (
+          <nav
+            className="flex min-w-0 items-center gap-1"
+            aria-label="代理视图面包屑"
+            data-testid="agent-view-breadcrumb"
+          >
+            <button
+              type="button"
+              data-testid="agent-breadcrumb-parent"
+              className="inline-flex h-7 max-w-[220px] shrink-0 cursor-pointer items-center gap-1.5 rounded-md border-0 bg-transparent px-1.5 text-[13.5px] font-medium text-(--biu-color-text-muted) transition-colors hover:bg-(--biu-color-bg-hover) hover:text-(--biu-color-text)"
+              title={`返回 ${currentAgentTitle}`}
+              onClick={closeAgentSubView}
+            >
+              {currentAgentSession ? (
+                <SidebarMascot
+                  size={16}
+                  sessionId={currentAgentSession.id}
+                  identity={resolveSessionMascot(currentAgentSession.id, currentAgentSession.mascot)}
+                  animate={false}
+                  title=""
+                />
+              ) : null}
+              <span className="truncate">{currentAgentTitle}</span>
+            </button>
+            <span className="shrink-0 select-none text-[13px] text-(--biu-color-text-subtle)" aria-hidden>
+              /
+            </span>
+            <span
+              className="inline-flex min-w-0 items-center gap-1.5 px-1 text-[13.5px] font-semibold text-(--biu-color-text)"
+              data-testid="agent-view-crumb"
+            >
+              {activeAgentView === 'trajectory' ? (
+                <MapIcon className="size-3.5 shrink-0 text-(--biu-color-icon)" aria-hidden />
+              ) : (
+                <SignalIcon className="size-3.5 shrink-0 text-(--biu-color-icon)" aria-hidden />
+              )}
+              <span className="truncate">{activeAgentView === 'trajectory' ? '轨迹' : '用量'}</span>
+            </span>
+          </nav>
+        ) : project ? (
           <div className="chat-view-project" title={project.path ?? project.name}>
             <FolderGlyph className="chat-view-project-icon" />
             <span className="chat-view-project-name">{project.name}</span>
           </div>
         ) : null}
       </div>
-      <ChatSessionTitle useSessionView={useSessionView} sessionView={sessionView} />
+      {activeAgentView === 'chat' ? (
+        <ChatSessionTitle useSessionView={useSessionView} sessionView={sessionView} />
+      ) : (
+        <div />
+      )}
       <div className="chat-view-header-right">
         <ChatSessionShare useSessionView={useSessionView} localOnly={workspaceLocation === 'device'} />
         <button
@@ -1081,6 +1168,7 @@ function Shell(props: SlotProps) {
                 renderSlot={props.renderSlot}
                 header={overlayHeader}
                 showCenter={activeModule === 'agent'}
+                agentView={activeAgentView}
               />
             </>
           )}
@@ -1254,6 +1342,7 @@ export function apply(ctx: Context) {
       stage: { kind: 'list' },
       'stage-aside': { kind: 'single' },
       trajectory: { kind: 'list' },
+      usage: { kind: 'list' },
       project: { kind: 'single' },
       composer: { kind: 'single' },
       settings: { kind: 'list' },
