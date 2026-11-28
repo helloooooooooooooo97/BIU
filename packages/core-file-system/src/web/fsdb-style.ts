@@ -475,6 +475,13 @@ const CSS = `
 .fsdb-page .tasks-tree-toggle.is-empty:hover{background:transparent}
 .fsdb-page .fsdb-title-text{min-width:0;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:var(--biu-font-weight-medium)}
 .fsdb-page .fsdb-title-host{position:relative;display:flex;align-items:center;gap:6px;min-width:0;width:100%;max-width:100%;min-height:22px;flex:1;overflow:hidden}
+.fsdb-page .fsdb-title-host.has-tree-count{padding-right:24px}
+.fsdb-page .tasks-table tr:hover td:has(.tasks-row-tools-slot) .fsdb-title-host:not(:focus-within){padding-right:50px}
+.fsdb-page .fsdb-title-role{--biu-tag:var(--biu-color-ink-gray);flex:none;display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;color:var(--biu-tag);opacity:.88}
+.fsdb-page .fsdb-title-role.is-manage{--biu-tag:var(--biu-color-ink-purple)}
+.fsdb-page .fsdb-title-role.is-edit{--biu-tag:var(--biu-color-ink-green)}
+.fsdb-page .fsdb-title-role.is-comment{--biu-tag:var(--biu-color-ink-blue)}
+.fsdb-page .fsdb-title-role.is-read{--biu-tag:var(--biu-color-ink-gray)}
 .fsdb-page .fsdb-table-record-icon{position:relative;flex:none;display:inline-flex;align-items:center}
 .fsdb-page .fsdb-record-mark,.fsdb-page .fsdb-record-mark svg,.fsdb-page .fsdb-title-host>svg,.fsdb-page .fsdb-table-record-icon svg{color:var(--biu-color-icon)}
 .fsdb-page .fsdb-record-mark .sidebar-mascot,.fsdb-page .fsdb-record-mark .sidebar-mascot svg,.fsdb-page .fsdb-table-record-icon .sidebar-mascot,.fsdb-page .fsdb-table-record-icon .sidebar-mascot svg{color:unset}
