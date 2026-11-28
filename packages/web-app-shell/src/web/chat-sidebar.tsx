@@ -168,6 +168,7 @@ const SessionRow = memo(function SessionRow({
   activeView = '',
   expanded = false,
   canExpand = false,
+  iconRail = false,
   busy,
   dancing,
   creator,
@@ -182,6 +183,7 @@ const SessionRow = memo(function SessionRow({
   activeView?: AgentSubView
   expanded?: boolean
   canExpand?: boolean
+  iconRail?: boolean
   busy: boolean
   dancing: boolean
   creator?: ChatMemberInfo | null
@@ -204,9 +206,10 @@ const SessionRow = memo(function SessionRow({
       {timeLabel}
     </span>
   ) : null
+  const mascotSize = iconRail ? 20 : 16
   const main = onOpen ? (
     <button type="button" {...sessionRowMainProps} data-dock-tip={item.title} onClick={() => onOpen(item)}>
-      <SessionRowMascot item={item} busy={busy} dancing={dancing} />
+      <SessionRowMascot item={item} size={mascotSize} busy={busy} dancing={dancing} />
       {label}
       {timeNode}
     </button>
@@ -227,7 +230,7 @@ const SessionRow = memo(function SessionRow({
       >
         <span className="sidebar-rail-icon sidebar-group-fold">
           <span className="sidebar-group-fold-face relative group-hover:hidden! group-hover/fold:hidden!">
-            <SessionRowMascot item={item} busy={busy} dancing={dancing} />
+            <SessionRowMascot item={item} size={mascotSize} busy={busy} dancing={dancing} />
           </span>
           <span className="sidebar-group-fold-chevron group-hover:grid! group-hover/fold:grid!">
             <ChevronRightIcon
@@ -250,7 +253,7 @@ const SessionRow = memo(function SessionRow({
     </SidebarRowMain>
   ) : (
     <Link to={sessionAppPath(item.id)} {...sessionRowMainProps} data-dock-tip={item.title}>
-      <SessionRowMascot item={item} busy={busy} dancing={dancing} />
+      <SessionRowMascot item={item} size={mascotSize} busy={busy} dancing={dancing} />
       {label}
       {timeNode}
     </Link>
@@ -307,7 +310,7 @@ const SessionRow = memo(function SessionRow({
                 >
                   <span className="grid size-6 shrink-0 place-items-center" aria-hidden>
                     <span className="sidebar-rail-icon">
-                      <MapIcon className="size-3.5 opacity-75" />
+                      <MapIcon className="size-4 shrink-0 opacity-75" />
                     </span>
                   </span>
                   <span className="sidebar-label min-w-0 flex-1 truncate text-[13px]">轨迹</span>
@@ -330,7 +333,7 @@ const SessionRow = memo(function SessionRow({
                 >
                   <span className="grid size-6 shrink-0 place-items-center" aria-hidden>
                     <span className="sidebar-rail-icon">
-                      <SignalIcon className="size-3.5 opacity-75" />
+                      <SignalIcon className="size-4 shrink-0 opacity-75" />
                     </span>
                   </span>
                   <span className="sidebar-label min-w-0 flex-1 truncate text-[13px]">用量</span>
@@ -346,16 +349,18 @@ const SessionRow = memo(function SessionRow({
 
 const SessionRowMascot = memo(function SessionRowMascot({
   item,
+  size = 16,
   busy,
   dancing,
 }: {
   item: SessionListItem
+  size?: number
   busy: boolean
   dancing: boolean
 }) {
   return (
     <SidebarMascot
-      size={20}
+      size={size}
       sessionId={item.id}
       identity={resolveSessionMascot(item.id, item.mascot)}
       busy={busy}
@@ -465,6 +470,7 @@ const WindowedSessionList = memo(function WindowedSessionList({
               activeView={item.id === highlightId ? activeView : ''}
               expanded={expanded}
               canExpand={canExpand}
+              iconRail={iconRail}
               busy={Boolean(busySessions[item.id])}
               dancing={dancing}
               creator={creatorOf?.(item) ?? null}
