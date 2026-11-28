@@ -2289,7 +2289,7 @@ export class ChannelService {
           push?: (input: {
             title: string
             body?: string
-            kind: 'approval' | 'task' | 'session'
+            kind: 'approval' | 'task' | 'session' | 'channel' | 'system'
             href?: string
             sourceKey: string
             accountId?: string
@@ -2317,7 +2317,7 @@ export class ChannelService {
         notices.push?.({
           title: `${message.senderName} 在 ${chLabel} 中 @ 了你`,
           body: snippet,
-          kind: 'session',
+          kind: 'channel',
           href: `/channels/${encodeURIComponent(channel.id)}?msg=${encodeURIComponent(message.id)}`,
           sourceKey: `channel-mention:${channel.id}`,
           accountId: targetId === 'local' ? '' : targetId,

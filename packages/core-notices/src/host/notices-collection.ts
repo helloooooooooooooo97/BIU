@@ -22,11 +22,11 @@ export function noticesCollection(store: NoticesStore): CollectionSpec {
     },
     records: { update: true, create: false, delete: true },
     schema: {
-      columns: ['title', 'kind', 'read', 'body', 'href', 'createdAt'],
+      columns: ['title', 'kind', 'read', 'body', 'href', 'updatedAt', 'createdAt'],
       fields: {
         title: { type: 'string', label: '标题' },
         body: { type: 'string', label: '摘要' },
-        kind: { type: 'select', label: '类型', enum: ['approval', 'task', 'session'] },
+        kind: { type: 'select', label: '类型', enum: ['approval', 'task', 'session', 'channel', 'system'] },
         read: { type: 'boolean', label: '已读', writable: true },
         href: { type: 'string', label: '跳转' },
         sourceKey: { type: 'string', label: '来源' },

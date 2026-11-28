@@ -575,10 +575,26 @@ body {
   background: color-mix(in srgb, var(--biu-color-text) 10%, transparent);
 }
 
+.shell-notify-meta {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
 .shell-notify-kind {
   color: var(--biu-color-text-subtle);
   font-size: 11px;
   font-weight: var(--biu-font-weight-semibold);
+  line-height: 1.2;
+}
+
+.shell-notify-time {
+  margin-left: auto;
+  color: var(--biu-color-text-subtle);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
   line-height: 1.2;
 }
 

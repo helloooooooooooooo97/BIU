@@ -4,7 +4,7 @@ import { dirname } from 'node:path'
 import { allocateRecordId, recordBuiltinValues, type DbRecord } from '@biu/type-file-system'
 import { currentTenantScope } from '@biu/host-plugin-loader/data-dir'
 
-export const NOTICE_KINDS = ['approval', 'task', 'session'] as const
+export const NOTICE_KINDS = ['approval', 'task', 'session', 'channel', 'system'] as const
 export type NoticeKind = (typeof NOTICE_KINDS)[number]
 
 export type NoticeRow = {
@@ -111,7 +111,9 @@ export class NoticesStore {
 
   list() {
     const scope = currentTenantScope()
-    return this.rows.filter((row) => this.matchesTenant(row, scope)).sort((a, b) => b.createdAt - a.createdAt)
+    return this.rows
+      .filter((row) => this.matchesTenant(row, scope))
+      .sort((a, b) => b.updatedAt - a.updatedAt || b.createdAt - a.createdAt)
   }
 
   get(id: string) {
@@ -233,6 +235,20 @@ export class NoticesStore {
     }
     if (touched.length) this.flush()
     return touched
+  }
+
+  markAllRead() {
+    const scope = currentTenantScope()
+    let n = 0
+    const now = Date.now()
+    for (const row of this.rows) {
+      if (row.read || !this.matchesTenant(row, scope)) continue
+      row.read = true
+      row.updatedAt = now
+      n += 1
+    }
+    if (n) this.flush()
+    return n
   }
 
   clear() {

@@ -3377,10 +3377,17 @@ type NoticeRow = {
   kind?: string
   read?: boolean
   href?: string
+  createdAt?: number
+  updatedAt?: number
 }
 
 function sessionIdFromPath(path: string) {
-  const match = path.match(/^\/agents\/([^/]+)/)
+  const match = path.match(/^\/agents\/([^/?#]+)/)
+  return match ? decodeURIComponent(match[1]!) : ''
+}
+
+function channelIdFromPath(path: string) {
+  const match = path.match(/^\/channels\/([^/?#]+)/)
   return match ? decodeURIComponent(match[1]!) : ''
 }
 
@@ -3388,10 +3395,48 @@ function noticeHref(row: NoticeRow) {
   return String(row.href ?? '').trim()
 }
 
-function noticeIsForSession(row: NoticeRow, sessionId: string) {
-  if (!sessionId) return false
+function noticePathname(row: NoticeRow) {
   const href = noticeHref(row)
-  return href === `/agents/${sessionId}` || href === `/agents/${encodeURIComponent(sessionId)}`
+  if (!href) return ''
+  return href.split(/[?#]/, 1)[0] ?? ''
+}
+
+function noticeIsForActiveRoute(row: NoticeRow, pathname: string) {
+  const targetPath = noticePathname(row)
+  if (!targetPath) return false
+  const sessionId = sessionIdFromPath(pathname)
+  if (sessionId && (targetPath === `/agents/${sessionId}` || targetPath === `/agents/${encodeURIComponent(sessionId)}`)) {
+    return true
+  }
+  const channelId = channelIdFromPath(pathname)
+  if (channelId && (targetPath === `/channels/${channelId}` || targetPath === `/channels/${encodeURIComponent(channelId)}`)) {
+    return true
+  }
+  return false
+}
+
+function formatNoticeTime(ts?: number, now = Date.now()) {
+  if (!ts || !Number.isFinite(ts) || ts <= 0) return ''
+  const d = new Date(ts)
+  const cur = new Date(now)
+  const pad = (n: number) => String(n).padStart(2, '0')
+  if (
+    d.getFullYear() === cur.getFullYear() &&
+    d.getMonth() === cur.getMonth() &&
+    d.getDate() === cur.getDate()
+  ) {
+    return `${pad(d.getHours())}:${pad(d.getMinutes())}`
+  }
+  const yest = new Date(cur.getFullYear(), cur.getMonth(), cur.getDate() - 1)
+  if (
+    d.getFullYear() === yest.getFullYear() &&
+    d.getMonth() === yest.getMonth() &&
+    d.getDate() === yest.getDate()
+  ) {
+    return '昨天'
+  }
+  if (d.getFullYear() === cur.getFullYear()) return `${pad(d.getMonth() + 1)}/${pad(d.getDate())}`
+  return `${d.getFullYear()}/${pad(d.getMonth() + 1)}/${pad(d.getDate())}`
 }
 
 function NoticeBody({ body }: { body: string }) {
@@ -3418,6 +3463,8 @@ function NoticeBody({ body }: { body: string }) {
 }
 
 function noticeKindLabel(kind?: string) {
+  if (kind === 'channel') return '聊天'
+  if (kind === 'system') return '系统'
   if (kind === 'approval') return '审批'
   if (kind === 'task') return '任务'
   if (kind === 'session') return '代理'
@@ -3434,10 +3481,9 @@ function NoticeBell({
   const navigate = useNavigate()
   const location = useLocation()
   const [rows, setRows] = useState<NoticeRow[]>([])
-  const looking = sessionIdFromPath(location.pathname)
 
   const load = useCallback(() => {
-    void apiFetch('/api/db/list?path=/notices&sort=createdAt&dir=desc&limit=40&columns=title,body,kind,read,href,createdAt')
+    void apiFetch('/api/db/list?path=/notices&sort=updatedAt&dir=desc&limit=40&columns=title,body,kind,read,href,createdAt,updatedAt')
       .then((res) => res.json() as Promise<{ items?: Array<Record<string, unknown>> }>)
       .then((data) => {
         const items = Array.isArray(data.items) ? data.items : []
@@ -3445,6 +3491,8 @@ function NoticeBell({
           items.flatMap((item) => {
             const id = noticeIdOf(item)
             if (!id) return []
+            const createdAt = Number(item.createdAt) || 0
+            const updatedAt = Number(item.updatedAt) || createdAt
             return [{
               id,
               title: String(item.title ?? ''),
@@ -3452,6 +3500,8 @@ function NoticeBell({
               kind: String(item.kind ?? ''),
               read: item.read === true,
               href: String(item.href ?? ''),
+              ...(createdAt > 0 ? { createdAt } : {}),
+              ...(updatedAt > 0 ? { updatedAt } : {}),
             }]
           }),
         )
@@ -3459,36 +3509,44 @@ function NoticeBell({
       .catch(() => setRows([]))
   }, [])
 
-  const pulled = useRef(false)
+  // 首屏即拉取未读通知，切回或打开弹窗时同步刷新
+  useEffect(() => {
+    load()
+  }, [load])
+
   useEffect(() => {
     if (!open) return
-    pulled.current = true
     load()
   }, [load, open])
 
+  // 实时通知推送（biu:notices-change）与账号/空间切换立即刷新
   useEffect(() => {
     let timer = 0
-    const onChange = (event: Event) => {
-      if (!pulled.current) return
-      if ((event as CustomEvent<{ views?: boolean }>).detail?.views) return
+    const scheduleLoad = () => {
       window.clearTimeout(timer)
-      timer = window.setTimeout(load, 8000)
+      timer = window.setTimeout(load, 200)
     }
-    window.addEventListener('fsdb:change', onChange)
+    const onTenantChange = () => {
+      setRows([])
+      load()
+    }
+    window.addEventListener('biu:notices-change', scheduleLoad)
+    const offApp = onAppEvents(['biu:account-token', 'biu:workspace-profile'], onTenantChange)
     return () => {
       window.clearTimeout(timer)
-      window.removeEventListener('fsdb:change', onChange)
+      window.removeEventListener('biu:notices-change', scheduleLoad)
+      offApp()
     }
   }, [load])
 
-  const unread = rows.filter((row) => row.read !== true && !noticeIsForSession(row, looking))
+  const unread = rows.filter((row) => row.read !== true && !noticeIsForActiveRoute(row, location.pathname))
   const inbox = rows.filter((row) => row.read !== true)
   const badge = unread.length > 99 ? '99+' : unread.length ? String(unread.length) : ''
   const triggerRef = useRef<HTMLButtonElement>(null)
 
-  const clearAll = () => {
-    setRows([])
-    void apiFetch('/api/db/notices/clear', { method: 'POST' })
+  const markAllRead = () => {
+    setRows((prev) => prev.map((item) => ({ ...item, read: true })))
+    void apiFetch('/api/db/notices/read-all', { method: 'POST' })
       .then(() => load())
       .catch(() => load())
   }
@@ -3545,9 +3603,9 @@ function NoticeBell({
                   type="button"
                   className="shell-notify-clear"
                   data-testid="chrome-notify-clear"
-                  title="全部已读并清空"
-                  aria-label="全部已读并清空"
-                  onClick={() => clearAll()}
+                  title="全部标为已读"
+                  aria-label="全部标为已读"
+                  onClick={() => markAllRead()}
                 >
                   <CheckIcon className="size-3.5" aria-hidden />
                 </button>
@@ -3569,6 +3627,7 @@ function NoticeBell({
             <ul className="shell-notify-list">
               {inbox.map((row) => {
                 const kind = noticeKindLabel(row.kind)
+                const time = formatNoticeTime(row.updatedAt || row.createdAt)
                 return (
                   <li key={row.id}>
                     <button
@@ -3577,7 +3636,12 @@ function NoticeBell({
                       data-testid="chrome-notify-item"
                       onClick={() => openRow(row)}
                     >
-                      {kind ? <span className="shell-notify-kind">{kind}</span> : null}
+                      {kind || time ? (
+                        <span className="shell-notify-meta">
+                          {kind ? <span className="shell-notify-kind">{kind}</span> : null}
+                          {time ? <span className="shell-notify-time">{time}</span> : null}
+                        </span>
+                      ) : null}
                       <span className="shell-notify-title">{row.title || '通知'}</span>
                       {row.body ? <NoticeBody body={row.body} /> : null}
                     </button>
