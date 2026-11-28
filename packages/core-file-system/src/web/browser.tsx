@@ -1,4 +1,5 @@
 import { writeStorageString } from '@biu/biu-ui/client-storage'
+import { normalizeAuthzRole } from '../shared/authz-labels.ts'
 import { useViewerIdentity } from './authz-api.ts'
 import { registerWorkspaceCache } from './workspace-client-store.ts'
 import { useBrowserPopovers } from './use-browser-popovers.ts'
