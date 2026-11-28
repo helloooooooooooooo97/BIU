@@ -705,10 +705,10 @@ export const ChannelStage = memo(function ChannelStage({
                       </div>
 
                       <div
-                        className="user-turn-bar box-border flex min-h-[30px] w-full items-center justify-between gap-3 overflow-hidden border-0 border-t border-(--biu-color-bg-muted) bg-(--biu-color-bg-subtle) px-(--biu-chat-pad-x) text-(length:--biu-chat-ui-font-size) leading-none text-(--biu-color-text-muted)"
+                        className={`user-turn-bar box-border flex min-h-[30px] w-full items-center justify-between gap-3 overflow-hidden border-0 border-t border-(--biu-color-bg-muted) bg-(--biu-color-bg-subtle) px-(--biu-chat-pad-x) text-(length:--biu-chat-ui-font-size) leading-none text-(--biu-color-text-muted)${isSelf ? ' flex-row-reverse' : ''}`}
                         aria-label="消息摘要"
                       >
-                        <div className="flex min-h-full min-w-0 flex-1 items-center gap-2">
+                        <div className={`flex min-h-full min-w-0 flex-1 items-center gap-2${isSelf ? ' flex-row-reverse' : ''}`}>
                           {isAgent || isSystemAgent ? (
                             <button
                               type="button"
@@ -728,7 +728,7 @@ export const ChannelStage = memo(function ChannelStage({
                             </button>
                           ) : (
                             <span
-                              className="inline-flex min-w-0 items-center gap-1.5"
+                              className={`inline-flex min-w-0 items-center gap-1.5${isSelf ? ' flex-row-reverse' : ''}`}
                               title={msg.senderName}
                               data-testid="channel-msg-avatar"
                             >

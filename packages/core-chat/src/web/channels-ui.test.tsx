@@ -377,11 +377,17 @@ test('ChannelStage reuses 1v1 chat card/composer/float styles and syncs workspac
     assert.equal(otherRow.children.length, 1)
     assert.ok(otherRow.querySelector('.chat-user-card')?.className.includes('!w-3/4'))
     assert.ok(otherRow.querySelector('.user-turn-bar [data-testid="channel-msg-avatar"]'))
+    assert.equal(otherRow.querySelector('.user-turn-bar')?.className.includes('flex-row-reverse'), false)
     assert.equal(selfRow.getAttribute('data-self'), 'true')
     assert.ok(selfRow.className.includes('justify-end'))
     assert.equal(selfRow.children.length, 1)
     assert.ok(selfRow.querySelector('.chat-user-card')?.className.includes('!w-3/4'))
     assert.ok(selfRow.querySelector('.user-turn-bar [data-testid="channel-msg-avatar"]'))
+    assert.equal(selfRow.querySelector('.user-turn-bar')?.className.includes('flex-row-reverse'), true)
+    assert.equal(
+      selfRow.querySelector('.user-turn-bar [data-testid="channel-msg-avatar"]')?.className.includes('flex-row-reverse'),
+      true,
+    )
   })
 
   // 打开「群成员与 Agent」弹窗：必须使用统一 .biu-float-overlay / .scfg-float 且头像一致
