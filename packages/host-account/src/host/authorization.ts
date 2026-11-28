@@ -198,7 +198,7 @@ function normalizeStoredAccessMode(raw: string | null | undefined): AccessMode {
 export class AuthorizationService {
   private memberViewMatcher?: MemberViewMatcher
   private memberViewLockChecker?: MemberViewLockChecker
-  private agentShareCap?: (workspaceId: string) => 'viewer' | 'editor' | 'manager'
+  private agentShareCap?: (workspaceId: string) => 'viewer' | 'editor'
   private memberViewMatchCache = new Map<string, boolean>()
   private scans = new Map<string, CollectionScan>()
   private invalidators = new Set<() => void>()
@@ -208,8 +208,8 @@ export class AuthorizationService {
     private activeWorkspaceFor: (accountId: string) => string | null,
   ) {}
 
-  /** 绑定工作区级代理最高分享角色上限（默认 editor；关闭可编辑时为 viewer；显式开启高危可管理时为 manager）。 */
-  setWorkspaceAgentShareCap(fn: (workspaceId: string) => 'viewer' | 'editor' | 'manager') {
+  /** 绑定工作区级代理最高分享角色上限（最高 editor；关闭可编辑时为 viewer；非创建者绝不允许 manager）。 */
+  setWorkspaceAgentShareCap(fn: (workspaceId: string) => 'viewer' | 'editor') {
     this.agentShareCap = fn
     this.scans.clear()
     this.notifyInvalidators()
@@ -603,11 +603,10 @@ export class AuthorizationService {
     if (!resolved) return { allowed: false, reason: 'PRIVATE_RESOURCE' }
     let cappedRole: ResourceRole =
       membership === 'viewer' || memberKind === 'guest' ? 'viewer' : resolved.effectiveRole
-    // /agents 支持多级权限（可查看/可编辑/可管理），但非创建者受空间策略上限约束；外部协作者绝不允许接管执行（最高 editor）
+    // /agents 仅支持可查看（看记录+Fork）与可编辑（改名/改配置，不可对话）；非创建者绝不允许 manager，不能替他人代理发消息执行
     if (resource.collection === '/agents' && resolved.source !== 'ownership') {
-      const cap = this.agentShareCap ? this.agentShareCap(resource.workspaceId) : 'editor'
-      const limit: ResourceRole = memberKind !== 'member' && cap === 'manager' ? 'editor' : cap
-      cappedRole = minRole([cappedRole, limit]) ?? 'viewer'
+      const cap: ResourceRole = this.agentShareCap ? this.agentShareCap(resource.workspaceId) : 'editor'
+      cappedRole = minRole([cappedRole, cap]) ?? 'viewer'
     }
     const effective = { effectiveRole: cappedRole, source: resolved.source }
     if (!roleCoversAction(effective.effectiveRole, action)) {

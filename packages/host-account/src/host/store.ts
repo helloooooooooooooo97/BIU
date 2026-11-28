@@ -8,7 +8,6 @@ import {
   agentShareRoleCeiling,
   defaultWorkspacePermissionPolicy,
   isPolicyAgentEditShareAllowed,
-  isPolicyAgentManagerShareAllowed,
   isPolicyExternalShareAllowed,
   normalizeWorkspacePermissionPolicy,
   type CollectionPermissionSetting,
@@ -135,16 +134,10 @@ export class CollabStore {
     collaboratorKind: 'internal' | 'external' | 'guest',
   ): ResourceRole {
     if (collaboratorKind === 'guest') return 'viewer'
-    const policy = this.workspacePermissionPolicy(workspaceId)
-    if (role === 'manager') {
-      if (collaboratorKind !== 'internal') {
-        throw new CollabError('外部协作者不支持授予代理的「可管理」权限', 403)
-      }
-      if (!isPolicyAgentManagerShareAllowed(policy)) {
-        throw new CollabError('当前空间未开启「允许将代理分享为可管理」，请先在设置 → 工作区 → 权限中开启', 403)
-      }
-      return 'manager'
+    if (role === 'manager' || role === 'owner') {
+      throw new CollabError('代理不支持授予「可管理」权限，仅创建者本人可直接对话与操作；他人可通过「可查看（可 Fork）」或「可编辑」协作', 403)
     }
+    const policy = this.workspacePermissionPolicy(workspaceId)
     if (role === 'editor') {
       if (!isPolicyAgentEditShareAllowed(policy)) {
         throw new CollabError('当前空间已关闭代理的「可编辑」分享权限', 403)
@@ -186,7 +179,7 @@ export class CollabStore {
       actorId,
       category: 'access',
       action: 'workspace.permissions.update',
-      detail: `更新空间权限设置（外部分享：${next.allowExternalShare ? '开' : '关'}，代理可管理：${next.allowAgentManagerShare ? '开' : '关'}）`,
+      detail: `更新空间权限设置（外部分享：${next.allowExternalShare ? '开' : '关'}，代理可编辑：${isPolicyAgentEditShareAllowed(next) ? '开' : '关'}）`,
     })
     return {
       workspaceId,
@@ -2499,7 +2492,6 @@ export class CollabStore {
         return {
           allowExternalShare: isPolicyExternalShareAllowed(wsPolicy, target.collection),
           allowAgentEditShare: isPolicyAgentEditShareAllowed(wsPolicy),
-          allowAgentManagerShare: isPolicyAgentManagerShareAllowed(wsPolicy),
         }
       })(),
       inheritance: {

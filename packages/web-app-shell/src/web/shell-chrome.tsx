@@ -2548,12 +2548,10 @@ export function ShellSettingsMembers() {
 type WorkspaceCollectionPermission = {
   allowExternalShare: boolean
   allowEditShare?: boolean
-  allowManageShare?: boolean
 }
 
 type WorkspacePermissionPolicyState = {
   allowExternalShare: boolean
-  allowAgentManagerShare: boolean
   collections: Record<string, WorkspaceCollectionPermission>
 }
 
@@ -2563,7 +2561,7 @@ const WORKSPACE_PERMISSION_COLLECTIONS: ReadonlyArray<{
   desc: string
 }> = [
   { path: '/pages', label: '页面', desc: '文档、知识库与页面内容' },
-  { path: '/agents', label: '代理', desc: '可查看=看记录+Fork · 可编辑=改名与配置（不对话） · 可管理=接管执行（高风险）' },
+  { path: '/agents', label: '代理', desc: '可查看=看记录+Fork · 可编辑=改名与配置（不可对话） · 仅创建者本人可直接对话执行' },
   { path: '/tags', label: '标签', desc: '全局标签定义、属性结构与三视图模板' },
   { path: '/plugins', label: '插件', desc: '扩展插件与能力包' },
   { path: '/skills', label: '技能', desc: '可复用的提示与技能定义' },
@@ -2573,10 +2571,9 @@ const WORKSPACE_PERMISSION_COLLECTIONS: ReadonlyArray<{
 function defaultClientWorkspacePolicy(): WorkspacePermissionPolicyState {
   return {
     allowExternalShare: true,
-    allowAgentManagerShare: false,
     collections: {
       '/pages': { allowExternalShare: true },
-      '/agents': { allowExternalShare: true, allowEditShare: true, allowManageShare: false },
+      '/agents': { allowExternalShare: true, allowEditShare: true },
       '/tags': { allowExternalShare: true },
       '/plugins': { allowExternalShare: true },
       '/skills': { allowExternalShare: true },
@@ -2594,7 +2591,6 @@ export function ShellSettingsPermissions() {
   const [canEdit, setCanEdit] = useState(false)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
-  const [confirmAgentManager, setConfirmAgentManager] = useState(false)
   const [notice, setNotice] = useState('')
   const [error, setError] = useState('')
 
@@ -2659,18 +2655,6 @@ export function ShellSettingsPermissions() {
     } finally {
       setSaving(false)
     }
-  }
-
-  const toggleAgentManager = (next: boolean) => {
-    if (!canEdit || saving) return
-    if (next) {
-      setConfirmAgentManager(true)
-      return
-    }
-    void patchPolicy(
-      { allowAgentManagerShare: false, collections: { '/agents': { allowManageShare: false } } },
-      '已关闭「允许将代理分享为可管理」',
-    )
   }
 
   const renderSwitch = (
@@ -2745,44 +2729,6 @@ export function ShellSettingsPermissions() {
             (next) => void patchPolicy({ allowExternalShare: next }, next ? '已开启空间外部分享' : '已关闭空间外部分享'),
           )}
         </div>
-
-        <div
-          style={{
-            borderTop: '1px solid var(--biu-color-border)',
-            paddingTop: 12,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            gap: 12,
-          }}
-        >
-          <div>
-            <div style={{ fontWeight: 600, fontSize: 13, display: 'flex', alignItems: 'center', gap: 6 }}>
-              <span>允许将代理分享为「可管理」</span>
-              <span
-                style={{
-                  fontSize: 11,
-                  padding: '1px 6px',
-                  borderRadius: 999,
-                  background: 'color-mix(in srgb, var(--biu-color-danger, #ef4444) 15%, transparent)',
-                  color: 'var(--biu-color-danger, #ef4444)',
-                  fontWeight: 500,
-                }}
-              >
-                高风险
-              </span>
-            </div>
-            <div className="settings-muted" style={{ fontSize: 12, marginTop: 2 }}>
-              默认关闭。开启后，成员可将代理的「可管理」权限授予内部协作者；对方可直接对话并触发该代理在工作区中执行工具。
-            </div>
-          </div>
-          {renderSwitch(
-            policy.allowAgentManagerShare,
-            '允许将代理分享为可管理',
-            'settings-perm-allow-agent-manager',
-            toggleAgentManager,
-          )}
-        </div>
       </div>
 
       <h4 style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>按数据类型详细权限</h4>
@@ -2845,43 +2791,12 @@ export function ShellSettingsPermissions() {
                         ),
                     )}
                   </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <span className="settings-muted" style={{ fontSize: 12 }}>允许分享为可管理（接管执行 · 高风险）</span>
-                    {renderSwitch(
-                      policy.allowAgentManagerShare,
-                      '代理允许分享为可管理',
-                      'settings-perm-agents-manage',
-                      toggleAgentManager,
-                    )}
-                  </div>
                 </div>
               ) : null}
             </div>
           )
         })}
       </div>
-
-      {confirmAgentManager ? (
-        <ConfirmDialog
-          title="开启代理「可管理」分享权限？"
-          message={
-            <>
-              这是一个<strong>高风险操作</strong>：开启后，空间成员可以将代理的「可管理」权限授予其他成员。获得可管理权限的人可以直接向该代理发消息并触发工具执行，相当于直接在该代理的工作区和权限范围内干活。确定开启吗？
-            </>
-          }
-          confirmLabel="确认开启（高风险）"
-          danger
-          testId="settings-perm-agent-manager-confirm"
-          onCancel={() => setConfirmAgentManager(false)}
-          onConfirm={() => {
-            setConfirmAgentManager(false)
-            void patchPolicy(
-              { allowAgentManagerShare: true, collections: { '/agents': { allowManageShare: true } } },
-              '已开启「允许将代理分享为可管理」（高风险）',
-            )
-          }}
-        />
-      ) : null}
     </section>
   )
 }
