@@ -23,6 +23,7 @@ test('notice click always opens the notice record, plus task or session', () => 
 test('noticeOpenHref always has a page to open', () => {
   assert.equal(noticeOpenHref({ id: 'n1' }), '/database/notices/record/n1')
   assert.equal(noticeOpenHref({ id: 'n2', href: '/agents/abc' }), '/agents/abc')
+  assert.equal(noticeOpenHref({ id: 'n4', href: '/channels/ch-1?msg=m1' }), '/channels/ch-1?msg=m1')
   assert.equal(noticeOpenHref({ id: 'n3', href: '/database/tasks/record/t1' }), '/database/tasks/record/t1')
 })
 

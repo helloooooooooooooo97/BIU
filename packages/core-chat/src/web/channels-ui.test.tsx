@@ -627,3 +627,264 @@ test('ChannelStage allows agent owner to toggle contextMode and manually sync co
     assert.equal(view.getByTestId('agent-context-mode-ag-mine').textContent, '仅群聊隔离')
   })
 })
+
+test('ChannelSidebarSections displays unread badges and online dot, and ChannelStage supports edit, recall, unread divider, attachments, and older paging', async () => {
+  let editedBody: string | null = null
+  let recalledId: string | null = null
+  let readCalled = false
+  const now = Date.now()
+  const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = new URL(String(input), 'http://test.local')
+    if (url.pathname === '/api/channels' && (!init?.method || init.method === 'GET')) {
+      return new Response(
+        JSON.stringify({
+          channels: [
+            {
+              id: 'ch-unread',
+              workspaceId: 'ws-1',
+              kind: 'channel',
+              dmKey: '',
+              name: '告警群',
+              topic: '',
+              accessMode: 'private',
+              createdBy: 'acc-alice',
+              createdAt: now - 5000,
+              updatedAt: now,
+              memberCount: 2,
+              agentCount: 0,
+              lastMessageAt: now,
+              lastMessageText: '@Alice 看一下',
+              unreadCount: 3,
+              mentionCount: 1,
+              lastReadSeq: 1,
+            },
+            {
+              id: 'dm-97',
+              workspaceId: 'ws-1',
+              kind: 'dm',
+              dmKey: 'acc-97\0acc-alice',
+              peerAccountId: 'acc-97',
+              peerName: '97',
+              name: '97',
+              topic: '',
+              accessMode: 'private',
+              createdBy: 'acc-alice',
+              createdAt: now - 5000,
+              updatedAt: now - 1000,
+              memberCount: 2,
+              agentCount: 0,
+              lastMessageAt: now - 1000,
+              lastMessageText: 'hi',
+              unreadCount: 2,
+              mentionCount: 0,
+              lastReadSeq: 0,
+            },
+          ],
+        }),
+        { status: 200 },
+      )
+    }
+    if (url.pathname === '/api/db/list') {
+      return new Response(
+        JSON.stringify({
+          items: [
+            { id: 'acc-alice', title: 'Alice', status: 'online' },
+            { id: 'acc-97', title: '97', status: 'online' },
+          ],
+        }),
+        { status: 200 },
+      )
+    }
+    if (url.pathname === '/api/account/workspace-profile') {
+      return new Response(JSON.stringify({ accountId: 'acc-alice', name: 'Alice' }), { status: 200 })
+    }
+    if (url.pathname === '/api/channels/ch-unread' && (!init?.method || init.method === 'GET')) {
+      return new Response(
+        JSON.stringify({
+          channel: {
+            id: 'ch-unread',
+            workspaceId: 'ws-1',
+            kind: 'channel',
+            dmKey: '',
+            name: '告警群',
+            topic: '',
+            accessMode: 'private',
+            createdBy: 'acc-alice',
+            createdAt: now - 5000,
+            updatedAt: now,
+            memberCount: 2,
+            agentCount: 0,
+            lastMessageAt: now,
+            lastMessageText: '@Alice 看一下',
+            unreadCount: 1,
+            mentionCount: 1,
+            lastReadSeq: 2,
+          },
+          members: [
+            { channelId: 'ch-unread', memberType: 'account', memberId: 'acc-alice', role: 'owner', addedBy: 'acc-alice', addedAt: 1, name: 'Alice', isOwn: true },
+            { channelId: 'ch-unread', memberType: 'account', memberId: 'acc-97', role: 'member', addedBy: 'acc-alice', addedAt: 1, name: '97', isOwn: false },
+          ],
+          messages: [
+            {
+              id: 'm-2',
+              channelId: 'ch-unread',
+              seq: 2,
+              senderType: 'account',
+              senderId: 'acc-alice',
+              senderName: 'Alice',
+              replyToId: '',
+              text: '我发的消息',
+              mentions: [],
+              attachments: [
+                { id: 'att-1.png', name: 'shot.png', mime: 'image/png', size: 1024, url: '/api/channels/ch-unread/uploads/att-1.png', kind: 'image' },
+              ],
+              traceId: '',
+              ephemeralTo: '',
+              createdAt: now - 2000,
+            },
+            {
+              id: 'm-3',
+              channelId: 'ch-unread',
+              seq: 3,
+              senderType: 'account',
+              senderId: 'acc-97',
+              senderName: '97',
+              replyToId: '',
+              text: '@Alice 请看截图',
+              mentions: [{ kind: 'account', id: 'acc-alice', label: 'Alice' }],
+              traceId: '',
+              ephemeralTo: '',
+              createdAt: now - 1000,
+            },
+          ],
+          hasMoreMessages: true,
+          activities: [],
+          myAccountId: 'acc-alice',
+          canManageMembers: true,
+        }),
+        { status: 200 },
+      )
+    }
+    if (url.pathname === '/api/channels/ch-unread/read' && init?.method === 'POST') {
+      readCalled = true
+      return new Response(JSON.stringify({ ok: true, channelId: 'ch-unread', lastReadSeq: 3 }), { status: 200 })
+    }
+    if (url.pathname === '/api/channels/ch-unread/messages' && (!init?.method || init.method === 'GET')) {
+      return new Response(
+        JSON.stringify({
+          messages: [
+            {
+              id: 'm-1',
+              channelId: 'ch-unread',
+              seq: 1,
+              senderType: 'account',
+              senderId: 'acc-97',
+              senderName: '97',
+              replyToId: '',
+              text: '更早的一条历史消息',
+              mentions: [],
+              traceId: '',
+              ephemeralTo: '',
+              createdAt: now - 86_400_000,
+            },
+          ],
+          hasMore: false,
+        }),
+        { status: 200 },
+      )
+    }
+    if (url.pathname === '/api/channels/ch-unread/messages/m-2' && init?.method === 'PATCH') {
+      const body = JSON.parse(String(init.body ?? '{}')) as { text?: string }
+      editedBody = body.text ?? null
+      return new Response(
+        JSON.stringify({
+          message: {
+            id: 'm-2',
+            channelId: 'ch-unread',
+            seq: 2,
+            senderType: 'account',
+            senderId: 'acc-alice',
+            senderName: 'Alice',
+            replyToId: '',
+            text: editedBody,
+            mentions: [],
+            traceId: '',
+            ephemeralTo: '',
+            editedAt: now,
+            createdAt: now - 2000,
+          },
+        }),
+        { status: 200 },
+      )
+    }
+    if (url.pathname === '/api/channels/ch-unread/messages/m-2' && init?.method === 'DELETE') {
+      recalledId = 'm-2'
+      return new Response(
+        JSON.stringify({
+          message: {
+            id: 'm-2',
+            channelId: 'ch-unread',
+            seq: 2,
+            senderType: 'account',
+            senderId: 'acc-alice',
+            senderName: 'Alice',
+            replyToId: '',
+            text: '',
+            mentions: [],
+            traceId: '',
+            ephemeralTo: '',
+            deletedAt: now,
+            createdAt: now - 2000,
+          },
+        }),
+        { status: 200 },
+      )
+    }
+    return new Response(JSON.stringify({}), { status: 200 })
+  })
+  vi.stubGlobal('fetch', fetchMock)
+
+  const sidebar = render(
+    <MemoryRouter initialEntries={['/']}>
+      <ChannelSidebarSections routeChannelId={null} />
+    </MemoryRouter>,
+  )
+  await waitFor(() => {
+    assert.equal(sidebar.getByTestId('sidebar-channel-unread-ch-unread').textContent, '@1')
+    assert.equal(sidebar.getByTestId('sidebar-channel-unread-dm-97').textContent, '2')
+    assert.ok(sidebar.getByTestId('sidebar-dm-online-dm-97'))
+  })
+  sidebar.unmount()
+
+  const stage = render(
+    <MemoryRouter initialEntries={['/channels/ch-unread']}>
+      <ChannelStage channelId="ch-unread" />
+    </MemoryRouter>,
+  )
+  await waitFor(() => {
+    assert.ok(stage.getByTestId('channel-unread-divider'))
+    assert.ok(stage.getByTestId('channel-msg-attachments-m-2'))
+    assert.ok(stage.getByTestId('channel-load-older'))
+    assert.equal(readCalled, true)
+  })
+
+  fireEvent.click(stage.getByTestId('channel-load-older'))
+  await waitFor(() => {
+    assert.ok(stage.container.textContent?.includes('更早的一条历史消息'))
+  })
+
+  fireEvent.click(stage.getByTestId('channel-msg-edit-m-2'))
+  const editorBox = stage.getByTestId('channel-msg-editor-m-2').querySelector('textarea')!
+  fireEvent.change(editorBox, { target: { value: '编辑后的内容' } })
+  fireEvent.click(stage.getByTestId('channel-msg-edit-save-m-2'))
+  await waitFor(() => {
+    assert.equal(editedBody, '编辑后的内容')
+    assert.ok(stage.getByTestId('channel-msg-edited-m-2'))
+  })
+
+  fireEvent.click(stage.getByTestId('channel-msg-recall-m-2'))
+  await waitFor(() => {
+    assert.equal(recalledId, 'm-2')
+    assert.ok(stage.getByTestId('channel-msg-recalled-m-2'))
+  })
+})

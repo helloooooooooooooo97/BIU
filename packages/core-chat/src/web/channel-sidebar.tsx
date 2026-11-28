@@ -127,6 +127,14 @@ export const ChannelSidebarSections = memo(function ChannelSidebarSections({
     return map
   }, [members])
 
+  const memberOnlineById = useMemo(() => {
+    const set = new Set<string>()
+    for (const m of members) {
+      if (m.status === 'online') set.add(m.id)
+    }
+    return set
+  }, [members])
+
   const peerMembers = useMemo(
     () => members.filter((m) => !myAccountId || m.id !== myAccountId),
     [members, myAccountId],
@@ -171,18 +179,21 @@ export const ChannelSidebarSections = memo(function ChannelSidebarSections({
           const peerAvatar = isDm
             ? (ch.peerAccountId ? memberAvatarById.get(ch.peerAccountId) : undefined) || ch.peerAvatar
             : undefined
+          const peerOnline = isDm && Boolean(ch.peerAccountId && memberOnlineById.has(ch.peerAccountId))
+          const unread = !active ? (ch.unreadCount ?? 0) : 0
+          const mentions = !active ? (ch.mentionCount ?? 0) : 0
           return (
             <Link
               key={ch.id}
               to={channelAppPath(ch.id)}
-              className={`chat-session-row${active ? ' is-active' : ''}`}
+              className={`chat-session-row relative${active ? ' is-active' : ''}`}
               title={isDm ? ch.name : `# ${ch.name}`}
               aria-label={`聊天 ${ch.name}`}
               data-dock-tip={isDm ? ch.name : `# ${ch.name}`}
               data-dock-tip-at="e"
               onClick={() => popoverClose?.()}
             >
-              <span className="grid size-6 shrink-0 place-items-center">
+              <span className="relative grid size-6 shrink-0 place-items-center">
                 {isDm ? (
                   peerAvatar ? (
                     <img src={peerAvatar} alt="" className="size-5 rounded-full object-cover" />
@@ -194,6 +205,18 @@ export const ChannelSidebarSections = memo(function ChannelSidebarSections({
                 ) : (
                   <HashtagIcon className="size-4 opacity-80" aria-hidden />
                 )}
+                {peerOnline ? (
+                  <span
+                    className="absolute right-0 bottom-0 size-2 rounded-full bg-emerald-500 ring-[1.5px] ring-(--biu-color-bg-subtle)"
+                    aria-hidden
+                  />
+                ) : null}
+                {unread > 0 && !ch.muted ? (
+                  <span
+                    className={`absolute -top-0.5 -right-0.5 size-2 rounded-full ${mentions > 0 ? 'bg-rose-500' : 'bg-(--biu-color-text)'}`}
+                    aria-hidden
+                  />
+                ) : null}
               </span>
             </Link>
           )
@@ -252,13 +275,18 @@ export const ChannelSidebarSections = memo(function ChannelSidebarSections({
             <div className="sidebar-section-rows flex min-w-0 flex-col pt-0.5">
               {channels.map((ch) => {
                 const isDm = ch.kind === 'dm'
+                const active = ch.id === routeChannelId
                 const peerAvatar = isDm
                   ? (ch.peerAccountId ? memberAvatarById.get(ch.peerAccountId) : undefined) || ch.peerAvatar
                   : undefined
+                const peerOnline = isDm && Boolean(ch.peerAccountId && memberOnlineById.has(ch.peerAccountId))
+                const unread = !active ? (ch.unreadCount ?? 0) : 0
+                const mentions = !active ? (ch.mentionCount ?? 0) : 0
+                const hasUnreadEmphasis = unread > 0 && !ch.muted
                 return (
                   <SidebarRow
                     key={ch.id}
-                    active={ch.id === routeChannelId}
+                    active={active}
                     main={
                       <Link
                         to={channelAppPath(ch.id)}
@@ -266,7 +294,7 @@ export const ChannelSidebarSections = memo(function ChannelSidebarSections({
                         title={ch.topic ? `${ch.name} · ${ch.topic}` : ch.name}
                         onClick={() => popoverClose?.()}
                       >
-                        <span className="grid size-5 shrink-0 place-items-center opacity-85" aria-hidden>
+                        <span className="relative grid size-5 shrink-0 place-items-center opacity-85" aria-hidden>
                           {isDm ? (
                             peerAvatar ? (
                               <img src={peerAvatar} alt="" className="size-4.5 rounded-full object-cover" />
@@ -278,8 +306,36 @@ export const ChannelSidebarSections = memo(function ChannelSidebarSections({
                           ) : (
                             <HashtagIcon className="size-3.5" />
                           )}
+                          {peerOnline ? (
+                            <span
+                              className="absolute right-0 bottom-0 size-2 rounded-full bg-emerald-500 ring-[1.5px] ring-(--biu-color-bg-subtle)"
+                              data-testid={`sidebar-dm-online-${ch.id}`}
+                              aria-hidden
+                            />
+                          ) : null}
                         </span>
-                        <span className="sidebar-label min-w-0 flex-1 truncate font-medium">{ch.name}</span>
+                        <span
+                          className={`sidebar-label min-w-0 flex-1 truncate ${hasUnreadEmphasis ? 'font-semibold text-(--biu-color-text)' : 'font-medium'}`}
+                        >
+                          {ch.name}
+                        </span>
+                        {mentions > 0 ? (
+                          <span
+                            className="shrink-0 rounded-full bg-rose-500 px-1.5 py-0.5 text-[10px] leading-none font-semibold text-white tabular-nums"
+                            data-testid={`sidebar-channel-unread-${ch.id}`}
+                            title={`${mentions} 条 @提及`}
+                          >
+                            @{mentions > 99 ? '99+' : mentions}
+                          </span>
+                        ) : unread > 0 && !ch.muted ? (
+                          <span
+                            className="shrink-0 rounded-full bg-(--biu-color-bg-muted) px-1.5 py-0.5 text-[10px] leading-none font-semibold text-(--biu-color-text) tabular-nums"
+                            data-testid={`sidebar-channel-unread-${ch.id}`}
+                            title={`${unread} 条未读消息`}
+                          >
+                            {unread > 99 ? '99+' : unread}
+                          </span>
+                        ) : null}
                       </Link>
                     }
                     onDelete={() => void handleDeleteChannel(ch.id)}

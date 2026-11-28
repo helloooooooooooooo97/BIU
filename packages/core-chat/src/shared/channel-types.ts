@@ -39,6 +39,15 @@ export interface ChannelMention {
   label: string
 }
 
+export interface ChannelAttachment {
+  id: string
+  name: string
+  mime: string
+  size: number
+  url: string
+  kind: 'image' | 'file'
+}
+
 export interface ChannelSummary {
   id: string
   workspaceId: string
@@ -58,6 +67,11 @@ export interface ChannelSummary {
   agentCount: number
   lastMessageAt: number
   lastMessageText: string
+  unreadCount?: number
+  mentionCount?: number
+  lastReadSeq?: number
+  muted?: boolean
+  pinned?: boolean
 }
 
 export interface ChannelMemberView {
@@ -112,9 +126,12 @@ export interface ChannelMessageView {
   replyPreview?: ChannelMessageReplyPreview | null
   text: string
   mentions: ChannelMention[]
+  attachments?: ChannelAttachment[]
   traceId: string
   ephemeralTo: string
   meta?: ChannelMessageMeta
+  editedAt?: number
+  deletedAt?: number
   createdAt: number
 }
 
@@ -181,6 +198,7 @@ export interface ChannelDetailPayload {
   channel: ChannelSummary
   members: ChannelMemberView[]
   messages: ChannelMessageView[]
+  hasMoreMessages?: boolean
   activities: ChannelAgentActivity[]
   myAccountId: string
   canManageMembers: boolean

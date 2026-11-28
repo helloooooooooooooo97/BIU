@@ -22,7 +22,7 @@ export function noticeClickPlan(row: NoticeClickRow): NoticeClickPlan {
   const record = href.match(/^\/database(\/[^/]+)\/record\/([^/?#]+)/)
   return {
     noticeId: noticeIdOf(row),
-    sessionHref: href.startsWith('/agents/') ? href : '',
+    sessionHref: href.startsWith('/agents/') || href.startsWith('/channels/') ? href : '',
     record: record
       ? { collection: record[1]!, recordId: decodeURIComponent(record[2]!) }
       : null,

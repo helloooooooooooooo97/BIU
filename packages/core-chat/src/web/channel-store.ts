@@ -5,6 +5,7 @@ import type {
   ChannelAccessMode,
   ChannelAgentActivity,
   ChannelAgentContextMode,
+  ChannelAttachment,
   ChannelDetailPayload,
   ChannelMemberType,
   ChannelMemberView,
@@ -18,6 +19,7 @@ import type {
 export type ChannelStoreState = {
   channels: ChannelSummary[]
   loaded: boolean
+  activeChannelId: string | null
   details: Record<string, ChannelDetailPayload>
   inspected: { channelId: string; runId: string } | null
   runs: Record<string, ChannelRunDetail>
@@ -26,6 +28,7 @@ export type ChannelStoreState = {
 let state: ChannelStoreState = {
   channels: [],
   loaded: false,
+  activeChannelId: null,
   details: {},
   inspected: null,
   runs: {},
@@ -65,11 +68,25 @@ export function resetChannelStore() {
   state = {
     channels: [],
     loaded: false,
+    activeChannelId: null,
     details: {},
     inspected: null,
     runs: {},
   }
   emit()
+}
+
+export function setActiveChannelId(channelId: string | null) {
+  setState((prev) => (prev.activeChannelId === channelId ? prev : { ...prev, activeChannelId: channelId }))
+}
+
+function sortChannels(channels: ChannelSummary[]): ChannelSummary[] {
+  return [...channels].sort(
+    (a, b) =>
+      Number(Boolean(b.pinned)) - Number(Boolean(a.pinned)) ||
+      b.lastMessageAt - a.lastMessageAt ||
+      b.updatedAt - a.updatedAt,
+  )
 }
 
 export async function loadChannels(): Promise<ChannelSummary[]> {
@@ -296,7 +313,7 @@ export async function removeChannelMember(
 
 export async function sendChannelMessage(
   channelId: string,
-  input: { text: string; replyToId?: string; mentions?: ChannelMention[] },
+  input: { text: string; replyToId?: string; mentions?: ChannelMention[]; attachments?: ChannelAttachment[] },
 ): Promise<{ message: ChannelMessageView; triggeredRunIds: string[] }> {
   const res = await apiFetch(`/api/channels/${encodeURIComponent(channelId)}/messages`, {
     method: 'POST',
@@ -305,8 +322,130 @@ export async function sendChannelMessage(
   })
   const body = (await res.json()) as { message?: ChannelMessageView; triggeredRunIds?: string[]; error?: string }
   if (!res.ok || !body.message) throw new Error(body.error || '发送失败')
-  upsertChannelMessage(body.message)
+  upsertChannelMessage(body.message, true)
   return { message: body.message, triggeredRunIds: body.triggeredRunIds ?? [] }
+}
+
+export async function uploadChannelAttachment(channelId: string, file: File): Promise<ChannelAttachment> {
+  const name = encodeURIComponent(file.name || 'attachment.bin')
+  const res = await apiFetch(`/api/channels/${encodeURIComponent(channelId)}/uploads?name=${name}`, {
+    method: 'POST',
+    headers: { 'content-type': file.type || 'application/octet-stream' },
+    body: file,
+  })
+  const body = (await res.json().catch(() => ({}))) as { attachment?: ChannelAttachment; error?: string }
+  if (!res.ok || !body.attachment) throw new Error(body.error || '上传附件失败')
+  return body.attachment
+}
+
+export async function editChannelMessage(
+  channelId: string,
+  messageId: string,
+  text: string,
+): Promise<ChannelMessageView> {
+  const res = await apiFetch(
+    `/api/channels/${encodeURIComponent(channelId)}/messages/${encodeURIComponent(messageId)}`,
+    {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ text }),
+    },
+  )
+  const body = (await res.json()) as { message?: ChannelMessageView; error?: string }
+  if (!res.ok || !body.message) throw new Error(body.error || '编辑消息失败')
+  upsertChannelMessage(body.message, true)
+  return body.message
+}
+
+export async function recallChannelMessage(channelId: string, messageId: string): Promise<ChannelMessageView> {
+  const res = await apiFetch(
+    `/api/channels/${encodeURIComponent(channelId)}/messages/${encodeURIComponent(messageId)}`,
+    { method: 'DELETE' },
+  )
+  const body = (await res.json()) as { message?: ChannelMessageView; error?: string }
+  if (!res.ok || !body.message) throw new Error(body.error || '撤回消息失败')
+  upsertChannelMessage(body.message, true)
+  return body.message
+}
+
+export async function markChannelRead(channelId: string, seq?: number): Promise<void> {
+  if (!channelId) return
+  setState((prev) => {
+    const nextChannels = prev.channels.map((c) =>
+      c.id === channelId
+        ? {
+            ...c,
+            unreadCount: 0,
+            mentionCount: 0,
+            lastReadSeq: typeof seq === 'number' ? Math.max(c.lastReadSeq ?? 0, seq) : c.lastReadSeq,
+          }
+        : c,
+    )
+    const detail = prev.details[channelId]
+    return {
+      ...prev,
+      channels: nextChannels,
+      ...(detail
+        ? {
+            details: {
+              ...prev.details,
+              [channelId]: {
+                ...detail,
+                channel: {
+                  ...detail.channel,
+                  unreadCount: 0,
+                  mentionCount: 0,
+                  lastReadSeq: typeof seq === 'number' ? Math.max(detail.channel.lastReadSeq ?? 0, seq) : detail.channel.lastReadSeq,
+                },
+              },
+            },
+          }
+        : {}),
+    }
+  })
+  try {
+    await apiFetch(`/api/channels/${encodeURIComponent(channelId)}/read`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(typeof seq === 'number' ? { seq } : {}),
+    })
+  } catch {
+    /* ignore */
+  }
+}
+
+export async function loadOlderChannelMessages(
+  channelId: string,
+  limit = 60,
+): Promise<{ added: number; hasMore: boolean }> {
+  const current = state.details[channelId]
+  if (!current || current.messages.length === 0) return { added: 0, hasMore: false }
+  const oldestSeq = current.messages[0]!.seq
+  const res = await apiFetch(
+    `/api/channels/${encodeURIComponent(channelId)}/messages?beforeSeq=${oldestSeq}&limit=${limit}`,
+  )
+  if (!res.ok) return { added: 0, hasMore: Boolean(current.hasMoreMessages) }
+  const body = (await res.json()) as { messages?: ChannelMessageView[]; hasMore?: boolean }
+  const older = Array.isArray(body.messages) ? body.messages : []
+  const hasMore = Boolean(body.hasMore)
+  setState((prev) => {
+    const detail = prev.details[channelId]
+    if (!detail) return prev
+    const existingIds = new Set(detail.messages.map((m) => m.id))
+    const merged = [...older.filter((m) => !existingIds.has(m.id)), ...detail.messages].sort((a, b) => a.seq - b.seq)
+    return {
+      ...prev,
+      details: {
+        ...prev.details,
+        [channelId]: {
+          ...detail,
+          messages: merged,
+          hasMoreMessages: hasMore,
+        },
+      },
+    }
+  })
+  return { added: older.length, hasMore }
 }
 
 export async function loadChannelRun(channelId: string, runId: string): Promise<ChannelRunDetail | null> {
@@ -357,17 +496,55 @@ export function openChannelRunTrace(channelId: string, runId: string) {
   }
 }
 
-function upsertChannelMessage(message: ChannelMessageView) {
+function messagePreviewText(message: ChannelMessageView): string {
+  if (message.deletedAt) return '此消息已撤回'
+  if (message.text.trim()) return message.text.slice(0, 120)
+  if (message.attachments?.length) {
+    const first = message.attachments[0]!
+    return first.kind === 'image' ? `[图片] ${first.name}` : `[文件] ${first.name}`
+  }
+  return ''
+}
+
+function upsertChannelMessage(message: ChannelMessageView, isUpdateOrSelf = false) {
   setState((prev) => {
     const detail = prev.details[message.channelId]
-    const nextChannels = prev.channels.map((c) =>
-      c.id === message.channelId && !message.ephemeralTo
-        ? { ...c, updatedAt: Math.max(c.updatedAt, message.createdAt), lastMessageAt: message.createdAt, lastMessageText: message.text.slice(0, 120) }
-        : c,
+    const existed = detail ? detail.messages.some((m) => m.id === message.id) : false
+    const myAccountId = detail?.myAccountId ?? ''
+    const isFromSelf = Boolean(myAccountId) && message.senderType === 'account' && message.senderId === myAccountId
+    const shouldBumpUnread =
+      !isUpdateOrSelf &&
+      !existed &&
+      !message.ephemeralTo &&
+      !message.deletedAt &&
+      !isFromSelf &&
+      prev.activeChannelId !== message.channelId
+    const mentionedMe =
+      shouldBumpUnread &&
+      message.mentions.some(
+        (m) => m.kind === 'everyone' || (m.kind === 'account' && Boolean(myAccountId) && m.id === myAccountId),
+      )
+
+    const preview = messagePreviewText(message)
+    const nextChannels = sortChannels(
+      prev.channels.map((c) => {
+        if (c.id !== message.channelId || message.ephemeralTo) return c
+        return {
+          ...c,
+          updatedAt: Math.max(c.updatedAt, message.createdAt),
+          lastMessageAt: Math.max(c.lastMessageAt, message.createdAt),
+          ...(preview ? { lastMessageText: preview } : {}),
+          ...(shouldBumpUnread
+            ? {
+                unreadCount: (c.unreadCount ?? 0) + 1,
+                mentionCount: (c.mentionCount ?? 0) + (mentionedMe ? 1 : 0),
+              }
+            : {}),
+        }
+      }),
     )
     if (!detail) return { ...prev, channels: nextChannels }
-    const exists = detail.messages.some((m) => m.id === message.id)
-    const nextMessages = exists
+    const nextMessages = existed
       ? detail.messages.map((m) => (m.id === message.id ? message : m))
       : [...detail.messages, message].sort((a, b) => a.seq - b.seq)
     return {
@@ -399,7 +576,46 @@ export function bindChannelRealtime(snapshot?: { onMessage?: (type: string, hand
     offs.push(
       snapshot.onMessage('channel/message-updated', (payload) => {
         const msg = (payload as { message?: ChannelMessageView } | null)?.message
-        if (msg?.id) upsertChannelMessage(msg)
+        if (msg?.id) upsertChannelMessage(msg, true)
+      }),
+    )
+    offs.push(
+      snapshot.onMessage('channel/read', (payload) => {
+        const data = payload as { channelId?: string; lastReadSeq?: number } | null
+        if (!data?.channelId) return
+        setState((prev) => {
+          const nextChannels = prev.channels.map((c) =>
+            c.id === data.channelId
+              ? {
+                  ...c,
+                  unreadCount: 0,
+                  mentionCount: 0,
+                  lastReadSeq: Math.max(c.lastReadSeq ?? 0, Number(data.lastReadSeq ?? 0)),
+                }
+              : c,
+          )
+          const detail = prev.details[data.channelId!]
+          return {
+            ...prev,
+            channels: nextChannels,
+            ...(detail
+              ? {
+                  details: {
+                    ...prev.details,
+                    [data.channelId!]: {
+                      ...detail,
+                      channel: {
+                        ...detail.channel,
+                        unreadCount: 0,
+                        mentionCount: 0,
+                        lastReadSeq: Math.max(detail.channel.lastReadSeq ?? 0, Number(data.lastReadSeq ?? 0)),
+                      },
+                    },
+                  },
+                }
+              : {}),
+          }
+        })
       }),
     )
     offs.push(
