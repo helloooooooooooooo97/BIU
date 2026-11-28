@@ -517,6 +517,9 @@ CREATE TABLE IF NOT EXISTS channel_members (
   member_id TEXT NOT NULL,
   role TEXT NOT NULL DEFAULT 'member',
   context_mode TEXT NOT NULL DEFAULT 'summary',
+  last_read_seq INTEGER NOT NULL DEFAULT 0,
+  muted INTEGER NOT NULL DEFAULT 0,
+  pinned INTEGER NOT NULL DEFAULT 0,
   added_by TEXT NOT NULL DEFAULT '',
   added_at INTEGER NOT NULL,
   PRIMARY KEY (channel_id, member_type, member_id)
@@ -532,9 +535,12 @@ CREATE TABLE IF NOT EXISTS channel_messages (
   reply_to_id TEXT NOT NULL DEFAULT '',
   text TEXT NOT NULL DEFAULT '',
   mentions_json TEXT NOT NULL DEFAULT '[]',
+  attachments_json TEXT NOT NULL DEFAULT '[]',
   trace_id TEXT NOT NULL DEFAULT '',
   ephemeral_to TEXT NOT NULL DEFAULT '',
   meta_json TEXT NOT NULL DEFAULT '{}',
+  edited_at INTEGER NOT NULL DEFAULT 0,
+  deleted_at INTEGER NOT NULL DEFAULT 0,
   created_at INTEGER NOT NULL
 );
 CREATE UNIQUE INDEX IF NOT EXISTS channel_messages_channel_seq ON channel_messages(channel_id, seq);

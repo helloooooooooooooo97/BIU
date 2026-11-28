@@ -1,5 +1,6 @@
 import type { Context } from 'cordis'
-import { join } from 'node:path'
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { basename, extname, join } from 'node:path'
 import type { DatabaseSync } from 'node:sqlite'
 import { allocateRecordId } from '@biu/type-file-system'
 import type { LlmClient, LlmConfig, LlmMessage } from '@biu/host-llm'
@@ -8,6 +9,8 @@ import {
   currentAccountId,
   currentRequestWorkspaceId,
   dataDir,
+  dataHome,
+  dataPath,
   openAndMigrateBiu,
   runWithAccount,
   runWithActorContext,
@@ -23,6 +26,7 @@ import {
   type ChannelAccessMode,
   type ChannelAgentActivity,
   type ChannelAgentContextMode,
+  type ChannelAttachment,
   type ChannelDetailPayload,
   type ChannelKind,
   type ChannelMemberRole,
@@ -38,10 +42,33 @@ import {
 } from '../shared/channel-types.ts'
 
 export const MAX_CHANNEL_HANDOFF_HOPS = 3
+export const MAX_CHANNEL_UPLOAD_BYTES = 25 * 1024 * 1024
 const MAX_CHANNEL_TOOL_STEPS = 8
 const MAX_CHANNEL_HISTORY_MESSAGES = 30
 const MAX_CHANNEL_QUEUE_PER_AGENT = 12
 const MAX_TOOL_DETAIL_CHARS = 8_000
+
+const MIME_BY_EXT: Record<string, string> = {
+  '.png': 'image/png',
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.gif': 'image/gif',
+  '.webp': 'image/webp',
+  '.svg': 'image/svg+xml',
+  '.pdf': 'application/pdf',
+  '.txt': 'text/plain; charset=utf-8',
+  '.md': 'text/markdown; charset=utf-8',
+  '.json': 'application/json; charset=utf-8',
+  '.csv': 'text/csv; charset=utf-8',
+  '.zip': 'application/zip',
+}
+
+function guessMime(name: string, rawMime?: string): string {
+  const clean = String(rawMime ?? '').split(';')[0]?.trim().toLowerCase() ?? ''
+  if (clean && clean !== 'application/octet-stream') return clean
+  const ext = extname(name).toLowerCase()
+  return MIME_BY_EXT[ext] ?? 'application/octet-stream'
+}
 
 type ChannelRow = {
   id: string
@@ -62,6 +89,9 @@ type MemberRow = {
   member_id: string
   role: string
   context_mode?: string
+  last_read_seq?: number
+  muted?: number
+  pinned?: number
   added_by: string
   added_at: number
 }
@@ -75,9 +105,12 @@ type MessageRow = {
   reply_to_id: string
   text: string
   mentions_json: string
+  attachments_json?: string
   trace_id: string
   ephemeral_to: string
   meta_json: string
+  edited_at?: number
+  deleted_at?: number
   created_at: number
 }
 
@@ -197,14 +230,17 @@ export function buildReadonlySessionContextSummary(session: {
   return combined.length > 1600 ? `${combined.slice(0, 1599)}…` : combined
 }
 
-/** 从消息文本与显式 mentions 中解析本次触发的 Agent ID 列表（严格 Slack 模式：仅显式 @ 才触发）。 */
+/** 从消息文本与显式 mentions 中解析本次触发的 Agent ID 列表（严格 Slack 模式：仅显式 @ 才触发），同时补全被 @ 的人类成员。 */
 export function resolveMentionedAgents(
   text: string,
   explicitMentions: ChannelMention[],
   channelAgents: Array<{ id: string; name: string }>,
+  channelHumans: Array<{ id: string; name: string }> = [],
 ): { agentIds: string[]; mentions: ChannelMention[] } {
   const agentById = new Map(channelAgents.map((a) => [a.id, a]))
+  const humanById = new Map(channelHumans.map((h) => [h.id, h]))
   const picked = new Map<string, ChannelMention>()
+  const pickedHumans = new Set<string>()
   const normalizedMentions: ChannelMention[] = []
   let broadcastAll = false
 
@@ -219,7 +255,11 @@ export function resolveMentionedAgents(
       picked.set(target.id, item)
       normalizedMentions.push(item)
     } else if (m.kind === 'account' && m.id) {
-      normalizedMentions.push({ kind: 'account', id: m.id, label: m.label || m.id })
+      const target = humanById.get(m.id)
+      if (!pickedHumans.has(m.id)) {
+        pickedHumans.add(m.id)
+        normalizedMentions.push({ kind: 'account', id: m.id, label: target?.name || m.label || m.id })
+      }
     }
   }
 
@@ -242,6 +282,19 @@ export function resolveMentionedAgents(
       const item: ChannelMention = { kind: 'agent', id: agent.id, label: clean }
       picked.set(agent.id, item)
       normalizedMentions.push(item)
+    }
+  }
+
+  // 解析文本中的 @人类成员名（用于 @通知 与 高亮）
+  const sortedHumans = [...channelHumans].sort((a, b) => b.name.length - a.name.length)
+  for (const human of sortedHumans) {
+    const clean = human.name.trim()
+    if (!clean || pickedHumans.has(human.id)) continue
+    const escaped = clean.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    const re = new RegExp(`(?:^|\\s)@${escaped}(?=$|\\s|[，。！？,.!?:：])`, 'i')
+    if (re.test(text)) {
+      pickedHumans.add(human.id)
+      normalizedMentions.push({ kind: 'account', id: human.id, label: clean })
     }
   }
 
@@ -493,19 +546,86 @@ export class ChannelService {
   }
 
   private schemaReady = new WeakSet<DatabaseSync>()
+  private memUploads = new Map<string, { name: string; mime: string; data: Uint8Array }>()
 
   private db(): DatabaseSync {
     const conn = this.dbOverride ?? openAndMigrateBiu(join(dataDir(), 'biu.sqlite'))
     if (!this.schemaReady.has(conn)) {
       conn.exec(CREATE_CHANNELS_SQL)
-      try {
-        conn.exec(`ALTER TABLE channel_members ADD COLUMN context_mode TEXT NOT NULL DEFAULT 'summary'`)
-      } catch {
-        /* column already exists */
+      const migrations = [
+        `ALTER TABLE channel_members ADD COLUMN context_mode TEXT NOT NULL DEFAULT 'summary'`,
+        `ALTER TABLE channel_members ADD COLUMN last_read_seq INTEGER NOT NULL DEFAULT 0`,
+        `ALTER TABLE channel_members ADD COLUMN muted INTEGER NOT NULL DEFAULT 0`,
+        `ALTER TABLE channel_members ADD COLUMN pinned INTEGER NOT NULL DEFAULT 0`,
+        `ALTER TABLE channel_messages ADD COLUMN attachments_json TEXT NOT NULL DEFAULT '[]'`,
+        `ALTER TABLE channel_messages ADD COLUMN edited_at INTEGER NOT NULL DEFAULT 0`,
+        `ALTER TABLE channel_messages ADD COLUMN deleted_at INTEGER NOT NULL DEFAULT 0`,
+      ]
+      for (const sql of migrations) {
+        try {
+          conn.exec(sql)
+        } catch {
+          /* column already exists */
+        }
       }
       this.schemaReady.add(conn)
     }
     return conn
+  }
+
+  private uploadDirForChannel(channelId: string): string {
+    return dataPath(dataHome(), 'channel-uploads', channelId.replace(/[^a-zA-Z0-9_-]/g, '_'))
+  }
+
+  saveUpload(channelId: string, input: { name: string; mime?: string; data: Uint8Array }): ChannelAttachment {
+    const { accountId } = this.currentActorIds()
+    this.requireChannelRow(channelId, accountId)
+    if (!input.data || input.data.byteLength === 0) throw new Error('文件内容不能为空')
+    if (input.data.byteLength > MAX_CHANNEL_UPLOAD_BYTES) throw new Error('file too large')
+    const rawName = basename(String(input.name || 'attachment.bin')).replace(/[\r\n\0/\\]+/g, '_').trim() || 'attachment.bin'
+    const cleanName = rawName.slice(0, 140)
+    const mime = guessMime(cleanName, input.mime)
+    const ext = extname(cleanName).replace(/[^a-zA-Z0-9.]/g, '').slice(0, 12)
+    const fileId = `${allocateRecordId()}${ext}`
+    const kind: 'image' | 'file' = mime.startsWith('image/') ? 'image' : 'file'
+
+    if (this.dbOverride || process.env.VITEST) {
+      this.memUploads.set(`${channelId}\0${fileId}`, { name: cleanName, mime, data: input.data })
+    } else {
+      const dir = this.uploadDirForChannel(channelId)
+      mkdirSync(dir, { recursive: true })
+      writeFileSync(join(dir, fileId), input.data)
+      writeFileSync(join(dir, `${fileId}.meta.json`), JSON.stringify({ name: cleanName, mime }), 'utf8')
+    }
+    return {
+      id: fileId,
+      name: cleanName,
+      mime,
+      size: input.data.byteLength,
+      url: `/api/channels/${encodeURIComponent(channelId)}/uploads/${encodeURIComponent(fileId)}`,
+      kind,
+    }
+  }
+
+  readUpload(channelId: string, fileId: string): { name: string; mime: string; data: Uint8Array } | null {
+    const { accountId } = this.currentActorIds()
+    this.requireChannelRow(channelId, accountId)
+    const safeId = basename(String(fileId ?? '').trim())
+    if (!safeId || safeId.includes('..') || safeId.endsWith('.meta.json')) return null
+    const mem = this.memUploads.get(`${channelId}\0${safeId}`)
+    if (mem) return mem
+    const dir = this.uploadDirForChannel(channelId)
+    const filePath = join(dir, safeId)
+    if (!existsSync(filePath)) return null
+    const metaPath = join(dir, `${safeId}.meta.json`)
+    let name = safeId
+    let mime = guessMime(safeId)
+    if (existsSync(metaPath)) {
+      const meta = safeJsonParse<{ name?: string; mime?: string }>(readFileSync(metaPath, 'utf8'), {})
+      if (meta.name) name = meta.name
+      if (meta.mime) mime = meta.mime
+    }
+    return { name, mime, data: readFileSync(filePath) }
   }
 
   private queueKey(channelId: string, agentId: string) {
@@ -696,11 +816,48 @@ export class ChannelService {
       .get(row.id) as { humans?: number | null; agents?: number | null } | undefined
     const last = db
       .prepare(
-        `SELECT text, created_at FROM channel_messages
+        `SELECT text, attachments_json, deleted_at, created_at FROM channel_messages
          WHERE channel_id = ? AND ephemeral_to = ''
          ORDER BY seq DESC LIMIT 1`,
       )
-      .get(row.id) as { text?: string; created_at?: number } | undefined
+      .get(row.id) as { text?: string; attachments_json?: string; deleted_at?: number; created_at?: number } | undefined
+    const viewerMember = db
+      .prepare(
+        `SELECT last_read_seq, muted, pinned FROM channel_members
+         WHERE channel_id = ? AND member_type = 'account' AND member_id = ? LIMIT 1`,
+      )
+      .get(row.id, viewerAccountId) as { last_read_seq?: number; muted?: number; pinned?: number } | undefined
+    const lastReadSeq = Number(viewerMember?.last_read_seq ?? 0)
+    const unreadRows = db
+      .prepare(
+        `SELECT mentions_json FROM channel_messages
+         WHERE channel_id = ? AND ephemeral_to = '' AND deleted_at = 0
+           AND seq > ? AND NOT (sender_type = 'account' AND sender_id = ?)`,
+      )
+      .all(row.id, lastReadSeq, viewerAccountId) as Array<{ mentions_json?: string }>
+    const unreadCount = unreadRows.length
+    let mentionCount = 0
+    for (const u of unreadRows) {
+      const ms = safeJsonParse<ChannelMention[]>(u.mentions_json, [])
+      if (ms.some((m) => m.kind === 'everyone' || (m.kind === 'account' && m.id === viewerAccountId))) {
+        mentionCount += 1
+      }
+    }
+
+    let lastPreview = ''
+    if (last) {
+      if (Number(last.deleted_at ?? 0) > 0) {
+        lastPreview = '此消息已撤回'
+      } else if (String(last.text ?? '').trim()) {
+        lastPreview = String(last.text ?? '').slice(0, 120)
+      } else {
+        const atts = safeJsonParse<ChannelAttachment[]>(last.attachments_json, [])
+        if (atts.length > 0) {
+          lastPreview = atts[0]!.kind === 'image' ? `[图片] ${atts[0]!.name}` : `[文件] ${atts[0]!.name}`
+        }
+      }
+    }
+
     const kind: ChannelKind = row.kind === 'dm' ? 'dm' : 'channel'
     let peerAccountId: string | undefined
     let peerName: string | undefined
@@ -736,7 +893,12 @@ export class ChannelService {
       memberCount: Number(counts?.humans ?? 0),
       agentCount: Number(counts?.agents ?? 0),
       lastMessageAt: Number(last?.created_at ?? row.updated_at),
-      lastMessageText: String(last?.text ?? '').slice(0, 120),
+      lastMessageText: lastPreview,
+      unreadCount,
+      mentionCount,
+      lastReadSeq,
+      muted: Boolean(viewerMember?.muted),
+      pinned: Boolean(viewerMember?.pinned),
     }
   }
 
@@ -749,7 +911,58 @@ export class ChannelService {
          ORDER BY updated_at DESC, created_at DESC`,
       )
       .all(workspaceId) as ChannelRow[]
-    return rows.filter((row) => this.canReadChannel(row, accountId)).map((row) => this.toSummary(row, accountId))
+    return rows
+      .filter((row) => this.canReadChannel(row, accountId))
+      .map((row) => this.toSummary(row, accountId))
+      .sort(
+        (a, b) =>
+          Number(Boolean(b.pinned)) - Number(Boolean(a.pinned)) ||
+          b.lastMessageAt - a.lastMessageAt ||
+          b.updatedAt - a.updatedAt,
+      )
+  }
+
+  markRead(channelId: string, upToSeq?: number): { ok: true; channelId: string; lastReadSeq: number } {
+    const { accountId } = this.currentActorIds()
+    const row = this.requireChannelRow(channelId, accountId)
+    const db = this.db()
+    const maxRow = db
+      .prepare(`SELECT COALESCE(MAX(seq), 0) AS max_seq FROM channel_messages WHERE channel_id = ? AND ephemeral_to = ''`)
+      .get(channelId) as { max_seq?: number } | undefined
+    const maxSeq = Number(maxRow?.max_seq ?? 0)
+    const targetSeq =
+      typeof upToSeq === 'number' && Number.isFinite(upToSeq) && upToSeq > 0
+        ? Math.min(maxSeq, Math.floor(upToSeq))
+        : maxSeq
+    if (!this.isChannelMember(channelId, accountId)) {
+      db.prepare(
+        `INSERT OR IGNORE INTO channel_members (channel_id, member_type, member_id, role, last_read_seq, added_by, added_at)
+         VALUES (?, 'account', ?, 'member', ?, ?, ?)`,
+      ).run(channelId, accountId, targetSeq, accountId, Date.now())
+    } else {
+      db.prepare(
+        `UPDATE channel_members
+         SET last_read_seq = MAX(last_read_seq, ?)
+         WHERE channel_id = ? AND member_type = 'account' AND member_id = ?`,
+      ).run(targetSeq, channelId, accountId)
+    }
+    const updatedRow = db
+      .prepare(
+        `SELECT last_read_seq FROM channel_members WHERE channel_id = ? AND member_type = 'account' AND member_id = ?`,
+      )
+      .get(channelId, accountId) as { last_read_seq?: number } | undefined
+    const finalSeq = Number(updatedRow?.last_read_seq ?? targetSeq)
+    const notices = this.ctx.get('notices') as { markSourceRead?: (sourceKey: string) => unknown } | undefined
+    try {
+      notices?.markSourceRead?.(`channel-mention:${channelId}`)
+    } catch {
+      /* ignore */
+    }
+    this.broadcastToAccounts([accountId], row.workspace_id, 'channel/read', {
+      channelId,
+      lastReadSeq: finalSeq,
+    })
+    return { ok: true, channelId, lastReadSeq: finalSeq }
   }
 
   /** 打开或创建与指定空间成员的 1v1 人类私聊窗口（Slack DM 语义：两人之间复用同一条 DM）。 */
@@ -1235,34 +1448,57 @@ export class ChannelService {
     const { accountId } = this.currentActorIds()
     const row = this.requireChannelRow(channelId, accountId)
     const members = this.listMembers(channelId, accountId, row.workspace_id)
-    const messages = this.listMessages(channelId, accountId, limit)
+    const page = this.listMessagesPage(channelId, accountId, limit)
     const activities = this.listActivities(channelId, accountId)
     return {
-      channel: this.toSummary(row),
+      channel: this.toSummary(row, accountId),
       members,
-      messages,
+      messages: page.messages,
+      hasMoreMessages: page.hasMore,
       activities,
       myAccountId: accountId,
       canManageMembers: this.canManageChannel(row, accountId),
     }
   }
 
-  listMessages(channelId: string, viewerAccountId = this.currentActorIds().accountId, limit = 100): ChannelMessageView[] {
+  listMessagesPage(
+    channelId: string,
+    viewerAccountId = this.currentActorIds().accountId,
+    limit = 100,
+    beforeSeq?: number,
+  ): { messages: ChannelMessageView[]; hasMore: boolean } {
     const ch = this.requireChannelRow(channelId, viewerAccountId)
     const safeLimit = Math.min(200, Math.max(1, limit))
-    const rows = this.db()
-      .prepare(
-        `SELECT * FROM (
-           SELECT * FROM channel_messages
-           WHERE channel_id = ? AND (ephemeral_to = '' OR ephemeral_to = ?)
-           ORDER BY seq DESC
-           LIMIT ?
-         ) ORDER BY seq ASC`,
-      )
-      .all(channelId, viewerAccountId, safeLimit) as MessageRow[]
+    const hasCursor = typeof beforeSeq === 'number' && Number.isFinite(beforeSeq) && beforeSeq > 0
+    const rawRows = (hasCursor
+      ? this.db()
+          .prepare(
+            `SELECT * FROM channel_messages
+             WHERE channel_id = ? AND (ephemeral_to = '' OR ephemeral_to = ?) AND seq < ?
+             ORDER BY seq DESC
+             LIMIT ?`,
+          )
+          .all(channelId, viewerAccountId, Math.floor(beforeSeq!), safeLimit + 1)
+      : this.db()
+          .prepare(
+            `SELECT * FROM channel_messages
+             WHERE channel_id = ? AND (ephemeral_to = '' OR ephemeral_to = ?)
+             ORDER BY seq DESC
+             LIMIT ?`,
+          )
+          .all(channelId, viewerAccountId, safeLimit + 1)) as MessageRow[]
+    const hasMore = rawRows.length > safeLimit
+    const sliced = (hasMore ? rawRows.slice(0, safeLimit) : rawRows).reverse()
     const byId = new Map<string, MessageRow>()
-    for (const r of rows) byId.set(r.id, r)
-    return rows.map((row) => this.hydrateMessage(row, byId, ch.workspace_id))
+    for (const r of sliced) byId.set(r.id, r)
+    return {
+      messages: sliced.map((row) => this.hydrateMessage(row, byId, ch.workspace_id)),
+      hasMore,
+    }
+  }
+
+  listMessages(channelId: string, viewerAccountId = this.currentActorIds().accountId, limit = 100, beforeSeq?: number): ChannelMessageView[] {
+    return this.listMessagesPage(channelId, viewerAccountId, limit, beforeSeq).messages
   }
 
   private hydrateMessage(row: MessageRow, lookup?: Map<string, MessageRow>, workspaceId?: string): ChannelMessageView {
@@ -1300,17 +1536,21 @@ export class ChannelService {
             : target.sender_type === 'account'
               ? this.accountLabel(target.sender_id, channelWorkspaceId)
               : '系统'
+        const targetDeleted = Number(target.deleted_at ?? 0) > 0
         replyPreview = {
           id: target.id,
           senderType: target.sender_type as ChannelMessageView['senderType'],
           senderId: target.sender_id,
           senderName: targetName,
-          text: target.text.slice(0, 120),
+          text: targetDeleted ? '此消息已撤回' : target.text.slice(0, 120),
         }
       }
     }
 
     const meta = safeJsonParse<ChannelMessageMeta>(row.meta_json, {})
+    const attachments = safeJsonParse<ChannelAttachment[]>(row.attachments_json, [])
+    const editedAt = Number(row.edited_at ?? 0)
+    const deletedAt = Number(row.deleted_at ?? 0)
     return {
       id: row.id,
       channelId: row.channel_id,
@@ -1322,11 +1562,14 @@ export class ChannelService {
       ...(senderMascot ? { senderMascot } : {}),
       replyToId: row.reply_to_id,
       replyPreview,
-      text: row.text,
+      text: deletedAt > 0 ? '' : row.text,
       mentions: safeJsonParse<ChannelMention[]>(row.mentions_json, []),
+      ...(deletedAt === 0 && attachments.length ? { attachments } : {}),
       traceId: row.trace_id,
       ephemeralTo: row.ephemeral_to,
       ...(Object.keys(meta).length ? { meta } : {}),
+      ...(editedAt > 0 ? { editedAt } : {}),
+      ...(deletedAt > 0 ? { deletedAt } : {}),
       createdAt: row.created_at,
     }
   }
@@ -1338,6 +1581,7 @@ export class ChannelService {
     replyToId?: string
     text: string
     mentions?: ChannelMention[]
+    attachments?: ChannelAttachment[]
     traceId?: string
     ephemeralTo?: string
     meta?: ChannelMessageMeta
@@ -1351,8 +1595,8 @@ export class ChannelService {
     const seq = Number(maxRow?.max_seq ?? 0) + 1
     db.prepare(
       `INSERT INTO channel_messages
-        (id, channel_id, seq, sender_type, sender_id, reply_to_id, text, mentions_json, trace_id, ephemeral_to, meta_json, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        (id, channel_id, seq, sender_type, sender_id, reply_to_id, text, mentions_json, attachments_json, trace_id, ephemeral_to, meta_json, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     ).run(
       id,
       input.channelId,
@@ -1362,6 +1606,7 @@ export class ChannelService {
       input.replyToId ?? '',
       input.text,
       JSON.stringify(input.mentions ?? []),
+      JSON.stringify(input.attachments ?? []),
       input.traceId ?? '',
       input.ephemeralTo ?? '',
       JSON.stringify(input.meta ?? {}),
@@ -1369,6 +1614,13 @@ export class ChannelService {
     )
     if (!input.ephemeralTo) {
       db.prepare(`UPDATE channels SET updated_at = ? WHERE id = ?`).run(now, input.channelId)
+      if (input.senderType === 'account' && input.senderId) {
+        db.prepare(
+          `UPDATE channel_members
+           SET last_read_seq = MAX(last_read_seq, ?)
+           WHERE channel_id = ? AND member_type = 'account' AND member_id = ?`,
+        ).run(seq, input.channelId, input.senderId)
+      }
     }
     const row = db.prepare(`SELECT * FROM channel_messages WHERE id = ?`).get(id) as MessageRow
     const view = this.hydrateMessage(row)
@@ -1384,6 +1636,50 @@ export class ChannelService {
         }
       }
     }
+    return view
+  }
+
+  editMessage(channelId: string, messageId: string, text: string): ChannelMessageView {
+    const { accountId } = this.currentActorIds()
+    const ch = this.requireChannelRow(channelId, accountId)
+    const nextText = String(text ?? '').trim()
+    if (!nextText) throw new Error('消息内容不能为空')
+    const db = this.db()
+    const row = db
+      .prepare(`SELECT * FROM channel_messages WHERE id = ? AND channel_id = ?`)
+      .get(messageId, channelId) as MessageRow | undefined
+    if (!row || row.ephemeral_to) throw new Error('未找到对应的消息')
+    if (Number(row.deleted_at ?? 0) > 0) throw new Error('已撤回的消息无法编辑')
+    if (row.sender_type !== 'account' || (accountId !== 'local' && row.sender_id !== accountId)) {
+      throw new Error('permission denied: 仅消息发送者可编辑该消息')
+    }
+    const now = Date.now()
+    db.prepare(`UPDATE channel_messages SET text = ?, edited_at = ? WHERE id = ?`).run(nextText, now, messageId)
+    const updatedRow = db.prepare(`SELECT * FROM channel_messages WHERE id = ?`).get(messageId) as MessageRow
+    const view = this.hydrateMessage(updatedRow, undefined, ch.workspace_id)
+    this.broadcastToChannel(channelId, ch.workspace_id, 'channel/message-updated', { message: view })
+    return view
+  }
+
+  recallMessage(channelId: string, messageId: string): ChannelMessageView {
+    const { accountId } = this.currentActorIds()
+    const ch = this.requireChannelRow(channelId, accountId)
+    const db = this.db()
+    const row = db
+      .prepare(`SELECT * FROM channel_messages WHERE id = ? AND channel_id = ?`)
+      .get(messageId, channelId) as MessageRow | undefined
+    if (!row || row.ephemeral_to) throw new Error('未找到对应的消息')
+    const isSelf = row.sender_type === 'account' && (accountId === 'local' || row.sender_id === accountId)
+    if (!isSelf && !this.canManageChannel(ch, accountId)) {
+      throw new Error('permission denied: 仅发送者或群管理员可撤回该消息')
+    }
+    const now = Date.now()
+    db.prepare(
+      `UPDATE channel_messages SET text = '', attachments_json = '[]', deleted_at = ? WHERE id = ?`,
+    ).run(now, messageId)
+    const updatedRow = db.prepare(`SELECT * FROM channel_messages WHERE id = ?`).get(messageId) as MessageRow
+    const view = this.hydrateMessage(updatedRow, undefined, ch.workspace_id)
+    this.broadcastToChannel(channelId, ch.workspace_id, 'channel/message-updated', { message: view })
     return view
   }
 
@@ -1409,12 +1705,25 @@ export class ChannelService {
 
   sendMessage(
     channelId: string,
-    input: { text: string; replyToId?: string; mentions?: ChannelMention[] },
+    input: { text: string; replyToId?: string; mentions?: ChannelMention[]; attachments?: ChannelAttachment[] },
   ): { message: ChannelMessageView; triggeredRunIds: string[] } {
     const { accountId } = this.currentActorIds()
     const channel = this.requireChannelRow(channelId, accountId)
     const text = String(input.text ?? '').trim()
-    if (!text) throw new Error('消息内容不能为空')
+    const attachments: ChannelAttachment[] = Array.isArray(input.attachments)
+      ? input.attachments
+          .filter((a) => a && typeof a === 'object' && typeof a.id === 'string' && typeof a.url === 'string')
+          .slice(0, 12)
+          .map((a) => ({
+            id: String(a.id),
+            name: String(a.name || a.id).slice(0, 140),
+            mime: String(a.mime || 'application/octet-stream'),
+            size: Number(a.size) || 0,
+            url: String(a.url),
+            kind: a.kind === 'image' ? 'image' : 'file',
+          }))
+      : []
+    if (!text && attachments.length === 0) throw new Error('消息内容不能为空')
 
     // 若是空间群，首次发消息自动加入人类成员表（便于群成员列表与 RoomFloor 计算）
     if (channel.access_mode === 'workspace' && !this.isChannelMember(channelId, accountId)) {
@@ -1426,10 +1735,14 @@ export class ChannelService {
         .run(channelId, accountId, accountId, Date.now())
     }
 
-    const channelAgents = this.listMembers(channelId, accountId)
+    const allMembers = this.listMembers(channelId, accountId)
+    const channelAgents = allMembers
       .filter((m) => m.memberType === 'agent')
       .map((m) => ({ id: m.memberId, name: m.name }))
-    const { agentIds, mentions } = resolveMentionedAgents(text, input.mentions ?? [], channelAgents)
+    const channelHumans = allMembers
+      .filter((m) => m.memberType === 'account')
+      .map((m) => ({ id: m.memberId, name: m.name }))
+    const { agentIds, mentions } = resolveMentionedAgents(text, input.mentions ?? [], channelAgents, channelHumans)
 
     const message = this.insertMessage({
       channelId,
@@ -1438,7 +1751,10 @@ export class ChannelService {
       replyToId: input.replyToId ?? '',
       text,
       mentions,
+      attachments,
     })
+
+    this.notifyMentionedHumans(channel, message, mentions, channelHumans)
 
     // 严格 Slack 逻辑：仅显式 @Agent 或 @所有人 时触发回复
     const triggeredRunIds: string[] = []
@@ -1450,7 +1766,7 @@ export class ChannelService {
         invokerId: accountId,
         originMessageId: message.id,
         senderName: message.senderName,
-        text,
+        text: text || attachments.map((a) => `[附件: ${a.name}]`).join(' '),
         hopCount: 0,
         visitedAgents: new Set(),
       })
@@ -1458,6 +1774,63 @@ export class ChannelService {
     }
 
     return { message, triggeredRunIds }
+  }
+
+  private notifyMentionedHumans(
+    channel: ChannelRow,
+    message: ChannelMessageView,
+    mentions: ChannelMention[],
+    channelHumans: Array<{ id: string; name: string }>,
+  ) {
+    const notices = this.ctx.get('notices') as
+      | {
+          push?: (input: {
+            title: string
+            body?: string
+            kind: 'approval' | 'task' | 'session'
+            href?: string
+            sourceKey: string
+            accountId?: string
+            workspaceId?: string
+          }) => unknown
+        }
+      | undefined
+    if (!notices?.push) return
+    const targetIds = new Set<string>()
+    const hasEveryone = mentions.some((m) => m.kind === 'everyone')
+    if (hasEveryone) {
+      for (const h of channelHumans) {
+        if (h.id && h.id !== message.senderId) targetIds.add(h.id)
+      }
+    } else {
+      for (const m of mentions) {
+        if (m.kind === 'account' && m.id && m.id !== message.senderId) targetIds.add(m.id)
+      }
+    }
+    if (targetIds.size === 0) return
+    const chLabel = channel.kind === 'dm' ? message.senderName : `#${channel.name}`
+    const snippet = (message.text || (message.attachments?.length ? `[附件] ${message.attachments[0]!.name}` : '')).slice(0, 120)
+    for (const targetId of targetIds) {
+      const pushNotice = () =>
+        notices.push?.({
+          title: `${message.senderName} 在 ${chLabel} 中 @ 了你`,
+          body: snippet,
+          kind: 'session',
+          href: `/channels/${encodeURIComponent(channel.id)}?msg=${encodeURIComponent(message.id)}`,
+          sourceKey: `channel-mention:${channel.id}`,
+          accountId: targetId === 'local' ? '' : targetId,
+          workspaceId: channel.workspace_id,
+        })
+      try {
+        if (targetId && targetId !== 'local') {
+          runWithAccount(targetId, () => runWithRequestWorkspace(channel.workspace_id, pushNotice))
+        } else {
+          pushNotice()
+        }
+      } catch {
+        /* ignore */
+      }
+    }
   }
 
   private enqueueAgentRun(opts: {
@@ -1629,12 +2002,12 @@ export class ChannelService {
         ? await this.buildAgentReadonlyProjection(job.agentId, job.agentOwnerId, channel.workspace_id)
         : ''
 
-    // 群聊对话流独立隔离：仅读取当前群聊公开消息，绝不将群聊消息写回 Agent 的 1v1 主工作台
+    // 群聊对话流独立隔离：仅读取当前群聊公开且未撤回消息，绝不将群聊消息写回 Agent 的 1v1 主工作台
     const historyRows = db
       .prepare(
         `SELECT * FROM (
            SELECT * FROM channel_messages
-           WHERE channel_id = ? AND ephemeral_to = ''
+           WHERE channel_id = ? AND ephemeral_to = '' AND deleted_at = 0
            ORDER BY seq DESC
            LIMIT ?
          ) ORDER BY seq ASC`,
@@ -1663,16 +2036,20 @@ export class ChannelService {
 
     const llmMessages: LlmMessage[] = [{ role: 'system', content: channelSystemPrompt }]
     for (const row of historyRows) {
+      const atts = safeJsonParse<ChannelAttachment[]>(row.attachments_json, [])
+      const attNote = atts.length > 0 ? ` ${atts.map((a) => `[附件: ${a.name}]`).join(' ')}` : ''
+      const content = `${row.text}${attNote}`.trim()
+      if (!content) continue
       if (row.sender_type === 'agent' && row.sender_id === job.agentId) {
-        llmMessages.push({ role: 'assistant', content: row.text })
+        llmMessages.push({ role: 'assistant', content })
       } else if (row.sender_type === 'account') {
         const speaker = this.accountLabel(row.sender_id, channel.workspace_id)
         const roleTag =
           job.agentOwnerId !== 'local' && row.sender_id === job.agentOwnerId ? '归属人' : '群成员'
-        llmMessages.push({ role: 'user', content: `[${speaker} · ${roleTag}]: ${row.text}` })
+        llmMessages.push({ role: 'user', content: `[${speaker} · ${roleTag}]: ${content}` })
       } else {
         const speaker = row.sender_type === 'agent' ? this.agentMeta(row.sender_id).name : '系统'
-        llmMessages.push({ role: 'user', content: `[${speaker}]: ${row.text}` })
+        llmMessages.push({ role: 'user', content: `[${speaker}]: ${content}` })
       }
     }
     if (job.messages.length > 1) {
@@ -2236,10 +2613,56 @@ export function registerChannelRoutes(ctx: Context, resolveLlm: (sessionId?: str
     }
   })
 
+  ctx.http.route('POST', '/api/channels/:id/read', async (route) => {
+    try {
+      const body = (await route.json().catch(() => ({}))) as { seq?: number }
+      route.send(200, service.markRead(route.params.id, body?.seq))
+    } catch (error) {
+      sendError(route, error)
+    }
+  })
+
+  ctx.http.route('POST', '/api/channels/:id/uploads', async (route) => {
+    try {
+      const name = String(route.query?.get('name') ?? '').trim() || 'attachment.bin'
+      const mime = String(route.req?.headers?.['content-type'] ?? '')
+      const data = await route.bytes()
+      const attachment = service.saveUpload(route.params.id, { name, mime, data })
+      route.send(200, { attachment })
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error)
+      if (msg === 'file too large') return route.send(413, { error: '文件过大（上限 25MB）' })
+      sendError(route, error)
+    }
+  })
+
+  ctx.http.route('GET', '/api/channels/:id/uploads/:fileId', (route) => {
+    try {
+      const file = service.readUpload(route.params.id, decodeURIComponent(route.params.fileId))
+      if (!file) return route.send(404, { error: 'unknown attachment' })
+      if (route.res.headersSent) return
+      const disposition = file.mime.startsWith('image/')
+        ? 'inline'
+        : `attachment; filename*=UTF-8''${encodeURIComponent(file.name)}`
+      route.res.writeHead(200, {
+        'content-type': file.mime,
+        'content-disposition': disposition,
+        'cache-control': 'private, max-age=3600',
+        'content-length': file.data.byteLength,
+      })
+      route.res.end(file.data)
+    } catch (error) {
+      sendError(route, error)
+    }
+  })
+
   ctx.http.route('GET', '/api/channels/:id/messages', (route) => {
     try {
       const limit = Number(route.query?.get('limit') ?? 100)
-      route.send(200, { messages: service.listMessages(route.params.id, undefined, Number.isFinite(limit) ? limit : 100) })
+      const beforeRaw = route.query?.get('beforeSeq')
+      const beforeSeq = beforeRaw != null && beforeRaw !== '' && Number.isFinite(Number(beforeRaw)) ? Number(beforeRaw) : undefined
+      const page = service.listMessagesPage(route.params.id, undefined, Number.isFinite(limit) ? limit : 100, beforeSeq)
+      route.send(200, { messages: page.messages, hasMore: page.hasMore })
     } catch (error) {
       sendError(route, error)
     }
@@ -2247,12 +2670,37 @@ export function registerChannelRoutes(ctx: Context, resolveLlm: (sessionId?: str
 
   ctx.http.route('POST', '/api/channels/:id/messages', async (route) => {
     try {
-      const body = (await route.json()) as { text?: string; replyToId?: string; mentions?: ChannelMention[] }
+      const body = (await route.json()) as {
+        text?: string
+        replyToId?: string
+        mentions?: ChannelMention[]
+        attachments?: ChannelAttachment[]
+      }
       route.send(200, service.sendMessage(route.params.id, {
         text: body?.text ?? '',
         replyToId: body?.replyToId,
         mentions: body?.mentions,
+        attachments: body?.attachments,
       }))
+    } catch (error) {
+      sendError(route, error)
+    }
+  })
+
+  ctx.http.route('PATCH', '/api/channels/:id/messages/:msgId', async (route) => {
+    try {
+      const body = (await route.json()) as { text?: string }
+      const message = service.editMessage(route.params.id, route.params.msgId, body?.text ?? '')
+      route.send(200, { message })
+    } catch (error) {
+      sendError(route, error)
+    }
+  })
+
+  ctx.http.route('DELETE', '/api/channels/:id/messages/:msgId', (route) => {
+    try {
+      const message = service.recallMessage(route.params.id, route.params.msgId)
+      route.send(200, { message })
     } catch (error) {
       sendError(route, error)
     }

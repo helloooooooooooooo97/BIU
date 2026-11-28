@@ -899,4 +899,119 @@ describe('Slack-style Group Channels: RBAC, Mention Dispatch, Per-Invoker Queue,
       rmSync(dir, { recursive: true, force: true })
     }
   })
+
+  it('supports unread/read cursors, @mention notices, attachments, edit/recall permissions, and cursor pagination', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'biu-channels-p0-'))
+    const db = openAndMigrateBiu(join(dir, 'biu.sqlite'))
+    const store = new CollabStore(db)
+    const alice = store.register('Alice', Date.now(), 'pass123456', 'alice@example.com')
+    const bob = store.register('Bob', Date.now(), 'pass123456', 'bob@example.com')
+    const carol = store.register('Carol', Date.now(), 'pass123456', 'carol@example.com')
+    const ws = store.createWorkspace(alice.id, 'P0 WS')
+    store.addMemberByEmail(alice.id, ws.id, 'bob@example.com')
+    store.addMemberByEmail(alice.id, ws.id, 'carol@example.com')
+
+    const pushedNotices: Array<Record<string, unknown>> = []
+    const readNoticeSources: string[] = []
+    const fakeCtx = {
+      get: (key: string) => {
+        if (key === 'account') return { store }
+        if (key === 'notices') {
+          return {
+            push: (input: Record<string, unknown>) => {
+              pushedNotices.push(input)
+              return input
+            },
+            markSourceRead: (sourceKey: string) => {
+              readNoticeSources.push(sourceKey)
+              return 1
+            },
+          }
+        }
+        return undefined
+      },
+      account: { store },
+      sessions: { peekSummary: () => null },
+      tools: { schemas: () => [], invoke: async () => ({ ok: true }) },
+      http: { broadcast: () => undefined, broadcastAccount: () => undefined },
+      effect: () => undefined,
+    } as unknown as Context
+
+    const svc = new ChannelService(
+      fakeCtx,
+      () => ({ chat: async () => ({ content: 'ok', toolCalls: [] }) }),
+      { db },
+    )
+    const asUser = <T>(acc: string, fn: () => T) => runWithAccount(acc, () => runWithRequestWorkspace(ws.id, fn))
+
+    try {
+      const created = asUser(alice.id, () =>
+        svc.createChannel({ name: '研发协作', memberAccountIds: [bob.id, carol.id] }),
+      )
+      const chId = created.channel.id
+
+      // 1. Alice 发消息 @Bob，Bob 收到未读数 + @提及数 + 通知中心推送
+      const m1 = asUser(alice.id, () => svc.sendMessage(chId, { text: '你好 @Bob 请看下报错' })).message
+      const m2 = asUser(alice.id, () => svc.sendMessage(chId, { text: '第二条跟进消息' })).message
+
+      assert.equal(pushedNotices.length, 1)
+      assert.equal(pushedNotices[0]!.accountId, bob.id)
+      assert.ok(String(pushedNotices[0]!.href).includes(`/channels/${chId}?msg=${m1.id}`))
+
+      const bobListBefore = asUser(bob.id, () => svc.listChannels())
+      assert.equal(bobListBefore[0]!.unreadCount, 2)
+      assert.equal(bobListBefore[0]!.mentionCount, 1)
+
+      // Bob 标记已读 → 未读清零并同步清除通知
+      const marked = asUser(bob.id, () => svc.markRead(chId))
+      assert.equal(marked.lastReadSeq, m2.seq)
+      assert.ok(readNoticeSources.includes(`channel-mention:${chId}`))
+      const bobListAfter = asUser(bob.id, () => svc.listChannels())
+      assert.equal(bobListAfter[0]!.unreadCount, 0)
+      assert.equal(bobListAfter[0]!.mentionCount, 0)
+
+      // 2. 上传图片附件并发送纯附件消息
+      const pngBytes = new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10])
+      const att = asUser(bob.id, () => svc.saveUpload(chId, { name: 'error.png', mime: 'image/png', data: pngBytes }))
+      assert.equal(att.kind, 'image')
+      assert.equal(att.size, pngBytes.byteLength)
+      const loadedAtt = asUser(alice.id, () => svc.readUpload(chId, att.id))
+      assert.ok(loadedAtt)
+      assert.equal(loadedAtt.mime, 'image/png')
+
+      const m3 = asUser(bob.id, () => svc.sendMessage(chId, { text: '', attachments: [att] })).message
+      assert.equal(m3.attachments?.length, 1)
+      assert.equal(m3.attachments?.[0]!.name, 'error.png')
+
+      // 3. 消息编辑与撤回权限
+      assert.throws(() => asUser(alice.id, () => svc.editMessage(chId, m3.id, '篡改')), /permission denied/)
+      const edited = asUser(alice.id, () => svc.editMessage(chId, m1.id, '你好 @Bob 已补充日志'))
+      assert.equal(edited.text, '你好 @Bob 已补充日志')
+      assert.ok((edited.editedAt ?? 0) > 0)
+
+      // 普通成员 Carol 不能撤回 Bob 的消息，但群主 Alice 可以，发送者 Bob 也可以
+      assert.throws(() => asUser(carol.id, () => svc.recallMessage(chId, m3.id)), /permission denied/)
+      const recalled = asUser(bob.id, () => svc.recallMessage(chId, m3.id))
+      assert.equal(recalled.text, '')
+      assert.ok((recalled.deletedAt ?? 0) > 0)
+      assert.equal(recalled.attachments, undefined)
+      assert.throws(() => asUser(bob.id, () => svc.editMessage(chId, m3.id, '再改')), /已撤回/)
+
+      // 4. 游标分页（beforeSeq）
+      const m4 = asUser(alice.id, () => svc.sendMessage(chId, { text: '第四条' })).message
+      const page1 = asUser(alice.id, () => svc.listMessagesPage(chId, alice.id, 2))
+      assert.equal(page1.messages.length, 2)
+      assert.equal(page1.hasMore, true)
+      assert.equal(page1.messages[1]!.id, m4.id)
+
+      const page2 = asUser(alice.id, () => svc.listMessagesPage(chId, alice.id, 2, page1.messages[0]!.seq))
+      assert.equal(page2.messages.length, 2)
+      assert.equal(page2.hasMore, false)
+      assert.equal(page2.messages[0]!.id, m1.id)
+    } finally {
+      svc.dispose()
+      db.close()
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
 })

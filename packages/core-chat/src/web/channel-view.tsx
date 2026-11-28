@@ -1,7 +1,8 @@
-import { memo, useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
+import { memo, useCallback, useEffect, useMemo, useRef, useState, type ClipboardEvent, type DragEvent, type FormEvent } from 'react'
 import { createPortal } from 'react-dom'
 import { useNavigate } from 'react-router-dom'
 import {
+  ArrowDownIcon,
   ArrowUpIcon,
   ArrowUturnLeftIcon,
   BookmarkSquareIcon,
@@ -10,13 +11,17 @@ import {
   ChevronDoubleRightIcon,
   ChevronRightIcon,
   ClockIcon,
+  DocumentIcon,
   EyeIcon,
   HashtagIcon,
   LockClosedIcon,
+  PaperClipIcon,
+  PencilSquareIcon,
   PlusIcon,
   ShieldCheckIcon,
   SparklesIcon,
   Square2StackIcon,
+  TrashIcon,
   UserGroupIcon,
   UserPlusIcon,
   XMarkIcon,
@@ -31,6 +36,7 @@ import { SidebarMascot, resolveSessionMascot } from '@biu/public-mascot'
 import { bindSessionView, sessionAppPath, type SessionViewService } from '@biu/web-session-view'
 import type {
   ChannelAgentContextMode,
+  ChannelAttachment,
   ChannelMemberView,
   ChannelMention,
   ChannelMessageView,
@@ -41,13 +47,19 @@ import {
   autoNameChannel,
   cancelChannelRun,
   decideChannelApproval,
+  editChannelMessage,
   loadChannelDetail,
+  loadOlderChannelMessages,
+  markChannelRead,
   openChannelRunTrace,
+  recallChannelMessage,
   removeChannelMember,
   renameChannel,
   sendChannelMessage,
+  setActiveChannelId,
   syncChannelToAgent,
   updateChannelAgentContextMode,
+  uploadChannelAttachment,
   useChannelStore,
 } from './channel-store.ts'
 
@@ -75,6 +87,71 @@ function formatSentAt(ts: number) {
   return `${day} ${time}`
 }
 
+function calendarDayKey(ts: number): string {
+  if (!ts) return ''
+  const d = new Date(ts)
+  if (Number.isNaN(d.getTime())) return ''
+  return `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`
+}
+
+function formatDayDivider(ts: number): string {
+  const d = new Date(ts)
+  if (Number.isNaN(d.getTime())) return ''
+  const now = new Date()
+  const todayKey = calendarDayKey(now.getTime())
+  const yesterday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1)
+  const targetKey = calendarDayKey(ts)
+  if (targetKey === todayKey) return '今天'
+  if (targetKey === calendarDayKey(yesterday.getTime())) return '昨天'
+  if (d.getFullYear() === now.getFullYear()) return `${d.getMonth() + 1}月${d.getDate()}日`
+  return `${d.getFullYear()}年${d.getMonth() + 1}月${d.getDate()}日`
+}
+
+function formatFileSize(bytes: number): string {
+  if (!Number.isFinite(bytes) || bytes <= 0) return ''
+  if (bytes < 1024) return `${bytes} B`
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+}
+
+function escapeHtmlText(text: string): string {
+  return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+}
+
+/**
+ * 将群聊正文预处理为富文本 Markdown：
+ * - 在代码块外保留单换行（Shift+Enter）；
+ * - 将显式 @提及（及 @所有人）渲染为醒目的行内胶囊标签。
+ */
+export function formatChannelMessageMarkdown(text: string, mentions: ChannelMention[] = []): string {
+  if (!text) return ''
+  const labels = [...new Set(mentions.map((m) => m.label.trim()).filter(Boolean))].sort((a, b) => b.length - a.length)
+  const segments = text.split(/(```[\s\S]*?```)/g)
+  return segments
+    .map((seg, idx) => {
+      if (idx % 2 === 1) return seg // fenced code block untouched
+      const inlineParts = seg.split(/(`[^`\n]+`)/g)
+      return inlineParts
+        .map((part, pIdx) => {
+          if (pIdx % 2 === 1) return part // inline code untouched
+          let out = part
+          if (labels.length > 0) {
+            const pattern = labels.map((l) => l.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|')
+            const re = new RegExp(`(^|[\\s(（])@(${pattern})(?=$|[\\s)），。！？,.!?:：])`, 'g')
+            out = out.replace(
+              re,
+              (_m, lead: string, label: string) =>
+                `${lead}<span class="inline-block rounded bg-(--biu-color-bg-muted) px-1 py-0.5 text-[0.92em] font-medium text-(--biu-color-text)">@${escapeHtmlText(label)}</span>`,
+            )
+          }
+          // Preserve single newlines inside paragraphs while leaving blank lines intact
+          return out.replace(/([^\n])\n(?!\n)/g, '$1  \n')
+        })
+        .join('')
+    })
+    .join('')
+}
+
 /** 与侧边栏账户及成员表完全一致的头像渲染（优先工作区头像，回退同 seed AiAvatar）。 */
 export function MemberAvatar({
   avatar,
@@ -99,10 +176,10 @@ export function MemberAvatar({
   return <AiAvatar seed={seed || 'biu-ai'} size={size} className="shrink-0 rounded-full" />
 }
 
-/** 实时同步当前工作区成员的头像与昵称，确保与空间头像和成员表始终 100% 一致。 */
+/** 实时同步当前工作区成员的头像、昵称与在线状态，确保与空间头像和成员表始终 100% 一致。 */
 function useLiveWorkspaceAvatars() {
   const workspaceProfile = useWorkspaceProfile()
-  const [byId, setById] = useState<Map<string, { name?: string; avatar?: string }>>(() => new Map())
+  const [byId, setById] = useState<Map<string, { name?: string; avatar?: string; online?: boolean }>>(() => new Map())
 
   useEffect(() => {
     let cancelled = false
@@ -110,7 +187,7 @@ function useLiveWorkspaceAvatars() {
       const params = new URLSearchParams({
         path: '/workspace-members',
         limit: '500',
-        columns: 'title,avatar',
+        columns: 'title,avatar,status',
       })
       void apiFetch(`/api/db/list?${params.toString()}`)
         .then((r) => (r.ok ? r.json() : null))
@@ -119,13 +196,14 @@ function useLiveWorkspaceAvatars() {
           const rows = Array.isArray((body as { items?: unknown[] } | null)?.items)
             ? ((body as { items: Array<Record<string, unknown>> }).items)
             : []
-          const next = new Map<string, { name?: string; avatar?: string }>()
+          const next = new Map<string, { name?: string; avatar?: string; online?: boolean }>()
           for (const row of rows) {
             const id = String(row?.id ?? '').trim()
             if (!id) continue
             const avatar = typeof row.avatar === 'string' ? row.avatar.trim() : ''
             const name = typeof row.title === 'string' ? row.title.trim() : ''
-            next.set(id, { ...(name ? { name } : {}), ...(avatar ? { avatar } : {}) })
+            const online = row.status === 'online'
+            next.set(id, { ...(name ? { name } : {}), ...(avatar ? { avatar } : {}), online })
           }
           setById(next)
         })
@@ -139,7 +217,7 @@ function useLiveWorkspaceAvatars() {
     }
   }, [])
 
-  return useCallback(
+  const resolveAvatar = useCallback(
     (accountId?: string, serverAvatar?: string): string | undefined => {
       const id = String(accountId ?? '').trim()
       if (id && workspaceProfile.accountId && id === workspaceProfile.accountId && workspaceProfile.hydrated) {
@@ -151,6 +229,16 @@ function useLiveWorkspaceAvatars() {
     },
     [byId, workspaceProfile.accountId, workspaceProfile.avatar, workspaceProfile.hydrated],
   )
+
+  const isOnline = useCallback(
+    (accountId?: string): boolean => {
+      const id = String(accountId ?? '').trim()
+      return Boolean(id && byId.get(id)?.online)
+    },
+    [byId],
+  )
+
+  return { resolveAvatar, isOnline }
 }
 
 function MessageCopyAction({ text }: { text: string }) {
@@ -198,11 +286,18 @@ export const ChannelStage = memo(function ChannelStage({
   const navigate = useNavigate()
   const detail = useChannelStore((s) => s.details[channelId])
   const workspaceProfile = useWorkspaceProfile()
-  const resolveAvatar = useLiveWorkspaceAvatars()
+  const { resolveAvatar, isOnline } = useLiveWorkspaceAvatars()
   const [loading, setLoading] = useState(false)
   const [text, setText] = useState('')
   const [mentions, setMentions] = useState<ChannelMention[]>([])
+  const [attachments, setAttachments] = useState<ChannelAttachment[]>([])
+  const [uploadingFiles, setUploadingFiles] = useState(0)
+  const [dragOver, setDragOver] = useState(false)
+  const [lightboxImage, setLightboxImage] = useState<{ url: string; name: string } | null>(null)
   const [replyTo, setReplyTo] = useState<ChannelMessageView | null>(null)
+  const [editingMsgId, setEditingMsgId] = useState<string | null>(null)
+  const [editingDraft, setEditingDraft] = useState('')
+  const [savingEdit, setSavingEdit] = useState(false)
   const [sending, setSending] = useState(false)
   const [error, setError] = useState('')
   const [membersModalOpen, setMembersModalOpen] = useState(false)
@@ -215,14 +310,35 @@ export const ChannelStage = memo(function ChannelStage({
   const [editingTitle, setEditingTitle] = useState(false)
   const [titleDraft, setTitleDraft] = useState('')
   const [syncedMsgIds, setSyncedMsgIds] = useState<Record<string, boolean>>({})
+  const [loadingOlder, setLoadingOlder] = useState(false)
+  const [unreadDividerSeq, setUnreadDividerSeq] = useState<number | null>(null)
+  const [pendingNewCount, setPendingNewCount] = useState(0)
 
   const scrollRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
   const titleInputRef = useRef<HTMLInputElement>(null)
+  const nearBottomRef = useRef(true)
+  const prevMsgCountRef = useRef(0)
+  const prevLastMsgIdRef = useRef('')
+  const unreadAnchorCapturedRef = useRef('')
+
+  useEffect(() => {
+    setActiveChannelId(channelId)
+    return () => setActiveChannelId(null)
+  }, [channelId])
 
   useEffect(() => {
     setLoading(true)
     setError('')
+    setUnreadDividerSeq(null)
+    setPendingNewCount(0)
+    setEditingMsgId(null)
+    setAttachments([])
+    nearBottomRef.current = true
+    prevMsgCountRef.current = 0
+    prevLastMsgIdRef.current = ''
+    unreadAnchorCapturedRef.current = ''
     void loadChannelDetail(channelId).finally(() => setLoading(false))
   }, [channelId])
 
@@ -230,12 +346,184 @@ export const ChannelStage = memo(function ChannelStage({
   const members = detail?.members ?? []
   const activities = detail?.activities ?? []
   const channel = detail?.channel
+  const myAccountId = detail?.myAccountId || workspaceProfile.accountId || ''
+
+  // 进入频道后捕获一次未读游标用于渲染「以下是新消息」分割线，并上报已读
+  useEffect(() => {
+    if (!detail || detail.channel.id !== channelId) return
+    if (unreadAnchorCapturedRef.current !== channelId) {
+      unreadAnchorCapturedRef.current = channelId
+      const lastRead = detail.channel.lastReadSeq ?? 0
+      const hasUnread =
+        (detail.channel.unreadCount ?? 0) > 0 &&
+        messages.some((m) => !m.ephemeralTo && !m.deletedAt && m.seq > lastRead && m.senderId !== myAccountId)
+      setUnreadDividerSeq(hasUnread ? lastRead : null)
+    }
+    const latestSeq = messages.at(-1)?.seq ?? 0
+    if (latestSeq > 0 && nearBottomRef.current && ((detail.channel.unreadCount ?? 0) > 0 || latestSeq > (detail.channel.lastReadSeq ?? 0))) {
+      void markChannelRead(channelId, latestSeq)
+    }
+  }, [channelId, detail, messages, myAccountId])
+
+  // 智能滚动：仅首次加载、自己在底部或自己刚发消息时滚到底部；往上翻历史时显示「N 条新消息」胶囊
+  useEffect(() => {
+    const el = scrollRef.current
+    const lastMsg = messages.at(-1)
+    const lastId = lastMsg?.id ?? ''
+    const isInitialLoad = prevMsgCountRef.current === 0 && messages.length > 0
+    const appendedAtEnd = Boolean(lastId) && lastId !== prevLastMsgIdRef.current && messages.length > prevMsgCountRef.current
+    const sentByMe = Boolean(lastMsg && myAccountId && lastMsg.senderType === 'account' && lastMsg.senderId === myAccountId)
+
+    prevMsgCountRef.current = messages.length
+    prevLastMsgIdRef.current = lastId
+
+    if (!el) return
+    if (isInitialLoad || sentByMe || nearBottomRef.current) {
+      el.scrollTop = el.scrollHeight
+      setPendingNewCount(0)
+      if (lastMsg?.seq) void markChannelRead(channelId, lastMsg.seq)
+    } else if (appendedAtEnd) {
+      setPendingNewCount((n) => n + 1)
+    }
+  }, [channelId, messages, activities.length, myAccountId])
+
+  const handleLoadOlder = useCallback(async () => {
+    if (loadingOlder || !detail?.hasMoreMessages) return
+    const el = scrollRef.current
+    const prevHeight = el?.scrollHeight ?? 0
+    const prevTop = el?.scrollTop ?? 0
+    setLoadingOlder(true)
+    try {
+      const res = await loadOlderChannelMessages(channelId)
+      if (res.added > 0 && el) {
+        requestAnimationFrame(() => {
+          const delta = el.scrollHeight - prevHeight
+          el.scrollTop = prevTop + delta
+        })
+      }
+    } finally {
+      setLoadingOlder(false)
+    }
+  }, [channelId, detail?.hasMoreMessages, loadingOlder])
 
   useEffect(() => {
     const el = scrollRef.current
     if (!el) return
-    el.scrollTop = el.scrollHeight
-  }, [messages.length, activities.length])
+    const onScroll = () => {
+      const distToBottom = el.scrollHeight - el.scrollTop - el.clientHeight
+      const near = distToBottom < 120
+      nearBottomRef.current = near
+      if (near && pendingNewCount > 0) {
+        setPendingNewCount(0)
+        const latestSeq = messages.at(-1)?.seq ?? 0
+        if (latestSeq > 0) void markChannelRead(channelId, latestSeq)
+      }
+      if (el.scrollTop < 60 && detail?.hasMoreMessages && !loadingOlder) {
+        void handleLoadOlder()
+      }
+    }
+    el.addEventListener('scroll', onScroll, { passive: true })
+    return () => el.removeEventListener('scroll', onScroll)
+  }, [channelId, detail?.hasMoreMessages, handleLoadOlder, loadingOlder, messages, pendingNewCount])
+
+  const scrollToBottom = useCallback(() => {
+    const el = scrollRef.current
+    if (el) {
+      if (typeof el.scrollTo === 'function') {
+        el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' })
+      } else {
+        el.scrollTop = el.scrollHeight
+      }
+    }
+    nearBottomRef.current = true
+    setPendingNewCount(0)
+    const latestSeq = messages.at(-1)?.seq ?? 0
+    if (latestSeq > 0) void markChannelRead(channelId, latestSeq)
+  }, [channelId, messages])
+
+  const uploadFiles = useCallback(
+    async (files: FileList | File[]) => {
+      const list = Array.from(files).filter((f) => f && f.size > 0)
+      if (list.length === 0) return
+      setError('')
+      setUploadingFiles((c) => c + list.length)
+      try {
+        for (const file of list) {
+          try {
+            const uploaded = await uploadChannelAttachment(channelId, file)
+            setAttachments((prev) => [...prev, uploaded].slice(0, 12))
+          } catch (err) {
+            setError(err instanceof Error ? err.message : String(err))
+          }
+        }
+      } finally {
+        setUploadingFiles((c) => Math.max(0, c - list.length))
+      }
+    },
+    [channelId],
+  )
+
+  const handlePaste = useCallback(
+    (event: ClipboardEvent<HTMLTextAreaElement>) => {
+      const items = event.clipboardData?.items
+      if (!items) return
+      const files: File[] = []
+      for (const item of Array.from(items)) {
+        if (item.kind === 'file') {
+          const f = item.getAsFile()
+          if (f) files.push(f)
+        }
+      }
+      if (files.length > 0) {
+        event.preventDefault()
+        void uploadFiles(files)
+      }
+    },
+    [uploadFiles],
+  )
+
+  const handleDrop = useCallback(
+    (event: DragEvent<HTMLDivElement>) => {
+      event.preventDefault()
+      setDragOver(false)
+      if (event.dataTransfer?.files?.length) {
+        void uploadFiles(event.dataTransfer.files)
+      }
+    },
+    [uploadFiles],
+  )
+
+  const commitEditMessage = useCallback(
+    async (msgId: string) => {
+      const next = editingDraft.trim()
+      if (!next || savingEdit) return
+      setSavingEdit(true)
+      setError('')
+      try {
+        await editChannelMessage(channelId, msgId, next)
+        setEditingMsgId(null)
+        setEditingDraft('')
+      } catch (err) {
+        setError(err instanceof Error ? err.message : String(err))
+      } finally {
+        setSavingEdit(false)
+      }
+    },
+    [channelId, editingDraft, savingEdit],
+  )
+
+  const handleRecallMessage = useCallback(
+    async (msgId: string) => {
+      setError('')
+      try {
+        await recallChannelMessage(channelId, msgId)
+        if (editingMsgId === msgId) setEditingMsgId(null)
+      } catch (err) {
+        setError(err instanceof Error ? err.message : String(err))
+      }
+    },
+    [channelId, editingMsgId],
+  )
 
   // 自动伸缩 textarea 高度，并与 .composer-pill.is-expanded 保持一致
   const syncTextareaHeight = useCallback((el: HTMLTextAreaElement | null) => {
@@ -339,7 +627,7 @@ export const ChannelStage = memo(function ChannelStage({
 
   const handleSend = useCallback(async () => {
     const body = text.trim()
-    if (!body || sending) return
+    if ((!body && attachments.length === 0) || sending || uploadingFiles > 0) return
     setSending(true)
     setError('')
     try {
@@ -347,9 +635,11 @@ export const ChannelStage = memo(function ChannelStage({
         text: body,
         ...(replyTo ? { replyToId: replyTo.id } : {}),
         mentions,
+        ...(attachments.length > 0 ? { attachments } : {}),
       })
       setText('')
       setMentions([])
+      setAttachments([])
       setReplyTo(null)
       setMentionQuery(null)
       setComposerExpanded(false)
@@ -358,7 +648,7 @@ export const ChannelStage = memo(function ChannelStage({
     } finally {
       setSending(false)
     }
-  }, [channelId, mentions, replyTo, sending, text])
+  }, [attachments, channelId, mentions, replyTo, sending, text, uploadingFiles])
 
   const onFormSubmit = (event: FormEvent) => {
     event.preventDefault()
@@ -396,7 +686,8 @@ export const ChannelStage = memo(function ChannelStage({
   const agentMembers = members.filter((m) => m.memberType === 'agent')
   const humanMembers = members.filter((m) => m.memberType === 'account')
   const peerAvatar = resolveAvatar(channel?.peerAccountId, channel?.peerAvatar)
-  const hasChips = Boolean(replyTo)
+  const peerOnline = isDm && isOnline(channel?.peerAccountId)
+  const hasChips = Boolean(replyTo) || attachments.length > 0 || uploadingFiles > 0
 
   const handleAutoName = async () => {
     if (isDm || namingTitle) return
@@ -462,7 +753,16 @@ export const ChannelStage = memo(function ChannelStage({
             </button>
           ) : null}
           {isDm ? (
-            <MemberAvatar avatar={peerAvatar} seed={channel?.peerAccountId || channelId} size={18} />
+            <span className="relative inline-flex shrink-0">
+              <MemberAvatar avatar={peerAvatar} seed={channel?.peerAccountId || channelId} size={18} />
+              {peerOnline ? (
+                <span
+                  className="absolute -right-0.5 -bottom-0.5 size-2 rounded-full bg-emerald-500 ring-[1.5px] ring-(--biu-color-bg)"
+                  title="在线"
+                  aria-label="在线"
+                />
+              ) : null}
+            </span>
           ) : channel?.accessMode === 'private' ? (
             <LockClosedIcon className="size-3.5 shrink-0 text-(--biu-color-icon)" aria-hidden />
           ) : (
@@ -538,11 +838,41 @@ export const ChannelStage = memo(function ChannelStage({
       </header>
 
       {/* 主对话舞台：与 AgentMainPanels 完全相同的居中舞台 + 底部悬浮胶囊输入栏 */}
-      <div className="relative flex min-h-0 w-full flex-1 flex-col overflow-hidden" data-testid="agent-center">
+      <div
+        className={`relative flex min-h-0 w-full flex-1 flex-col overflow-hidden${dragOver ? ' ring-2 ring-inset ring-(--biu-color-icon-active)' : ''}`}
+        data-testid="agent-center"
+        onDragOver={(e) => {
+          if (e.dataTransfer?.types?.includes('Files')) {
+            e.preventDefault()
+            setDragOver(true)
+          }
+        }}
+        onDragLeave={() => setDragOver(false)}
+        onDrop={handleDrop}
+      >
+        {dragOver ? (
+          <div className="pointer-events-none absolute inset-3 z-20 flex items-center justify-center rounded-xl border-2 border-dashed border-(--biu-color-border) bg-(--biu-color-bg)/85 text-[14px] font-medium text-(--biu-color-text)">
+            松开鼠标即可上传图片或文件到当前聊天
+          </div>
+        ) : null}
         <div className="absolute inset-0 z-1 flex min-h-0 overflow-hidden">
           <div className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
             <BiuChatStage variant="center" stageRef={scrollRef}>
               <div className="chat-node-list pt-2" data-testid="channel-messages">
+                {detail?.hasMoreMessages ? (
+                  <div className="mb-3 flex justify-center">
+                    <button
+                      type="button"
+                      disabled={loadingOlder}
+                      data-testid="channel-load-older"
+                      className="cursor-pointer rounded-full border border-(--biu-color-border-subtle) bg-(--biu-color-bg-subtle) px-3 py-1 text-[12px] text-(--biu-color-text-muted) hover:bg-(--biu-color-bg-hover) hover:text-(--biu-color-text) disabled:opacity-50"
+                      onClick={() => void handleLoadOlder()}
+                    >
+                      {loadingOlder ? '加载更早消息中…' : '加载更早消息'}
+                    </button>
+                  </div>
+                ) : null}
+
                 {messages.length === 0 && !loading ? (
                   <div className="flex flex-col items-center justify-center py-16 text-center">
                     <div className="mb-2 flex items-center gap-2 text-[16px] font-semibold text-(--biu-color-text)">
@@ -559,198 +889,364 @@ export const ChannelStage = memo(function ChannelStage({
                   </div>
                 ) : null}
 
-                {messages.map((msg) => {
-                  const isEphemeral = Boolean(msg.ephemeralTo)
-                  const isAgent = msg.senderType === 'agent'
-                  const isSystemAgent = msg.senderType === 'system' && Boolean(msg.senderId)
-                  const approvalMeta = msg.meta?.kind === 'approval' ? msg.meta : null
-                  const sentLabel = formatSentAt(msg.createdAt)
-                  const myAccountId = detail?.myAccountId || workspaceProfile.accountId || ''
-                  const isSelf =
-                    msg.senderType === 'account' &&
-                    !isEphemeral &&
-                    Boolean(myAccountId) &&
-                    msg.senderId === myAccountId
-                  const accountAvatar =
-                    msg.senderType === 'account' ? resolveAvatar(msg.senderId, msg.senderAvatar) : undefined
+                {(() => {
+                  let prevDayKey = ''
+                  let shownUnreadDivider = false
+                  return messages.map((msg) => {
+                    const dayKey = calendarDayKey(msg.createdAt)
+                    const showDayDivider = Boolean(dayKey) && dayKey !== prevDayKey
+                    if (dayKey) prevDayKey = dayKey
 
-                  // 所有群聊消息（Agent 公开回复 / 人类消息 / Ephemeral / 系统消息）统一使用 .chat-user-card + 底部 .user-turn-bar
-                  const cardNode = (
-                    <div
-                      className={`chat-user-card group !w-3/4 min-w-0${isEphemeral ? ' opacity-95' : ''}`}
-                    >
-                      <div className="chat-user-card-body text-(--biu-color-text)">
-                        {msg.replyPreview ? (
-                          <div className="mb-1.5 flex items-center gap-1.5 border-l-2 border-(--biu-color-border) pl-2 text-(length:--biu-chat-ui-font-size) text-(--biu-color-text-subtle)">
-                            <ArrowUturnLeftIcon className="size-3 shrink-0" />
-                            <span className="shrink-0 font-medium">{msg.replyPreview.senderName}：</span>
-                            <span className="truncate">{msg.replyPreview.text}</span>
-                          </div>
-                        ) : null}
+                    const showUnreadDivider =
+                      !shownUnreadDivider &&
+                      unreadDividerSeq !== null &&
+                      !msg.ephemeralTo &&
+                      !msg.deletedAt &&
+                      msg.seq > unreadDividerSeq &&
+                      msg.senderId !== myAccountId
+                    if (showUnreadDivider) shownUnreadDivider = true
 
-                        {isAgent && !isEphemeral ? (
-                          <div className="chat-assistant-body">
-                            <MarkdownBody text={msg.text} />
-                          </div>
-                        ) : (
-                          <div className="whitespace-pre-wrap break-words text-(--biu-color-text)">
-                            {msg.text}
-                          </div>
-                        )}
+                    const isEphemeral = Boolean(msg.ephemeralTo)
+                    const isRecalled = Boolean(msg.deletedAt && msg.deletedAt > 0)
+                    const isAgent = msg.senderType === 'agent'
+                    const isSystemAgent = msg.senderType === 'system' && Boolean(msg.senderId)
+                    const approvalMeta = msg.meta?.kind === 'approval' ? msg.meta : null
+                    const sentLabel = formatSentAt(msg.createdAt)
+                    const isSelf =
+                      msg.senderType === 'account' &&
+                      !isEphemeral &&
+                      Boolean(myAccountId) &&
+                      msg.senderId === myAccountId
+                    const canEdit = isSelf && !isRecalled
+                    const canRecall = !isEphemeral && !isRecalled && (isSelf || Boolean(detail?.canManageMembers))
+                    const isEditing = editingMsgId === msg.id
+                    const accountAvatar =
+                      msg.senderType === 'account' ? resolveAvatar(msg.senderId, msg.senderAvatar) : undefined
+                    const msgAttachments = msg.attachments ?? []
 
-                        {approvalMeta?.approvalId ? (
-                          <div className="mt-2.5 flex flex-wrap items-center gap-2 border-t border-(--biu-color-bg-muted) pt-2 text-(length:--biu-chat-ui-font-size)">
-                            <ShieldCheckIcon className="size-4 text-(--biu-color-icon-active)" />
-                            <span className="font-mono text-[12px] text-(--biu-color-text-muted)">
-                              {approvalMeta.toolName}
-                            </span>
-                            {approvalMeta.status === 'pending' ? (
-                              <div className="ml-auto flex items-center gap-1.5">
+                    // 所有群聊消息统一使用 .chat-user-card + 底部 .user-turn-bar
+                    const cardNode = (
+                      <div
+                        className={`chat-user-card group !w-3/4 min-w-0${isEphemeral ? ' opacity-95' : ''}`}
+                      >
+                        <div className="chat-user-card-body text-(--biu-color-text)">
+                          {msg.replyPreview && !isRecalled ? (
+                            <div className="mb-1.5 flex items-center gap-1.5 border-l-2 border-(--biu-color-border) pl-2 text-(length:--biu-chat-ui-font-size) text-(--biu-color-text-subtle)">
+                              <ArrowUturnLeftIcon className="size-3 shrink-0" />
+                              <span className="shrink-0 font-medium">{msg.replyPreview.senderName}：</span>
+                              <span className="truncate">{msg.replyPreview.text}</span>
+                            </div>
+                          ) : null}
+
+                          {isRecalled ? (
+                            <div
+                              className="text-[13px] italic text-(--biu-color-text-subtle)"
+                              data-testid={`channel-msg-recalled-${msg.id}`}
+                            >
+                              此消息已撤回
+                            </div>
+                          ) : isEditing ? (
+                            <div className="space-y-2" data-testid={`channel-msg-editor-${msg.id}`}>
+                              <textarea
+                                rows={2}
+                                value={editingDraft}
+                                autoFocus
+                                className="w-full resize-y rounded-md border border-(--biu-color-border) bg-(--biu-color-bg) px-2.5 py-1.5 text-[13.5px] text-(--biu-color-text) outline-none focus:border-(--biu-color-icon-active)"
+                                onChange={(e) => setEditingDraft(e.target.value)}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Escape') {
+                                    e.preventDefault()
+                                    setEditingMsgId(null)
+                                    return
+                                  }
+                                  if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
+                                    e.preventDefault()
+                                    void commitEditMessage(msg.id)
+                                  }
+                                }}
+                              />
+                              <div className="flex items-center justify-end gap-1.5">
                                 <Button
+                                  variant="ghost"
                                   className="h-7 px-2.5 text-[12px]"
-                                  disabled={decidingApproval === approvalMeta.approvalId}
-                                  onClick={() => void handleApproval(approvalMeta.approvalId!, true)}
+                                  onClick={() => setEditingMsgId(null)}
                                 >
-                                  批准一次
+                                  取消
                                 </Button>
                                 <Button
-                                  variant="secondary"
                                   className="h-7 px-2.5 text-[12px]"
-                                  disabled={decidingApproval === approvalMeta.approvalId}
-                                  onClick={() => void handleApproval(approvalMeta.approvalId!, false)}
+                                  disabled={!editingDraft.trim() || savingEdit}
+                                  data-testid={`channel-msg-edit-save-${msg.id}`}
+                                  onClick={() => void commitEditMessage(msg.id)}
                                 >
-                                  拒绝
+                                  {savingEdit ? '保存中…' : '保存'}
                                 </Button>
                               </div>
-                            ) : (
-                              <span className="ml-auto text-(--biu-color-text-subtle)">
-                                {approvalMeta.status === 'allowed' ? '已批准' : '已拒绝'}
-                              </span>
-                            )}
-                          </div>
-                        ) : null}
-                      </div>
-
-                      <div
-                        className={`user-turn-bar box-border flex min-h-[30px] w-full items-center justify-between gap-3 overflow-hidden border-0 border-t border-(--biu-color-bg-muted) bg-(--biu-color-bg-subtle) px-(--biu-chat-pad-x) text-(length:--biu-chat-ui-font-size) leading-none text-(--biu-color-text-muted)${isSelf ? ' flex-row-reverse' : ''}`}
-                        aria-label="消息摘要"
-                      >
-                        <div className={`flex min-h-full min-w-0 flex-1 items-center gap-2${isSelf ? ' flex-row-reverse' : ''}`}>
-                          {isAgent || isSystemAgent ? (
-                            <button
-                              type="button"
-                              className="inline-flex min-w-0 cursor-pointer items-center gap-1.5 border-0 bg-transparent p-0 text-(--biu-color-text-muted) hover:text-(--biu-color-text)"
-                              title={`查看 ${msg.senderName}`}
-                              data-testid="channel-msg-avatar"
-                              onClick={() => handleAgentClick(msg.senderId)}
-                            >
-                              <SidebarMascot
-                                size={16}
-                                sessionId={msg.senderId}
-                                identity={resolveSessionMascot(msg.senderId, msg.senderMascot)}
-                                animate={false}
-                                title=""
-                              />
-                              <span className="truncate font-medium">{msg.senderName}</span>
-                            </button>
-                          ) : (
-                            <span
-                              className={`inline-flex min-w-0 items-center gap-1.5${isSelf ? ' flex-row-reverse' : ''}`}
-                              title={msg.senderName}
-                              data-testid="channel-msg-avatar"
-                            >
-                              <MemberAvatar avatar={accountAvatar} seed={msg.senderId} size={16} />
-                              <span className="truncate font-medium">{msg.senderName}</span>
-                            </span>
-                          )}
-
-                          {isEphemeral ? (
-                            <span className="inline-flex shrink-0 items-center gap-1 rounded bg-(--biu-color-bg-muted) px-1.5 py-0.5 text-[11px] text-(--biu-color-text-subtle)">
-                              <EyeIcon className="size-3" />
-                              仅你可见
-                            </span>
+                            </div>
                           ) : (
                             <>
-                              {isAgent ? <MessageCopyAction text={msg.text} /> : null}
-                              {isAgent && memberById.get(`agent:${msg.senderId}`)?.isOwn ? (
-                                <button
-                                  type="button"
-                                  className="inline-flex shrink-0 cursor-pointer items-center gap-1 rounded-md border border-transparent bg-transparent px-1.5 py-0.5 text-(length:--biu-chat-ui-font-size) leading-none text-(--biu-color-text-subtle) opacity-0 transition-opacity hover:bg-(--biu-color-bg-hover) hover:text-(--biu-color-text) group-hover:opacity-100"
-                                  title="仅归属人可见：将本条结论手动沉淀回该代理的 1v1 主工作台"
-                                  data-testid={`channel-msg-sync-${msg.id}`}
-                                  onClick={() => {
-                                    void syncChannelToAgent(channelId, msg.senderId, msg.id)
-                                      .then(() => {
-                                        setSyncedMsgIds((prev) => ({ ...prev, [msg.id]: true }))
-                                        window.setTimeout(() => {
-                                          setSyncedMsgIds((prev) => ({ ...prev, [msg.id]: false }))
-                                        }, 1800)
-                                      })
-                                      .catch((err) => setError(err instanceof Error ? err.message : String(err)))
-                                  }}
-                                >
-                                  {syncedMsgIds[msg.id] ? (
-                                    <CheckIcon className="size-3 text-emerald-500" />
-                                  ) : (
-                                    <BookmarkSquareIcon className="size-3" />
-                                  )}
-                                  <span>{syncedMsgIds[msg.id] ? '已同步' : '同步到 1v1'}</span>
-                                </button>
+                              {msg.text ? (
+                                isAgent && !isEphemeral ? (
+                                  <div className="chat-assistant-body">
+                                    <MarkdownBody text={msg.text} />
+                                  </div>
+                                ) : isEphemeral ? (
+                                  <div className="whitespace-pre-wrap break-words text-(--biu-color-text)">
+                                    {msg.text}
+                                  </div>
+                                ) : (
+                                  <div className="chat-assistant-body">
+                                    <MarkdownBody text={formatChannelMessageMarkdown(msg.text, msg.mentions)} />
+                                  </div>
+                                )
                               ) : null}
-                              <button
-                                type="button"
-                                className="inline-flex shrink-0 cursor-pointer items-center gap-1 rounded-md border border-transparent bg-transparent px-1.5 py-0.5 text-(length:--biu-chat-ui-font-size) leading-none text-(--biu-color-text-subtle) opacity-0 transition-opacity hover:bg-(--biu-color-bg-hover) hover:text-(--biu-color-text) group-hover:opacity-100"
-                                onClick={() => {
-                                  setReplyTo(msg)
-                                  inputRef.current?.focus()
-                                }}
-                              >
-                                <ArrowUturnLeftIcon className="size-3" />
-                                <span>回复</span>
-                              </button>
+
+                              {msgAttachments.length > 0 ? (
+                                <div className="mt-2 flex flex-wrap gap-2" data-testid={`channel-msg-attachments-${msg.id}`}>
+                                  {msgAttachments.map((att) =>
+                                    att.kind === 'image' ? (
+                                      <button
+                                        key={att.id}
+                                        type="button"
+                                        className="group/img relative cursor-zoom-in overflow-hidden rounded-lg border border-(--biu-color-border-subtle) bg-(--biu-color-bg-subtle) p-0"
+                                        title={`点击查看大图：${att.name}`}
+                                        onClick={() => setLightboxImage({ url: att.url, name: att.name })}
+                                      >
+                                        <img
+                                          src={att.url}
+                                          alt={att.name}
+                                          loading="lazy"
+                                          className="block max-h-56 max-w-xs object-contain"
+                                        />
+                                      </button>
+                                    ) : (
+                                      <a
+                                        key={att.id}
+                                        href={att.url}
+                                        download={att.name}
+                                        target="_blank"
+                                        rel="noreferrer"
+                                        className="inline-flex max-w-xs items-center gap-2 rounded-lg border border-(--biu-color-border-subtle) bg-(--biu-color-bg-subtle) px-2.5 py-1.5 text-[12px] text-(--biu-color-text) no-underline hover:bg-(--biu-color-bg-hover)"
+                                      >
+                                        <DocumentIcon className="size-4 shrink-0 text-(--biu-color-icon)" />
+                                        <span className="truncate font-medium">{att.name}</span>
+                                        {att.size > 0 ? (
+                                          <span className="shrink-0 text-[11px] text-(--biu-color-text-subtle)">
+                                            {formatFileSize(att.size)}
+                                          </span>
+                                        ) : null}
+                                      </a>
+                                    ),
+                                  )}
+                                </div>
+                              ) : null}
                             </>
                           )}
 
-                          {msg.traceId && (isAgent || isSystemAgent) ? (
-                            <button
-                              type="button"
-                              className="inline-flex shrink-0 cursor-pointer items-center gap-0.5 rounded-md border border-transparent bg-transparent px-1.5 py-0.5 text-(length:--biu-chat-ui-font-size) leading-none text-(--biu-color-text-muted) hover:bg-(--biu-color-bg-hover) hover:text-(--biu-color-text)"
-                              data-testid={isAgent ? `channel-msg-trace-${msg.traceId}` : `channel-sys-trace-${msg.traceId}`}
-                              onClick={() => openChannelRunTrace(channelId, msg.traceId)}
-                            >
-                              <ChevronRightIcon className="size-3.5" />
-                              <span>Details</span>
-                            </button>
+                          {approvalMeta?.approvalId ? (
+                            <div className="mt-2.5 flex flex-wrap items-center gap-2 border-t border-(--biu-color-bg-muted) pt-2 text-(length:--biu-chat-ui-font-size)">
+                              <ShieldCheckIcon className="size-4 text-(--biu-color-icon-active)" />
+                              <span className="font-mono text-[12px] text-(--biu-color-text-muted)">
+                                {approvalMeta.toolName}
+                              </span>
+                              {approvalMeta.status === 'pending' ? (
+                                <div className="ml-auto flex items-center gap-1.5">
+                                  <Button
+                                    className="h-7 px-2.5 text-[12px]"
+                                    disabled={decidingApproval === approvalMeta.approvalId}
+                                    onClick={() => void handleApproval(approvalMeta.approvalId!, true)}
+                                  >
+                                    批准一次
+                                  </Button>
+                                  <Button
+                                    variant="secondary"
+                                    className="h-7 px-2.5 text-[12px]"
+                                    disabled={decidingApproval === approvalMeta.approvalId}
+                                    onClick={() => void handleApproval(approvalMeta.approvalId!, false)}
+                                  >
+                                    拒绝
+                                  </Button>
+                                </div>
+                              ) : (
+                                <span className="ml-auto text-(--biu-color-text-subtle)">
+                                  {approvalMeta.status === 'allowed' ? '已批准' : '已拒绝'}
+                                </span>
+                              )}
+                            </div>
                           ) : null}
                         </div>
 
-                        <div className="inline-flex shrink-0 items-center gap-1.5">
-                          {sentLabel ? (
-                            <span
-                              className="inline-flex shrink-0 items-center gap-1 text-(length:--biu-chat-ui-font-size) leading-none text-(--biu-color-text-muted) tabular-nums"
-                              title="发送时间"
-                            >
-                              <ClockIcon className="size-3" aria-hidden />
-                              <span>{sentLabel}</span>
-                            </span>
-                          ) : null}
+                        <div
+                          className={`user-turn-bar box-border flex min-h-[30px] w-full items-center justify-between gap-3 overflow-hidden border-0 border-t border-(--biu-color-bg-muted) bg-(--biu-color-bg-subtle) px-(--biu-chat-pad-x) text-(length:--biu-chat-ui-font-size) leading-none text-(--biu-color-text-muted)${isSelf ? ' flex-row-reverse' : ''}`}
+                          aria-label="消息摘要"
+                        >
+                          <div className={`flex min-h-full min-w-0 flex-1 items-center gap-2${isSelf ? ' flex-row-reverse' : ''}`}>
+                            {isAgent || isSystemAgent ? (
+                              <button
+                                type="button"
+                                className="inline-flex min-w-0 cursor-pointer items-center gap-1.5 border-0 bg-transparent p-0 text-(--biu-color-text-muted) hover:text-(--biu-color-text)"
+                                title={`查看 ${msg.senderName}`}
+                                data-testid="channel-msg-avatar"
+                                onClick={() => handleAgentClick(msg.senderId)}
+                              >
+                                <SidebarMascot
+                                  size={16}
+                                  sessionId={msg.senderId}
+                                  identity={resolveSessionMascot(msg.senderId, msg.senderMascot)}
+                                  animate={false}
+                                  title=""
+                                />
+                                <span className="truncate font-medium">{msg.senderName}</span>
+                              </button>
+                            ) : (
+                              <span
+                                className={`inline-flex min-w-0 items-center gap-1.5${isSelf ? ' flex-row-reverse' : ''}`}
+                                title={msg.senderName}
+                                data-testid="channel-msg-avatar"
+                              >
+                                <MemberAvatar avatar={accountAvatar} seed={msg.senderId} size={16} />
+                                <span className="truncate font-medium">{msg.senderName}</span>
+                              </span>
+                            )}
+
+                            {isEphemeral ? (
+                              <span className="inline-flex shrink-0 items-center gap-1 rounded bg-(--biu-color-bg-muted) px-1.5 py-0.5 text-[11px] text-(--biu-color-text-subtle)">
+                                <EyeIcon className="size-3" />
+                                仅你可见
+                              </span>
+                            ) : !isRecalled ? (
+                              <>
+                                {isAgent ? <MessageCopyAction text={msg.text} /> : null}
+                                {isAgent && memberById.get(`agent:${msg.senderId}`)?.isOwn ? (
+                                  <button
+                                    type="button"
+                                    className="inline-flex shrink-0 cursor-pointer items-center gap-1 rounded-md border border-transparent bg-transparent px-1.5 py-0.5 text-(length:--biu-chat-ui-font-size) leading-none text-(--biu-color-text-subtle) opacity-0 transition-opacity hover:bg-(--biu-color-bg-hover) hover:text-(--biu-color-text) group-hover:opacity-100"
+                                    title="仅归属人可见：将本条结论手动沉淀回该代理的 1v1 主工作台"
+                                    data-testid={`channel-msg-sync-${msg.id}`}
+                                    onClick={() => {
+                                      void syncChannelToAgent(channelId, msg.senderId, msg.id)
+                                        .then(() => {
+                                          setSyncedMsgIds((prev) => ({ ...prev, [msg.id]: true }))
+                                          window.setTimeout(() => {
+                                            setSyncedMsgIds((prev) => ({ ...prev, [msg.id]: false }))
+                                          }, 1800)
+                                        })
+                                        .catch((err) => setError(err instanceof Error ? err.message : String(err)))
+                                    }}
+                                  >
+                                    {syncedMsgIds[msg.id] ? (
+                                      <CheckIcon className="size-3 text-emerald-500" />
+                                    ) : (
+                                      <BookmarkSquareIcon className="size-3" />
+                                    )}
+                                    <span>{syncedMsgIds[msg.id] ? '已同步' : '同步到 1v1'}</span>
+                                  </button>
+                                ) : null}
+                                <button
+                                  type="button"
+                                  className="inline-flex shrink-0 cursor-pointer items-center gap-1 rounded-md border border-transparent bg-transparent px-1.5 py-0.5 text-(length:--biu-chat-ui-font-size) leading-none text-(--biu-color-text-subtle) opacity-0 transition-opacity hover:bg-(--biu-color-bg-hover) hover:text-(--biu-color-text) group-hover:opacity-100"
+                                  onClick={() => {
+                                    setReplyTo(msg)
+                                    inputRef.current?.focus()
+                                  }}
+                                >
+                                  <ArrowUturnLeftIcon className="size-3" />
+                                  <span>回复</span>
+                                </button>
+                                {canEdit ? (
+                                  <button
+                                    type="button"
+                                    className="inline-flex shrink-0 cursor-pointer items-center gap-1 rounded-md border border-transparent bg-transparent px-1.5 py-0.5 text-(length:--biu-chat-ui-font-size) leading-none text-(--biu-color-text-subtle) opacity-0 transition-opacity hover:bg-(--biu-color-bg-hover) hover:text-(--biu-color-text) group-hover:opacity-100"
+                                    data-testid={`channel-msg-edit-${msg.id}`}
+                                    onClick={() => {
+                                      setEditingMsgId(msg.id)
+                                      setEditingDraft(msg.text)
+                                    }}
+                                  >
+                                    <PencilSquareIcon className="size-3" />
+                                    <span>编辑</span>
+                                  </button>
+                                ) : null}
+                                {canRecall ? (
+                                  <button
+                                    type="button"
+                                    className="inline-flex shrink-0 cursor-pointer items-center gap-1 rounded-md border border-transparent bg-transparent px-1.5 py-0.5 text-(length:--biu-chat-ui-font-size) leading-none text-(--biu-color-text-subtle) opacity-0 transition-opacity hover:bg-(--biu-color-bg-hover) hover:text-(--biu-color-danger) group-hover:opacity-100"
+                                    data-testid={`channel-msg-recall-${msg.id}`}
+                                    onClick={() => void handleRecallMessage(msg.id)}
+                                  >
+                                    <TrashIcon className="size-3" />
+                                    <span>撤回</span>
+                                  </button>
+                                ) : null}
+                              </>
+                            ) : null}
+
+                            {msg.traceId && (isAgent || isSystemAgent) ? (
+                              <button
+                                type="button"
+                                className="inline-flex shrink-0 cursor-pointer items-center gap-0.5 rounded-md border border-transparent bg-transparent px-1.5 py-0.5 text-(length:--biu-chat-ui-font-size) leading-none text-(--biu-color-text-muted) hover:bg-(--biu-color-bg-hover) hover:text-(--biu-color-text)"
+                                data-testid={isAgent ? `channel-msg-trace-${msg.traceId}` : `channel-sys-trace-${msg.traceId}`}
+                                onClick={() => openChannelRunTrace(channelId, msg.traceId)}
+                              >
+                                <ChevronRightIcon className="size-3.5" />
+                                <span>Details</span>
+                              </button>
+                            ) : null}
+                          </div>
+
+                          <div className="inline-flex shrink-0 items-center gap-1.5">
+                            {msg.editedAt && !isRecalled ? (
+                              <span
+                                className="text-[11px] text-(--biu-color-text-subtle)"
+                                data-testid={`channel-msg-edited-${msg.id}`}
+                              >
+                                已编辑
+                              </span>
+                            ) : null}
+                            {sentLabel ? (
+                              <span
+                                className="inline-flex shrink-0 items-center gap-1 text-(length:--biu-chat-ui-font-size) leading-none text-(--biu-color-text-muted) tabular-nums"
+                                title="发送时间"
+                              >
+                                <ClockIcon className="size-3" aria-hidden />
+                                <span>{sentLabel}</span>
+                              </span>
+                            ) : null}
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  )
+                    )
 
-                  return (
-                    <div
-                      key={msg.id}
-                      data-testid={isEphemeral ? 'channel-ephemeral-msg' : 'channel-message'}
-                      data-sender-type={msg.senderType}
-                      data-self={isSelf ? 'true' : 'false'}
-                      className={`flex w-full items-start ${isSelf ? 'justify-end' : 'justify-start'}`}
-                    >
-                      {cardNode}
-                    </div>
-                  )
-                })}
+                    return (
+                      <div key={msg.id} className="w-full space-y-2">
+                        {showDayDivider ? (
+                          <div className="my-2 flex items-center gap-3" data-testid="channel-day-divider">
+                            <span className="h-px flex-1 bg-(--biu-color-border-subtle)" />
+                            <span className="text-[11px] font-medium text-(--biu-color-text-subtle)">
+                              {formatDayDivider(msg.createdAt)}
+                            </span>
+                            <span className="h-px flex-1 bg-(--biu-color-border-subtle)" />
+                          </div>
+                        ) : null}
+                        {showUnreadDivider ? (
+                          <div className="my-2 flex items-center gap-3" data-testid="channel-unread-divider">
+                            <span className="h-px flex-1 bg-rose-500/40" />
+                            <span className="text-[11px] font-medium text-rose-500">以下是新消息</span>
+                            <span className="h-px flex-1 bg-rose-500/40" />
+                          </div>
+                        ) : null}
+                        <div
+                          data-testid={isEphemeral ? 'channel-ephemeral-msg' : 'channel-message'}
+                          data-sender-type={msg.senderType}
+                          data-self={isSelf ? 'true' : 'false'}
+                          className={`flex w-full items-start ${isSelf ? 'justify-end' : 'justify-start'}`}
+                        >
+                          {cardNode}
+                        </div>
+                      </div>
+                    )
+                  })
+                })()}
               </div>
             </BiuChatStage>
 
@@ -758,6 +1254,19 @@ export const ChannelStage = memo(function ChannelStage({
             <div className="chat-composer-dock pointer-events-none absolute inset-x-0 bottom-0 bg-transparent px-[var(--biu-pad-page)] pb-[calc(1rem+5px)]">
               <ChatDockStack>
                 <div className="composer-stack" data-biu-ignore>
+                  {pendingNewCount > 0 ? (
+                    <div className="pointer-events-auto flex justify-center">
+                      <button
+                        type="button"
+                        data-testid="channel-new-messages-pill"
+                        className="inline-flex cursor-pointer items-center gap-1 rounded-full border border-(--biu-color-border) bg-(--biu-color-bg) px-3 py-1 text-[12px] font-medium text-(--biu-color-text) shadow-sm hover:bg-(--biu-color-bg-hover)"
+                        onClick={scrollToBottom}
+                      >
+                        <ArrowDownIcon className="size-3.5" />
+                        <span>{pendingNewCount} 条新消息</span>
+                      </button>
+                    </div>
+                  ) : null}
                   {/* 忙碌/排队状态条（Slack 模式：主聊天流不吐字，点击在右侧检查器看实时吐字） */}
                   {activities.length > 0 ? (
                     <div className="space-y-1.5" data-testid="channel-busy-bar">
@@ -855,23 +1364,64 @@ export const ChannelStage = memo(function ChannelStage({
                       </div>
                     ) : null}
 
-                    {/* 引用回复 chip */}
-                    {replyTo ? (
-                      <div className="composer-tool-chips" aria-label="正在回复">
-                        <button
-                          type="button"
-                          className="composer-tool-chip max-w-full"
-                          title="取消引用回复"
-                          onClick={() => setReplyTo(null)}
-                        >
-                          <ArrowUturnLeftIcon className="size-3 shrink-0" />
-                          <span className="truncate">
-                            回复 {replyTo.senderName}：{replyTo.text.slice(0, 60)}
+                    {/* 引用回复 & 待发附件 chip */}
+                    {replyTo || attachments.length > 0 || uploadingFiles > 0 ? (
+                      <div className="composer-tool-chips flex-wrap" aria-label="附件与引用">
+                        {replyTo ? (
+                          <button
+                            type="button"
+                            className="composer-tool-chip max-w-full"
+                            title="取消引用回复"
+                            onClick={() => setReplyTo(null)}
+                          >
+                            <ArrowUturnLeftIcon className="size-3 shrink-0" />
+                            <span className="truncate">
+                              回复 {replyTo.senderName}：{replyTo.text.slice(0, 60)}
+                            </span>
+                            <span aria-hidden>×</span>
+                          </button>
+                        ) : null}
+                        {attachments.map((att) => (
+                          <span
+                            key={att.id}
+                            className="composer-tool-chip max-w-[220px]"
+                            data-testid={`composer-attachment-${att.id}`}
+                          >
+                            {att.kind === 'image' ? (
+                              <img src={att.url} alt="" className="size-4 shrink-0 rounded object-cover" />
+                            ) : (
+                              <DocumentIcon className="size-3.5 shrink-0" />
+                            )}
+                            <span className="truncate">{att.name}</span>
+                            <button
+                              type="button"
+                              className="cursor-pointer border-0 bg-transparent p-0 leading-none text-current opacity-70 hover:opacity-100"
+                              aria-label={`移除附件 ${att.name}`}
+                              onClick={() => setAttachments((prev) => prev.filter((x) => x.id !== att.id))}
+                            >
+                              ×
+                            </button>
                           </span>
-                          <span aria-hidden>×</span>
-                        </button>
+                        ))}
+                        {uploadingFiles > 0 ? (
+                          <span className="composer-tool-chip text-(--biu-color-text-subtle)">
+                            正在上传 {uploadingFiles} 个文件…
+                          </span>
+                        ) : null}
                       </div>
                     ) : null}
+
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      multiple
+                      className="hidden"
+                      data-testid="channel-file-input"
+                      onChange={(e) => {
+                        if (e.target.files?.length) void uploadFiles(e.target.files)
+                        e.target.value = ''
+                      }}
+                    />
 
                     <div className="composer-pill-row">
                       <button
@@ -884,12 +1434,24 @@ export const ChannelStage = memo(function ChannelStage({
                         <PlusIcon className="size-4" />
                       </button>
 
+                      <button
+                        type="button"
+                        className="composer-plus"
+                        title="上传图片或文件（也支持粘贴或拖拽）"
+                        aria-label="上传图片或文件"
+                        data-testid="channel-upload-btn"
+                        onClick={() => fileInputRef.current?.click()}
+                      >
+                        <PaperClipIcon className="size-3.5" />
+                      </button>
+
                       <div className="composer-editor">
                         <textarea
                           ref={inputRef}
                           rows={1}
                           value={text}
                           onChange={(e) => handleTextChange(e.target.value)}
+                          onPaste={handlePaste}
                           data-testid="channel-composer-input"
                           className="composer-tiptap block w-full resize-none border-0 bg-transparent p-0 outline-none placeholder:text-(--biu-color-text-placeholder)"
                           onKeyDown={(e) => {
@@ -926,7 +1488,7 @@ export const ChannelStage = memo(function ChannelStage({
                       <div className="composer-pill-right">
                         <button
                           type="submit"
-                          disabled={!text.trim() || sending}
+                          disabled={(!text.trim() && attachments.length === 0) || sending || uploadingFiles > 0}
                           data-testid="channel-composer-send"
                           className="composer-send"
                           aria-label="发送消息"
@@ -943,6 +1505,46 @@ export const ChannelStage = memo(function ChannelStage({
           </div>
         </div>
       </div>
+
+      {/* 图片大图预览 Lightbox */}
+      {lightboxImage
+        ? createPortal(
+            <div
+              className="biu-float-overlay"
+              onClick={() => setLightboxImage(null)}
+              data-testid="channel-image-lightbox"
+            >
+              <div
+                className="relative flex max-h-[90vh] max-w-[90vw] flex-col items-center gap-2"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <img
+                  src={lightboxImage.url}
+                  alt={lightboxImage.name}
+                  className="max-h-[82vh] max-w-[88vw] rounded-lg object-contain shadow-2xl"
+                />
+                <div className="flex items-center gap-3 text-[12px] text-white/90">
+                  <span className="max-w-md truncate">{lightboxImage.name}</span>
+                  <a
+                    href={lightboxImage.url}
+                    download={lightboxImage.name}
+                    className="underline hover:text-white"
+                  >
+                    下载原图
+                  </a>
+                  <button
+                    type="button"
+                    className="cursor-pointer rounded bg-white/15 px-2 py-0.5 text-white hover:bg-white/25"
+                    onClick={() => setLightboxImage(null)}
+                  >
+                    关闭
+                  </button>
+                </div>
+              </div>
+            </div>,
+            document.body,
+          )
+        : null}
 
       {/* 群成员与 Agent 管理弹窗：统一使用 .biu-float-overlay + .biu-float.scfg-float */}
       {membersModalOpen && detail ? (
