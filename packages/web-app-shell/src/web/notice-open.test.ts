@@ -1,6 +1,6 @@
 import { test } from 'vitest'
 import assert from 'node:assert/strict'
-import { applyNoticeClick, noticeClickPlan, noticeOpenHref } from './notice-open.ts'
+import { applyNoticeClick, markAllNoticesRead, noticeClickPlan, noticeOpenHref } from './notice-open.ts'
 
 test('notice click always opens the notice record, plus task or session', () => {
   assert.deepEqual(noticeClickPlan({ id: 'n1', href: '' }), {
@@ -37,4 +37,29 @@ test('applyNoticeClick does not open notices in the inspector', () => {
   assert.equal(href, '/database/tasks/record/t1')
   assert.equal(noticeOnly, '/database/notices/record/n1')
   assert.deepEqual(seen, [{ collection: '/tasks', recordId: 't1', unique: true }])
+})
+
+test('markAllNoticesRead uses /api/db/notices/read-all when available', async () => {
+  const calls: Array<{ url: string; body?: string }> = []
+  const ok = await markAllNoticesRead(['n1', 'n2'], async (url, init) => {
+    calls.push({ url, body: typeof init?.body === 'string' ? init.body : undefined })
+    return { ok: true, status: 200 }
+  })
+  assert.equal(ok, true)
+  assert.deepEqual(calls, [{ url: '/api/db/notices/read-all', body: undefined }])
+})
+
+test('markAllNoticesRead falls back to /api/db/update when /api/db/notices/read-all returns 404', async () => {
+  const calls: Array<{ url: string; body?: string }> = []
+  const ok = await markAllNoticesRead(['n1', 'n2', 'n1'], async (url, init) => {
+    calls.push({ url, body: typeof init?.body === 'string' ? init.body : undefined })
+    if (url === '/api/db/notices/read-all') return { ok: false, status: 404 }
+    return { ok: true, status: 200 }
+  })
+  assert.equal(ok, true)
+  assert.deepEqual(calls, [
+    { url: '/api/db/notices/read-all', body: undefined },
+    { url: '/api/db/update', body: JSON.stringify({ path: '/notices/n1', content: { read: true } }) },
+    { url: '/api/db/update', body: JSON.stringify({ path: '/notices/n2', content: { read: true } }) },
+  ])
 })

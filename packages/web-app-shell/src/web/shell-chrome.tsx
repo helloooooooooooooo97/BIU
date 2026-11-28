@@ -24,7 +24,7 @@ import {
 import { TagChip } from '@biu/biu-ui/tag-chip'
 import { ConfirmDialog } from '@biu/biu-ui/confirm-dialog'
 import { chromeIcon } from './chrome-icon.ts'
-import { applyNoticeClick, noticeIdOf } from './notice-open.ts'
+import { applyNoticeClick, markAllNoticesRead, noticeIdOf } from './notice-open.ts'
 import {
   THEME_ACCENTS,
   applyAccent,
@@ -3483,7 +3483,7 @@ function NoticeBell({
   const [rows, setRows] = useState<NoticeRow[]>([])
 
   const load = useCallback(() => {
-    void apiFetch('/api/db/list?path=/notices&sort=updatedAt&dir=desc&limit=40&columns=title,body,kind,read,href,createdAt,updatedAt')
+    void apiFetch('/api/db/list?path=/notices&sort=updatedAt&dir=desc&limit=40&columns=id,title,body,kind,read,href,createdAt,updatedAt')
       .then((res) => res.json() as Promise<{ items?: Array<Record<string, unknown>> }>)
       .then((data) => {
         const items = Array.isArray(data.items) ? data.items : []
@@ -3545,8 +3545,9 @@ function NoticeBell({
   const triggerRef = useRef<HTMLButtonElement>(null)
 
   const markAllRead = () => {
+    const targets = inbox.map((item) => item.id).filter(Boolean)
     setRows((prev) => prev.map((item) => ({ ...item, read: true })))
-    void apiFetch('/api/db/notices/read-all', { method: 'POST' })
+    void markAllNoticesRead(targets, apiFetch)
       .then(() => load())
       .catch(() => load())
   }

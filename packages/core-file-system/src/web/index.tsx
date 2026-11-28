@@ -621,7 +621,11 @@ export function apply(ctx: Context) {
       )?.get?.()?.sessionId
       applyDatabaseChannelPayload(payload, sessionId)
       if (parsed?.asset) emitAssetChanged(parsed.asset)
-      if (parsed?.scope === 'notices') {
+      if (
+        parsed?.scope === 'notices' ||
+        parsed?.path === '/notices' ||
+        parsed?.path?.startsWith('/notices/')
+      ) {
         window.dispatchEvent(new CustomEvent('biu:notices-change'))
       }
       if (!parsed) return
