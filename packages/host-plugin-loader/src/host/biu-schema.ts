@@ -533,6 +533,7 @@ CREATE TABLE IF NOT EXISTS channel_messages (
   sender_type TEXT NOT NULL,
   sender_id TEXT NOT NULL,
   reply_to_id TEXT NOT NULL DEFAULT '',
+  thread_root_id TEXT NOT NULL DEFAULT '',
   text TEXT NOT NULL DEFAULT '',
   mentions_json TEXT NOT NULL DEFAULT '[]',
   attachments_json TEXT NOT NULL DEFAULT '[]',
@@ -547,6 +548,7 @@ CREATE TABLE IF NOT EXISTS channel_messages (
 );
 CREATE UNIQUE INDEX IF NOT EXISTS channel_messages_channel_seq ON channel_messages(channel_id, seq);
 CREATE INDEX IF NOT EXISTS channel_messages_ephemeral ON channel_messages(channel_id, ephemeral_to, seq);
+CREATE INDEX IF NOT EXISTS channel_messages_thread ON channel_messages(channel_id, thread_root_id, seq);
 
 CREATE TABLE IF NOT EXISTS channel_message_reactions (
   channel_id TEXT NOT NULL,
