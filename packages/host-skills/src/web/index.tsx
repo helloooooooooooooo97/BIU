@@ -130,7 +130,7 @@ function SkillLibraryView({ rows, onOpen }: FsViewProps) {
                     {String(row.emoji ?? '') ? `${String(row.emoji)} ` : ''}
                     {String(row.title ?? row.id)}
                   </strong>
-                  <span style={{ color: row.enabled ? 'var(--biu-color-ok)' : 'var(--biu-color-text-subtle)', fontSize: 12 }}>
+                  <span style={{ color: row.enabled ? 'var(--biu-color-emphasis)' : 'var(--biu-color-text-subtle)', fontSize: 12 }}>
                     {row.enabled ? '已启用' : '已停用'}
                   </span>
                 </span>

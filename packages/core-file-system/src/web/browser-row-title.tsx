@@ -252,6 +252,15 @@ export function TitleRoleIcon({ role }: { role: unknown }) {
   )
 }
 
+export function isRecordActive(row: DbRecord): boolean {
+  return (
+    row.running === true ||
+    row.running === 'true' ||
+    row.enabled === true ||
+    row.enabled === 'true'
+  )
+}
+
 export function RecordTitle({
   row,
   label,
@@ -295,11 +304,12 @@ export function RecordTitle({
   }
   const tree = openDetail && treeOn
   const typeIcon = typeof row.tableIcon === 'string' && row.tableIcon.trim() ? row.tableIcon : tableIcon
+  const active = isRecordActive(row)
   if (!toolsLive && !tree) {
     const emoji = recordPreviewEmoji(row)
     const mascotRow = Boolean(recordPreviewMascot(row)) || row.tablePath === AGENTS_COLLECTION_PATH
     return (
-      <span className="fsdb-title-host" onMouseEnter={armTools}>
+      <span className="fsdb-title-host" data-record-active={active ? '' : undefined} onMouseEnter={armTools}>
         {!mascotRow && emoji ? (
           <span className="fsdb-record-emoji">{emoji}</span>
         ) : (typeIcon && typeIcon !== tableIcon) || mascotRow ? (
@@ -316,6 +326,7 @@ export function RecordTitle({
     <>
       <span
         className={`fsdb-title-host${tree && kidCount > 0 ? ' has-tree-count' : ''}`}
+        data-record-active={active ? '' : undefined}
         style={tree ? { paddingLeft: depth * 16 } : undefined}
         onMouseEnter={armTools}
       >

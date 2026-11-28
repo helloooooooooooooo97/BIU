@@ -3262,7 +3262,7 @@ body {
 .shell-search-hit-icon.is-enabled,
 .shell-search-hit.is-active .shell-search-hit-icon.is-enabled,
 .shell-search-hit:hover .shell-search-hit-icon.is-enabled {
-  color: var(--biu-color-ink-green);
+  color: var(--biu-color-emphasis);
 }
 
 .shell-search-hit-title {

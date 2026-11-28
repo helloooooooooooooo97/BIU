@@ -485,7 +485,7 @@ const CSS = `
 .fsdb-page .fsdb-table-record-icon{position:relative;flex:none;display:inline-flex;align-items:center}
 .fsdb-page .fsdb-record-mark,.fsdb-page .fsdb-record-mark svg,.fsdb-page .fsdb-title-host>svg,.fsdb-page .fsdb-table-record-icon svg{color:var(--biu-color-icon)}
 .fsdb-page .fsdb-record-mark .sidebar-mascot,.fsdb-page .fsdb-record-mark .sidebar-mascot svg,.fsdb-page .fsdb-table-record-icon .sidebar-mascot,.fsdb-page .fsdb-table-record-icon .sidebar-mascot svg{color:unset}
-.fsdb-page .fsdb-title-host:has([data-plugin-enabled]) .fsdb-record-mark,.fsdb-page .fsdb-title-host:has([data-plugin-enabled]) .fsdb-record-mark svg,.fsdb-page .fsdb-title-host:has([data-plugin-enabled]) .fsdb-table-record-icon svg{color:var(--biu-color-ink-green)}
+.fsdb-page .fsdb-title-host:is([data-record-active],:has([data-plugin-enabled])) .fsdb-record-mark,.fsdb-page .fsdb-title-host:is([data-record-active],:has([data-plugin-enabled])) .fsdb-record-mark svg,.fsdb-page .fsdb-title-host:is([data-record-active],:has([data-plugin-enabled])) .fsdb-table-record-icon svg{color:var(--biu-color-emphasis)}
 .fsdb-page .fsdb-table-emoji-btn{display:inline-flex;align-items:center;justify-content:center;margin:0;border:0;padding:0;background:transparent;color:var(--biu-color-icon);font:inherit;line-height:1;cursor:pointer}
 .fsdb-page .tasks-table.is-wrap .fsdb-title-text{white-space:normal}
 .fsdb-page .tasks-title-aside{position:relative;display:inline-flex;align-items:center;gap:2px;pointer-events:none}
@@ -894,6 +894,7 @@ const CSS = `
 .fsdb-detail-icon-slot > *{pointer-events:auto}
 .fsdb-detail-title-icon{display:inline-flex;align-items:center;justify-content:center;width:78px;height:78px;margin:0;border:0;border-radius:18px;padding:0;background:transparent;color:var(--biu-color-icon);font-size:64px;line-height:1;overflow:visible}
 .fsdb-detail-title-icon svg{width:78px;height:78px;color:var(--biu-color-icon)}
+.fsdb-detail-title-icon[data-record-active],.fsdb-page .fsdb-detail-title-icon[data-record-active],.fsdb-page .fsdb-detail-title-icon[data-record-active] .fsdb-record-mark,.fsdb-page .fsdb-detail-title-icon[data-record-active] svg,.fsdb-detail-title-icon[data-record-active] svg{color:var(--biu-color-emphasis)}
 button.fsdb-detail-title-icon{cursor:pointer}
 button.fsdb-detail-title-icon:hover{background:color-mix(in srgb,var(--biu-color-bg-hover) 80%,transparent);color:var(--biu-color-icon-active)}
 .fsdb-detail-title-icon .fsdb-record-emoji{display:flex;align-items:center;justify-content:center;width:100%;height:100%;font-size:58px;line-height:1}
@@ -1167,7 +1168,7 @@ a.fsdb-person.is-link:hover .fsdb-person-name,button.fsdb-person.is-link:hover .
 .fsdb-share-scope{display:inline-flex;align-items:center;gap:4px;flex:none;border-radius:999px;background:var(--biu-color-bg-hover);padding:4px 8px;color:var(--biu-color-text-muted);font-size:var(--biu-font-size-2);font-weight:var(--biu-font-weight-bold)}
 .fsdb-share-scope.is-workspace{background:color-mix(in srgb,var(--biu-color-ink-green) 16%,transparent);color:var(--biu-color-ink-green)}
 .fsdb-share-scope.is-shared{background:var(--biu-color-emphasis-muted);color:var(--biu-color-emphasis)}
-.fsdb-share-scope.is-external{background:color-mix(in srgb,var(--biu-color-warning,#d9730d) 16%,transparent);color:var(--biu-color-warning,#d9730d)}
+.fsdb-share-scope.is-external{background:color-mix(in srgb,var(--biu-color-ink-orange) 16%,transparent);color:var(--biu-color-ink-orange)}
 .fsdb-scope-detail{position:relative;display:inline-flex}
 .fsdb-scope-tag{--biu-tag:var(--biu-color-ink-gray);display:inline-flex;align-items:center;gap:var(--biu-space-1);height:var(--biu-space-5);border:0;border-radius:var(--biu-radius-sm);background:color-mix(in srgb,var(--biu-tag) 22%,transparent);padding:0 var(--biu-pad-chip-x);color:var(--biu-tag);font:inherit;font-size:var(--biu-chat-chip-font-size,var(--biu-font-size-3));font-weight:var(--biu-font-weight-medium);line-height:var(--biu-space-5);white-space:nowrap;cursor:pointer}
 span.fsdb-scope-tag{cursor:default}
@@ -1177,7 +1178,7 @@ span.fsdb-scope-tag{cursor:default}
 .fsdb-scope-tag.is-personal,.fsdb-scope-pill.is-personal,.fsdb-scope-tag.is-read,.fsdb-scope-pill.is-read{--biu-tag:var(--biu-color-ink-gray)}
 .fsdb-scope-tag.is-workspace,.fsdb-scope-pill.is-workspace,.fsdb-page .tasks-table td .fsdb-scope-tag.is-workspace,.fsdb-page .tasks-table td .fsdb-scope-pill.is-workspace,.fsdb-page .fsdb-proprow-v .fsdb-scope-tag.is-workspace,.fsdb-page .fsdb-proprow-v .fsdb-scope-pill.is-workspace{--biu-tag:var(--biu-color-ink-green)}
 .fsdb-scope-tag.is-shared,.fsdb-scope-pill.is-shared,.fsdb-page .tasks-table td .fsdb-scope-tag.is-shared,.fsdb-page .tasks-table td .fsdb-scope-pill.is-shared,.fsdb-page .fsdb-proprow-v .fsdb-scope-tag.is-shared,.fsdb-page .fsdb-proprow-v .fsdb-scope-pill.is-shared{--biu-tag:var(--biu-color-ink-blue)}
-.fsdb-scope-tag.is-external,.fsdb-scope-pill.is-external,.fsdb-page .tasks-table td .fsdb-scope-tag.is-external,.fsdb-page .tasks-table td .fsdb-scope-pill.is-external,.fsdb-page .fsdb-proprow-v .fsdb-scope-tag.is-external,.fsdb-page .fsdb-proprow-v .fsdb-scope-pill.is-external{--biu-tag:var(--biu-color-warning,#d9730d)}
+.fsdb-scope-tag.is-external,.fsdb-scope-pill.is-external,.fsdb-page .tasks-table td .fsdb-scope-tag.is-external,.fsdb-page .tasks-table td .fsdb-scope-pill.is-external,.fsdb-page .fsdb-proprow-v .fsdb-scope-tag.is-external,.fsdb-page .fsdb-proprow-v .fsdb-scope-pill.is-external{--biu-tag:var(--biu-color-ink-orange)}
 .fsdb-scope-tag.is-manage,.fsdb-scope-pill.is-manage,.fsdb-page .tasks-table td .fsdb-scope-tag.is-manage,.fsdb-page .tasks-table td .fsdb-scope-pill.is-manage,.fsdb-page .fsdb-proprow-v .fsdb-scope-tag.is-manage,.fsdb-page .fsdb-proprow-v .fsdb-scope-pill.is-manage{--biu-tag:var(--biu-color-ink-purple)}
 .fsdb-scope-tag.is-edit,.fsdb-scope-pill.is-edit,.fsdb-page .tasks-table td .fsdb-scope-tag.is-edit,.fsdb-page .tasks-table td .fsdb-scope-pill.is-edit,.fsdb-page .fsdb-proprow-v .fsdb-scope-tag.is-edit,.fsdb-page .fsdb-proprow-v .fsdb-scope-pill.is-edit{--biu-tag:var(--biu-color-ink-green)}
 .fsdb-scope-tag.is-comment,.fsdb-scope-pill.is-comment,.fsdb-page .tasks-table td .fsdb-scope-tag.is-comment,.fsdb-page .tasks-table td .fsdb-scope-pill.is-comment,.fsdb-page .fsdb-proprow-v .fsdb-scope-tag.is-comment,.fsdb-page .fsdb-proprow-v .fsdb-scope-pill.is-comment{--biu-tag:var(--biu-color-ink-blue)}

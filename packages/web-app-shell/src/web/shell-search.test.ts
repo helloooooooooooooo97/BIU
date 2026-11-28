@@ -99,7 +99,7 @@ test('plugin search hits turn the icon green when enabled', () => {
   assert.match(src, /shell-search-hit-icon\$\{[^}]*is-enabled/)
   assert.doesNotMatch(src, /plugin-enabled-dot/)
   const css = readFileSync(resolve(import.meta.dirname, '../../../../web/style.css'), 'utf8')
-  assert.match(css, /\.shell-search-hit-icon\.is-enabled[^}]*color:\s*var\(--biu-color-ink-green\)/)
+  assert.match(css, /\.shell-search-hit-icon\.is-enabled[^}]*color:\s*var\(--biu-color-emphasis\)/)
 })
 
 test('session task page plugin hits render tags left of actions', () => {

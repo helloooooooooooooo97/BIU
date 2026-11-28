@@ -59,6 +59,8 @@ export {
   TAG_TONE_ORANGE,
   TAG_TONE_GREEN,
   TAG_TONE_RED,
+  TAG_TONE_PURPLE,
+  TAG_TONE_GRAY,
   ensureTagChipStyle,
 } from './tag-chip.tsx'
 export {
