@@ -406,21 +406,51 @@ test('notices stays personal-only while mcp supports standard 3-state sharing', 
   assert.equal(auth.authorize(actor(bob.id), 'resource:update', mcpRec).allowed, true)
 })
 
-test('agents clamp non-owner sharing to read-only viewer role', () => {
+test('agents support viewer/editor/manager tiers gated by workspace permission policy and external share switches', () => {
   const { store, auth, workspace, ada, bob, actor } = setup()
   const asAda = <T>(op: () => T) => runWithAccount(ada.id, () => runWithRequestWorkspace(workspace.id, op))
   const agentRec = { type: 'record' as const, workspaceId: workspace.id, collection: '/agents', recordId: 'ag-1' }
 
   auth.attach(actor(ada.id), agentRec, { accessMode: 'private' })
-  // Even if caller requests editor role via shareWithEmail or members mode, /agents clamps to viewer
-  asAda(() => store.shareWithEmail(ada.id, '/agents', 'ag-1', bob.email, 'editor', 'internal'))
+
+  // 1. Default policy: viewer (read/fork) & editor (rename/config update, no manage/chat) allowed; manager blocked by default
+  asAda(() => store.shareWithEmail(ada.id, '/agents', 'ag-1', bob.email, 'viewer', 'internal'))
   assert.equal(auth.authorize(actor(bob.id), 'resource:read', agentRec).allowed, true)
   assert.equal(auth.authorize(actor(bob.id), 'resource:update', agentRec).allowed, false)
-  assert.equal(auth.authorize(actor(bob.id), 'resource:delete', agentRec).allowed, false)
-  assert.equal(auth.authorize(actor(ada.id), 'resource:update', agentRec).allowed, true)
+  assert.equal(auth.authorize(actor(bob.id), 'resource:manage-permissions', agentRec).allowed, false)
 
-  asAda(() => store.setRecordAccessMode(ada.id, '/agents', 'ag-1', 'members', 'editor'))
-  const decision = auth.authorize(actor(bob.id), 'resource:read', agentRec)
-  assert.equal(decision.allowed, true)
-  assert.equal(decision.effectiveRole, 'viewer')
+  asAda(() => store.shareWithEmail(ada.id, '/agents', 'ag-1', bob.email, 'editor', 'internal'))
+  assert.equal(auth.authorize(actor(bob.id), 'resource:update', agentRec).allowed, true)
+  assert.equal(auth.authorize(actor(bob.id), 'resource:manage-permissions', agentRec).allowed, false)
+  assert.equal(auth.authorize(actor(ada.id), 'resource:manage-permissions', agentRec).allowed, true)
+
+  assert.throws(
+    () => asAda(() => store.shareWithEmail(ada.id, '/agents', 'ag-1', bob.email, 'manager', 'internal')),
+    /未开启「允许将代理分享为可管理」/,
+  )
+
+  // 2. Enabling workspace allowAgentManagerShare unlocks manager tier for internal collaborators
+  asAda(() => store.updateWorkspacePermissions(ada.id, workspace.id, { allowAgentManagerShare: true }))
+  asAda(() => store.shareWithEmail(ada.id, '/agents', 'ag-1', bob.email, 'manager', 'internal'))
+  const mgrDecision = auth.authorize(actor(bob.id), 'resource:manage-permissions', agentRec)
+  assert.equal(mgrDecision.allowed, true)
+  assert.equal(mgrDecision.effectiveRole, 'manager')
+
+  // Turning allowAgentManagerShare back off immediately clamps existing manager grants down to editor
+  asAda(() => store.updateWorkspacePermissions(ada.id, workspace.id, { allowAgentManagerShare: false }))
+  assert.equal(auth.authorize(actor(bob.id), 'resource:manage-permissions', agentRec).allowed, false)
+  assert.equal(auth.authorize(actor(bob.id), 'resource:update', agentRec).allowed, true)
+
+  // Turning off allowEditShare clamps down to viewer
+  asAda(() => store.updateWorkspacePermissions(ada.id, workspace.id, { collections: { '/agents': { allowEditShare: false } } }))
+  assert.equal(auth.authorize(actor(bob.id), 'resource:update', agentRec).allowed, false)
+  assert.equal(auth.authorize(actor(bob.id), 'resource:read', agentRec).allowed, true)
+
+  // 3. Disabling external share blocks guest invites & external collaborators
+  asAda(() => store.updateWorkspacePermissions(ada.id, workspace.id, { allowExternalShare: false }))
+  assert.equal(store.isExternalShareAllowed(workspace.id, '/pages'), false)
+  assert.throws(
+    () => asAda(() => store.createGuestInvite(ada.id, '/agents', 'ag-1', 'viewer')),
+    /已关闭该数据类型的外部分享/,
+  )
 })

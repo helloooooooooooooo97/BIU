@@ -1292,7 +1292,7 @@ export function apply(ctx: Context) {
     const record = await ctx.sessions.get(id)
     return record && ctx.sessions.inWorkspace(id) ? record : null
   }
-  const canWriteSession = (id: string) => {
+  const checkSessionAction = (id: string, action: 'resource:update' | 'resource:manage-permissions') => {
     const account = getAccountPort(ctx) as
       | (ReturnType<typeof getAccountPort> & {
           authorization?: {
@@ -1308,13 +1308,15 @@ export function apply(ctx: Context) {
     const auth = account?.authorization
     const actor = auth?.currentActor?.()
     if (!auth?.authorize || !actor) return true
-    return auth.authorize(actor, 'resource:update', {
+    return auth.authorize(actor, action, {
       type: 'record',
       workspaceId: actor.workspaceId,
       collection: '/agents',
       recordId: id,
     }).allowed
   }
+  const canWriteSession = (id: string) => checkSessionAction(id, 'resource:update')
+  const canManageSession = (id: string) => checkSessionAction(id, 'resource:manage-permissions')
   const requireWritableSession = async (id: string, route: { send: (status: number, body: unknown) => void }) => {
     const record = await visibleSession(id)
     if (!record) {
@@ -1322,7 +1324,19 @@ export function apply(ctx: Context) {
       return null
     }
     if (!canWriteSession(id)) {
-      route.send(403, { error: '只读会话仅可查看聊天记录，无法操作或修改配置' })
+      route.send(403, { error: '需要「可编辑」或更高权限才能修改代理名称与配置' })
+      return null
+    }
+    return record
+  }
+  const requireManageableSession = async (id: string, route: { send: (status: number, body: unknown) => void }) => {
+    const record = await visibleSession(id)
+    if (!record) {
+      route.send(404, { error: 'unknown session' })
+      return null
+    }
+    if (!canManageSession(id)) {
+      route.send(403, { error: '需要「可管理」权限才能直接与该代理对话或操作；可点击 Fork 复制为自己的代理' })
       return null
     }
     return record
@@ -1717,7 +1731,7 @@ export function apply(ctx: Context) {
   })
   ctx.http.route('DELETE', '/api/agents/:id', async (route) => {
     const id = route.params.id
-    const record = await requireWritableSession(id, route)
+    const record = await requireManageableSession(id, route)
     if (!record) return
     const db = databaseOf(ctx)
     if (db?.tags.isDeleted('/agents', id)) return route.send(404, { error: 'unknown session' })
@@ -1741,7 +1755,7 @@ export function apply(ctx: Context) {
       images?: Array<{ name?: string; mime?: string; url?: string }>
       liveContext?: unknown
     }
-    if (!(await requireWritableSession(route.params.id, route))) {
+    if (!(await requireManageableSession(route.params.id, route))) {
       return
     }
     const agent = await ctx.agents.create(route.params.id)
@@ -1806,7 +1820,7 @@ export function apply(ctx: Context) {
   })
   ctx.http.route('POST', '/api/agents/:id/inbox/drop', async (route) => {
     const id = route.params.id
-    if (!(await requireWritableSession(id, route))) return
+    if (!(await requireManageableSession(id, route))) return
     await ctx.agents.create(id)
     const payload = ((await route.json().catch(() => null)) ?? {}) as { id?: string }
     const itemId = typeof payload.id === 'string' ? payload.id : ''
@@ -1817,7 +1831,7 @@ export function apply(ctx: Context) {
   })
   ctx.http.route('POST', '/api/agents/:id/inbox/patch', async (route) => {
     const id = route.params.id
-    if (!(await requireWritableSession(id, route))) return
+    if (!(await requireManageableSession(id, route))) return
     await ctx.agents.create(id)
     const payload = ((await route.json().catch(() => null)) ?? {}) as { id?: string; text?: string }
     const itemId = typeof payload.id === 'string' ? payload.id : ''
@@ -1869,7 +1883,7 @@ export function apply(ctx: Context) {
   })
   ctx.http.route('POST', '/api/chat', async (route) => {
     const payload = (await route.json()) as { messages?: ChatMessage[]; sessionId?: string; text?: string }
-    if (payload?.sessionId && !(await requireWritableSession(payload.sessionId, route))) {
+    if (payload?.sessionId && !(await requireManageableSession(payload.sessionId, route))) {
       return
     }
     const messages = Array.isArray(payload?.messages)

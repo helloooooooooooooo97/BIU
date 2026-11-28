@@ -214,6 +214,7 @@ export function SharePanel({
   const [share, setShare] = useState<ShareInfo | null>(null)
   const [inheritedShare, setInheritedShare] = useState<InheritedShareInfo | null>(null)
   const [publicInheritance, setPublicInheritance] = useState<ShareInheritanceMeta | null>(null)
+  const [allowExternalShare, setAllowExternalShare] = useState(true)
   const [publicInheritBusy, setPublicInheritBusy] = useState(false)
   const [inheritedCopied, setInheritedCopied] = useState(false)
   const [viewPublicStats, setViewPublicStats] = useState<{ matchedCount: number; publicCount: number } | null>(null)
@@ -227,8 +228,9 @@ export function SharePanel({
   }, [localOnly, tab])
 
   async function refreshPublicShare() {
-    const data = await fetchRecordShare<SharePayload>(target.collection, target.recordId, { fresh: true })
+    const data = await fetchRecordShare<SharePayload & { allowExternalShare?: boolean }>(target.collection, target.recordId, { fresh: true })
     applyPayload(data)
+    setAllowExternalShare(data.allowExternalShare !== false)
     setInheritedShare(data.inheritedShare ?? null)
     setPublicInheritance(data.inheritance ?? null)
     setViewPublicStats(data.viewPublicStats ?? null)
@@ -237,9 +239,10 @@ export function SharePanel({
   useEffect(() => {
     if (tab !== 'public') return
     let gone = false
-    void fetchRecordShare<SharePayload>(target.collection, target.recordId, { fresh: true }).then((data) => {
+    void fetchRecordShare<SharePayload & { allowExternalShare?: boolean }>(target.collection, target.recordId, { fresh: true }).then((data) => {
       if (gone) return
       applyPayload(data)
+      setAllowExternalShare(data.allowExternalShare !== false)
       setInheritedShare(data.inheritedShare ?? null)
       setPublicInheritance(data.inheritance ?? null)
       setViewPublicStats(data.viewPublicStats ?? null)
@@ -490,17 +493,19 @@ export function SharePanel({
                     {localOnly ? '局域网链接' : inheritedShare ? '本条独立公开链接' : '公开链接'}
                   </p>
                   <p className="fsdb-share-empty-copy">
-                    {localOnly
-                      ? '仅在本机服务运行且处于同一局域网时可访问'
-                      : inheritedShare
-                        ? '可单独为本条生成独立链接与密码（不影响上级继承）'
-                        : '获得链接的人可以查看'}
+                    {!localOnly && !allowExternalShare
+                      ? '当前空间已在「设置 → 工作区 → 权限」中关闭该数据类型的公开分享'
+                      : localOnly
+                        ? '仅在本机服务运行且处于同一局域网时可访问'
+                        : inheritedShare
+                          ? '可单独为本条生成独立链接与密码（不影响上级继承）'
+                          : '获得链接的人可以查看'}
                   </p>
                 </span>
                 <button
                   type="button"
                   className="fsdb-share-publish"
-                  disabled={busy}
+                  disabled={busy || (!localOnly && !allowExternalShare)}
                   data-testid="fsdb-share-enable"
                   onClick={() => void copyShare()}
                 >

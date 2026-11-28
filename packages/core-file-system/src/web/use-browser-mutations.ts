@@ -28,7 +28,7 @@ import {
   type GroupBucket,
 } from './fields.ts'
 import { parseFieldValue } from './fsdb-cells.tsx'
-import { ENABLE_PAGE_BLOCK_PLUGIN_EVENT } from './fsdb-events.ts'
+import { ENABLE_PAGE_BLOCK_PLUGIN_EVENT, OPEN_SESSION_EVENT } from './fsdb-events.ts'
 import { seedGroupRecord } from './group-create.ts'
 import { rememberInspectorWorkingView, showRecordInInspector } from './inspector-db-route.ts'
 import type { KeyedSerialQueue, PendingFieldPatchTracker } from './record-write-queue.ts'
@@ -187,7 +187,7 @@ export function createBrowserMutations(opts: BrowserMutationsOptions) {
         typeof document === 'undefined'
           ? ''
           : String(document.querySelector('[data-testid="brand-corner-mascot"]')?.getAttribute('data-session-id') ?? '').trim()
-      await readJson('/api/db/action', {
+      const actionRes = await readJson<{ result?: { sessionId?: string }; sessionId?: string }>('/api/db/action', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
@@ -202,6 +202,12 @@ export function createBrowserMutations(opts: BrowserMutationsOptions) {
       announceListChange()
       quietUntil.current = 0
       await reload({ force: true })
+      if (action.id === 'fork') {
+        const forkedSessionId = String(actionRes?.result?.sessionId ?? actionRes?.sessionId ?? '').trim()
+        if (forkedSessionId) {
+          window.dispatchEvent(new CustomEvent(OPEN_SESSION_EVENT, { detail: { sessionId: forkedSessionId } }))
+        }
+      }
     } catch (err) {
       setDlg({ kind: 'alert', title: `${action.label}失败`, body: String(err) })
       quietUntil.current = 0

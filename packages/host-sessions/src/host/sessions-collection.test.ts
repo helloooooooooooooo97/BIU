@@ -75,14 +75,18 @@ test('sessionsCollection maps summaries and writes title/tag without exposing sh
     ['delete', 's1'],
   ])
   const actionIds = (spec.actions ?? []).map((item) => item.id)
-  assert.deepEqual(actionIds, ['chat', 'rename', 'send', 'inspect', 'query', 'progress', 'compact', 'clear', 'retrieve', 'status'])
+  assert.deepEqual(actionIds, ['chat', 'fork', 'rename', 'send', 'inspect', 'query', 'progress', 'compact', 'clear', 'retrieve', 'status'])
   assert.equal(spec.actions?.find((item) => item.id === 'chat')?.for, 'user')
+  assert.equal(spec.actions?.find((item) => item.id === 'chat')?.requiredAction, 'resource:read')
   assert.deepEqual(spec.actions?.find((item) => item.id === 'chat')?.placement, ['row', 'detail'])
+  assert.equal(spec.actions?.find((item) => item.id === 'fork')?.for, 'both')
+  assert.equal(spec.actions?.find((item) => item.id === 'fork')?.requiredAction, 'resource:read')
+  assert.deepEqual(spec.actions?.find((item) => item.id === 'fork')?.placement, ['row', 'detail'])
   assert.equal(spec.actions?.find((item) => item.id === 'rename')?.for, 'both')
   assert.deepEqual(spec.actions?.find((item) => item.id === 'rename')?.placement, ['row', 'detail'])
   assert.equal(spec.actions?.find((item) => item.id === 'send')?.for, 'agent')
   assert.deepEqual(spec.actions?.find((item) => item.id === 'send')?.placement, [])
-  assert.equal(spec.actions?.find((item) => item.id === 'send')?.requiredAction, 'resource:update')
+  assert.equal(spec.actions?.find((item) => item.id === 'send')?.requiredAction, 'resource:manage-permissions')
   assert.equal(spec.actions?.find((item) => item.id === 'progress')?.for, 'agent')
   assert.deepEqual(spec.actions?.find((item) => item.id === 'progress')?.placement, [])
   assert.equal(spec.actions?.find((item) => item.id === 'compact')?.for, 'agent')
@@ -244,7 +248,7 @@ test('send action dispatches message to another agent with sender and supports s
   })
   const send = spec.actions?.find((item) => item.id === 'send')
   assert.ok(send)
-  assert.equal(send.requiredAction, 'resource:update')
+  assert.equal(send.requiredAction, 'resource:manage-permissions')
 
   const syncRes = (await runWithSession('caller-1', () =>
     send.run!('target-2', { id: 'target-2' }, { text: '帮我查一下日志' }),
@@ -286,5 +290,31 @@ test('send action dispatches message to another agent with sender and supports s
     async () => runWithSession('caller-1', () => send.run!('caller-1', { id: 'caller-1' }, { text: 'ping' })),
     /cannot send message to self/,
   )
+})
+
+test('fork action clones an agent and only requires resource:read permission', async () => {
+  const forked: string[] = []
+  const spec = sessionsCollection({
+    listSummaries: async () => [],
+    rename: async () => undefined,
+    patchConfig: async () => undefined,
+    delete: async () => true,
+    fork: async (id) => {
+      forked.push(id)
+      return { id: `${id}-copy`, config: { title: '代理的副本' } }
+    },
+  })
+  const fork = spec.actions?.find((item) => item.id === 'fork')
+  assert.ok(fork)
+  assert.equal(fork.requiredAction, 'resource:read')
+  assert.deepEqual(fork.placement, ['row', 'detail'])
+  const res = (await fork.run!('s1', { id: 's1' }, {})) as {
+    ok: boolean
+    sessionId: string
+    parentId: string
+    title?: string
+  }
+  assert.deepEqual(res, { ok: true, sessionId: 's1-copy', parentId: 's1', title: '代理的副本' })
+  assert.deepEqual(forked, ['s1'])
 })
 

@@ -61,6 +61,7 @@ import {
   ShellSettingsConnections,
   ShellSettingsMembers,
   ShellSettingsMcp,
+  ShellSettingsPermissions,
   ShellSettingsSecurity,
   ShellSettingsShortcuts,
   ShellSettingsWorkspace,
@@ -1078,6 +1079,7 @@ function Shell(props: SlotProps) {
                       { key: 'workspace', label: '空间', Icon: CircleStackIcon },
                       { key: 'members', label: '成员', Icon: UserGroupIcon },
                       { key: 'mcp', label: 'MCP', Icon: LinkIcon },
+                      { key: 'permissions', label: '权限', Icon: LockClosedIcon },
                     ].filter((item) => item.key !== 'members' || workspaceLocation === 'cloud'),
                   },
                   {
@@ -1125,6 +1127,7 @@ function Shell(props: SlotProps) {
                   {settingsTab === 'members' && workspaceLocation === 'cloud' ? <ShellSettingsMembers /> : null}
                   {settingsTab === 'style' ? <ShellSettingsAppearance /> : null}
                   {settingsTab === 'mcp' ? <ShellSettingsMcp onLeave={() => setSettingsOpen(false)} /> : null}
+                  {settingsTab === 'permissions' ? <ShellSettingsPermissions /> : null}
                   {settingsTab === 'shortcuts' ? <ShellSettingsShortcuts /> : null}
                 </div>
               </div>

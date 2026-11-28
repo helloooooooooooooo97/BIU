@@ -2547,6 +2547,347 @@ export function ShellSettingsMembers() {
   return <ShellSettingsCollab panel="members" />
 }
 
+type WorkspaceCollectionPermission = {
+  allowExternalShare: boolean
+  allowEditShare?: boolean
+  allowManageShare?: boolean
+}
+
+type WorkspacePermissionPolicyState = {
+  allowExternalShare: boolean
+  allowAgentManagerShare: boolean
+  collections: Record<string, WorkspaceCollectionPermission>
+}
+
+const WORKSPACE_PERMISSION_COLLECTIONS: ReadonlyArray<{
+  path: string
+  label: string
+  desc: string
+}> = [
+  { path: '/pages', label: '页面', desc: '文档、知识库与页面内容' },
+  { path: '/agents', label: '代理', desc: '可查看=看记录+Fork · 可编辑=改名与配置（不对话） · 可管理=接管执行（高风险）' },
+  { path: '/tags', label: '标签', desc: '全局标签定义、属性结构与三视图模板' },
+  { path: '/plugins', label: '插件', desc: '扩展插件与能力包' },
+  { path: '/skills', label: '技能', desc: '可复用的提示与技能定义' },
+  { path: '/mcp', label: 'MCP', desc: '外部工具服务连接配置' },
+]
+
+function defaultClientWorkspacePolicy(): WorkspacePermissionPolicyState {
+  return {
+    allowExternalShare: true,
+    allowAgentManagerShare: false,
+    collections: {
+      '/pages': { allowExternalShare: true },
+      '/agents': { allowExternalShare: true, allowEditShare: true, allowManageShare: false },
+      '/tags': { allowExternalShare: true },
+      '/plugins': { allowExternalShare: true },
+      '/skills': { allowExternalShare: true },
+      '/mcp': { allowExternalShare: true },
+    },
+  }
+}
+
+export function ShellSettingsPermissions() {
+  const [token] = useState(() => readStorageString(ACCOUNT_KEY) ?? '')
+  const [workspaceId, setWorkspaceId] = useState('')
+  const [workspaceName, setWorkspaceName] = useState('')
+  const [workspaceLocation, setWorkspaceLocation] = useState<'device' | 'cloud'>('device')
+  const [policy, setPolicy] = useState<WorkspacePermissionPolicyState>(() => defaultClientWorkspacePolicy())
+  const [canEdit, setCanEdit] = useState(false)
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [confirmAgentManager, setConfirmAgentManager] = useState(false)
+  const [notice, setNotice] = useState('')
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    if (!token) {
+      setLoading(false)
+      return
+    }
+    let gone = false
+    setLoading(true)
+    void (async () => {
+      try {
+        const [listed, active] = await Promise.all([
+          accountFetch(token, '/api/account/workspaces') as Promise<{ workspaces?: CollabWorkspace[] }>,
+          accountFetch(token, '/api/account/active') as Promise<{ workspaceId?: string }>,
+        ])
+        if (gone) return
+        const rows = listed.workspaces ?? []
+        const activeId = String(active.workspaceId || rows[0]?.id || '')
+        const current = rows.find((item) => item.id === activeId)
+        setWorkspaceId(activeId)
+        setWorkspaceName(current?.name ?? '')
+        const loc = current?.location === 'cloud' ? 'cloud' : 'device'
+        setWorkspaceLocation(loc)
+        if (!activeId) {
+          setLoading(false)
+          return
+        }
+        const res = (await accountFetch(token, `/api/account/workspaces/${encodeURIComponent(activeId)}/permissions`)) as {
+          policy?: WorkspacePermissionPolicyState
+          canEdit?: boolean
+        }
+        if (gone) return
+        if (res.policy) setPolicy(res.policy)
+        setCanEdit(Boolean(res.canEdit))
+        setError('')
+      } catch (err) {
+        if (!gone) setError(err instanceof Error ? err.message : '读取空间权限设置失败')
+      } finally {
+        if (!gone) setLoading(false)
+      }
+    })()
+    return () => {
+      gone = true
+    }
+  }, [token])
+
+  const patchPolicy = async (patch: Record<string, unknown>, message = '已保存权限设置') => {
+    if (!token || !workspaceId || !canEdit || saving) return
+    setSaving(true)
+    setError('')
+    setNotice('')
+    try {
+      const res = (await accountFetch(token, `/api/account/workspaces/${encodeURIComponent(workspaceId)}/permissions`, {
+        method: 'PATCH',
+        body: JSON.stringify(patch),
+      })) as { policy?: WorkspacePermissionPolicyState; canEdit?: boolean }
+      if (res.policy) setPolicy(res.policy)
+      setNotice(message)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '更新权限设置失败')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const toggleAgentManager = (next: boolean) => {
+    if (!canEdit || saving) return
+    if (next) {
+      setConfirmAgentManager(true)
+      return
+    }
+    void patchPolicy(
+      { allowAgentManagerShare: false, collections: { '/agents': { allowManageShare: false } } },
+      '已关闭「允许将代理分享为可管理」',
+    )
+  }
+
+  const renderSwitch = (
+    checked: boolean,
+    label: string,
+    testId: string,
+    onToggle: (next: boolean) => void,
+    disabled = false,
+  ) => (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      aria-label={label}
+      data-testid={testId}
+      disabled={disabled || !canEdit || saving}
+      onClick={() => onToggle(!checked)}
+      style={{
+        width: 34,
+        height: 20,
+        borderRadius: 999,
+        padding: 2,
+        border: '1px solid var(--biu-color-border)',
+        background: checked ? 'var(--biu-color-emphasis)' : 'var(--biu-color-surface-raised)',
+        display: 'inline-flex',
+        alignItems: 'center',
+        justifyContent: checked ? 'flex-end' : 'flex-start',
+        cursor: disabled || !canEdit || saving ? 'not-allowed' : 'pointer',
+        opacity: disabled || !canEdit ? 0.5 : 1,
+        flexShrink: 0,
+      }}
+    >
+      <span
+        style={{
+          width: 14,
+          height: 14,
+          borderRadius: '50%',
+          background: '#fff',
+          display: 'block',
+        }}
+      />
+    </button>
+  )
+
+  return (
+    <section className="settings-account" data-testid="settings-permissions-pane">
+      <h3 className="settings-account-title">空间权限</h3>
+      <p className="settings-muted" style={{ marginTop: -4, marginBottom: 14 }}>
+        统一控制当前工作区{workspaceName ? `「${workspaceName}」` : ''}内各类型数据的外部分享与高风险权限开关。
+        {workspaceLocation === 'device' ? '（本机空间无多成员协作，以下策略在云端空间生效。）' : ''}
+      </p>
+      {error ? <p className="settings-error" role="alert">{error}</p> : null}
+      {notice ? <p className="settings-muted" style={{ color: 'var(--biu-color-emphasis)' }}>{notice}</p> : null}
+      {!loading && !canEdit && workspaceLocation === 'cloud' ? (
+        <p className="settings-muted" style={{ marginBottom: 12 }}>
+          当前账号非空间管理员，仅可查看以下权限配置。
+        </p>
+      ) : null}
+
+      <div className="settings-card" style={{ display: 'flex', flexDirection: 'column', gap: 14, marginBottom: 16 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+          <div>
+            <div style={{ fontWeight: 600, fontSize: 13 }}>允许分享到外部（全局总开关）</div>
+            <div className="settings-muted" style={{ fontSize: 12, marginTop: 2 }}>
+              关闭后，空间内所有数据类型均不可创建公开外链、邀请外部协作者或生成临时访客链接。
+            </div>
+          </div>
+          {renderSwitch(
+            policy.allowExternalShare,
+            '允许分享到外部',
+            'settings-perm-allow-external',
+            (next) => void patchPolicy({ allowExternalShare: next }, next ? '已开启空间外部分享' : '已关闭空间外部分享'),
+          )}
+        </div>
+
+        <div
+          style={{
+            borderTop: '1px solid var(--biu-color-border)',
+            paddingTop: 12,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: 12,
+          }}
+        >
+          <div>
+            <div style={{ fontWeight: 600, fontSize: 13, display: 'flex', alignItems: 'center', gap: 6 }}>
+              <span>允许将代理分享为「可管理」</span>
+              <span
+                style={{
+                  fontSize: 11,
+                  padding: '1px 6px',
+                  borderRadius: 999,
+                  background: 'color-mix(in srgb, var(--biu-color-danger, #ef4444) 15%, transparent)',
+                  color: 'var(--biu-color-danger, #ef4444)',
+                  fontWeight: 500,
+                }}
+              >
+                高风险
+              </span>
+            </div>
+            <div className="settings-muted" style={{ fontSize: 12, marginTop: 2 }}>
+              默认关闭。开启后，成员可将代理的「可管理」权限授予内部协作者；对方可直接对话并触发该代理在工作区中执行工具。
+            </div>
+          </div>
+          {renderSwitch(
+            policy.allowAgentManagerShare,
+            '允许将代理分享为可管理',
+            'settings-perm-allow-agent-manager',
+            toggleAgentManager,
+          )}
+        </div>
+      </div>
+
+      <h4 style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>按数据类型详细权限</h4>
+      <div className="settings-card" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+        {WORKSPACE_PERMISSION_COLLECTIONS.map((item, idx) => {
+          const colPolicy = policy.collections[item.path] ?? { allowExternalShare: true }
+          const externalEffective = policy.allowExternalShare && colPolicy.allowExternalShare
+          return (
+            <div
+              key={item.path}
+              data-testid={`settings-perm-col-${item.path.replace(/^\//, '')}`}
+              style={{
+                borderTop: idx === 0 ? 'none' : '1px solid var(--biu-color-border)',
+                paddingTop: idx === 0 ? 0 : 12,
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 8,
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+                <div>
+                  <div style={{ fontWeight: 600, fontSize: 13 }}>{item.label}</div>
+                  <div className="settings-muted" style={{ fontSize: 12, marginTop: 2 }}>{item.desc}</div>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span className="settings-muted" style={{ fontSize: 12 }}>外部分享</span>
+                  {renderSwitch(
+                    externalEffective,
+                    `${item.label}允许外部分享`,
+                    `settings-perm-ext-${item.path.replace(/^\//, '')}`,
+                    (next) =>
+                      void patchPolicy(
+                        { collections: { [item.path]: { allowExternalShare: next } } },
+                        `已${next ? '开启' : '关闭'}「${item.label}」外部分享`,
+                      ),
+                    !policy.allowExternalShare,
+                  )}
+                </div>
+              </div>
+              {item.path === '/agents' ? (
+                <div
+                  style={{
+                    display: 'flex',
+                    flexWrap: 'wrap',
+                    gap: 16,
+                    paddingLeft: 12,
+                    borderLeft: '2px solid var(--biu-color-border)',
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span className="settings-muted" style={{ fontSize: 12 }}>允许分享为可编辑（改名/改配置，不可对话）</span>
+                    {renderSwitch(
+                      colPolicy.allowEditShare !== false,
+                      '代理允许分享为可编辑',
+                      'settings-perm-agents-edit',
+                      (next) =>
+                        void patchPolicy(
+                          { collections: { '/agents': { allowEditShare: next } } },
+                          `已${next ? '开启' : '关闭'}代理可编辑分享`,
+                        ),
+                    )}
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span className="settings-muted" style={{ fontSize: 12 }}>允许分享为可管理（接管执行 · 高风险）</span>
+                    {renderSwitch(
+                      policy.allowAgentManagerShare,
+                      '代理允许分享为可管理',
+                      'settings-perm-agents-manage',
+                      toggleAgentManager,
+                    )}
+                  </div>
+                </div>
+              ) : null}
+            </div>
+          )
+        })}
+      </div>
+
+      {confirmAgentManager ? (
+        <ConfirmDialog
+          title="开启代理「可管理」分享权限？"
+          message={
+            <>
+              这是一个<strong>高风险操作</strong>：开启后，空间成员可以将代理的「可管理」权限授予其他成员。获得可管理权限的人可以直接向该代理发消息并触发工具执行，相当于直接在该代理的工作区和权限范围内干活。确定开启吗？
+            </>
+          }
+          confirmLabel="确认开启（高风险）"
+          danger
+          testId="settings-perm-agent-manager-confirm"
+          onCancel={() => setConfirmAgentManager(false)}
+          onConfirm={() => {
+            setConfirmAgentManager(false)
+            void patchPolicy(
+              { allowAgentManagerShare: true, collections: { '/agents': { allowManageShare: true } } },
+              '已开启「允许将代理分享为可管理」（高风险）',
+            )
+          }}
+        />
+      ) : null}
+    </section>
+  )
+}
+
 export function ShellSettingsAppearance() {
   useSyncExternalStore(subscribeTheme, getThemeVersion, () => 0)
   const theme = readTheme()

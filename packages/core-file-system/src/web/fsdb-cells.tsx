@@ -58,6 +58,16 @@ export function actionIcon(id: string, opts?: { fallback?: boolean; className?: 
   if (id === 'deliver') return <PaperAirplaneIcon aria-hidden className={cls} />
   if (id === 'add-child' || id === 'add-subpage' || id === 'add-subtask') return <PlusIcon aria-hidden className={cls} />
   if (id === 'chat' || id === 'report' || id === 'progress') return <ChatBubbleLeftRightIcon aria-hidden className={cls} />
+  if (id === 'fork') {
+    return (
+      <svg aria-hidden viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className={cls}>
+        <circle cx="5" cy="3.5" r="1.5" />
+        <circle cx="11" cy="3.5" r="1.5" />
+        <circle cx="8" cy="12.5" r="1.5" />
+        <path d="M5 5v2a3 3 0 0 0 3 3m3-5v2a3 3 0 0 1-3 3v1" />
+      </svg>
+    )
+  }
   if (opts?.fallback === false) return null
   return <BoltIcon aria-hidden className={cls} />
 }

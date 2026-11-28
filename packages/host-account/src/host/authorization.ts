@@ -132,7 +132,6 @@ const POLICY_SELECT = `workspace_id, collection, record_id, owner_account_id, ac
 export const ROLE_RANK: Record<ResourceRole, number> = { viewer: 1, commenter: 2, editor: 3, manager: 4, owner: 5 }
 
 const PERSONAL_ONLY_COLLECTIONS = new Set(['/notices'])
-const READ_ONLY_SHARE_COLLECTIONS = new Set(['/agents'])
 
 export const ROLE_CAPABILITIES: Record<ResourceRole, ReadonlySet<Capability>> = {
   viewer: new Set<Capability>(['read']),
@@ -196,6 +195,7 @@ function normalizeStoredAccessMode(raw: string | null | undefined): AccessMode {
 export class AuthorizationService {
   private memberViewMatcher?: MemberViewMatcher
   private memberViewLockChecker?: MemberViewLockChecker
+  private agentShareCap?: (workspaceId: string) => 'viewer' | 'editor' | 'manager'
   private memberViewMatchCache = new Map<string, boolean>()
   private scans = new Map<string, CollectionScan>()
   private invalidators = new Set<() => void>()
@@ -204,6 +204,13 @@ export class AuthorizationService {
     private db: DatabaseSync,
     private activeWorkspaceFor: (accountId: string) => string | null,
   ) {}
+
+  /** 绑定工作区级代理最高分享角色上限（默认 editor；关闭可编辑时为 viewer；显式开启高危可管理时为 manager）。 */
+  setWorkspaceAgentShareCap(fn: (workspaceId: string) => 'viewer' | 'editor' | 'manager') {
+    this.agentShareCap = fn
+    this.scans.clear()
+    this.notifyInvalidators()
+  }
 
   /** 授权表变了之后通知列表清掉可见行缓存。grant / revoke 都走这里。 */
   onInvalidate(fn: () => void) {
@@ -559,11 +566,15 @@ export class AuthorizationService {
     const resolved = this.effectiveRole(actor.accountId, resource, new Set(), 0)
     if (resolved && 'reason' in resolved) return resolved
     if (!resolved) return { allowed: false, reason: 'PRIVATE_RESOURCE' }
-    // /agents 分享出去一律仅只读看聊天记录：非创建者强制收敛为 viewer，禁止操作或修改原代理
-    const readOnlyShared = READ_ONLY_SHARE_COLLECTIONS.has(resource.collection) && resolved.source !== 'ownership'
-    const effective = membership === 'viewer' || memberKind === 'guest' || readOnlyShared
-      ? { effectiveRole: 'viewer' as const, source: resolved.source }
-      : { effectiveRole: resolved.effectiveRole, source: resolved.source }
+    let cappedRole: ResourceRole =
+      membership === 'viewer' || memberKind === 'guest' ? 'viewer' : resolved.effectiveRole
+    // /agents 支持多级权限（可查看/可编辑/可管理），但非创建者受空间策略上限约束；外部协作者绝不允许接管执行（最高 editor）
+    if (resource.collection === '/agents' && resolved.source !== 'ownership') {
+      const cap = this.agentShareCap ? this.agentShareCap(resource.workspaceId) : 'editor'
+      const limit: ResourceRole = memberKind !== 'member' && cap === 'manager' ? 'editor' : cap
+      cappedRole = minRole([cappedRole, limit]) ?? 'viewer'
+    }
+    const effective = { effectiveRole: cappedRole, source: resolved.source }
     if (!roleCoversAction(effective.effectiveRole, action)) {
       return { allowed: false, reason: 'INSUFFICIENT_PERMISSION' }
     }

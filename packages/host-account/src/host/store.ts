@@ -4,6 +4,17 @@ import { currentAccountId, currentRequestWorkspaceId, superAdminEmail, superAdmi
 import { getRuntimePolicy } from '@biu/host-plugin-loader/runtime'
 import { AuthorizationService, ROLE_RANK, type ResourcePolicyInput, type ResourceRole, type WorkspaceRole } from './authorization.ts'
 import {
+  PERMISSION_MANAGED_COLLECTIONS,
+  agentShareRoleCeiling,
+  defaultWorkspacePermissionPolicy,
+  isPolicyAgentEditShareAllowed,
+  isPolicyAgentManagerShareAllowed,
+  isPolicyExternalShareAllowed,
+  normalizeWorkspacePermissionPolicy,
+  type CollectionPermissionSetting,
+  type WorkspacePermissionPolicy,
+} from './workspace-permissions.ts'
+import {
   CollabError,
   DEFAULT_LOCK_MS,
   DEFAULT_MCP_CREDENTIAL_MS,
@@ -50,11 +61,15 @@ export {
   type RecordHead,
   type SyncOp,
   type Workspace,
+  PERMISSION_MANAGED_COLLECTIONS,
+  type CollectionPermissionSetting,
+  type WorkspacePermissionPolicy,
 }
 
 export class CollabStore {
   readonly authorization: AuthorizationService
   private lastActiveAccount: { accountId: string; at: number } | null = null
+  private permissionPolicyCache = new Map<string, WorkspacePermissionPolicy>()
   private db: DatabaseSync
 
   constructor(rawDb: DatabaseSync) {
@@ -68,6 +83,116 @@ export class CollabStore {
     this.ensureBuiltInRoot()
     this.ensureActivityTable()
     this.ensureWorkspaceAvatarColumn()
+    this.ensureWorkspacePermissionPolicyTable()
+    this.authorization.setWorkspaceAgentShareCap((wsId) => agentShareRoleCeiling(this.workspacePermissionPolicy(wsId)))
+  }
+
+  private ensureWorkspacePermissionPolicyTable() {
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS workspace_permission_policies (
+        workspace_id TEXT PRIMARY KEY,
+        policy_json TEXT NOT NULL,
+        updated_at INTEGER NOT NULL
+      )
+    `)
+  }
+
+  workspacePermissionPolicy(workspaceId: string): WorkspacePermissionPolicy {
+    const wsId = String(workspaceId ?? '').trim()
+    if (!wsId) return defaultWorkspacePermissionPolicy()
+    const cached = this.permissionPolicyCache.get(wsId)
+    if (cached) return cached
+    const row = this.db
+      .prepare('SELECT policy_json FROM workspace_permission_policies WHERE workspace_id = ?')
+      .get(wsId) as { policy_json?: string } | undefined
+    let parsed: unknown = null
+    if (row?.policy_json) {
+      try {
+        parsed = JSON.parse(row.policy_json)
+      } catch {
+        parsed = null
+      }
+    }
+    const policy = normalizeWorkspacePermissionPolicy(parsed)
+    this.permissionPolicyCache.set(wsId, policy)
+    return policy
+  }
+
+  isExternalShareAllowed(workspaceId: string, collection: string): boolean {
+    if (!workspaceId) return true
+    return isPolicyExternalShareAllowed(this.workspacePermissionPolicy(workspaceId), collection)
+  }
+
+  private assertExternalShareAllowed(workspaceId: string, collection: string) {
+    if (!this.isExternalShareAllowed(workspaceId, collection)) {
+      throw new CollabError('当前空间已关闭该数据类型的外部分享，请联系管理员在设置 → 工作区 → 权限中开启', 403)
+    }
+  }
+
+  private validateAgentShareRole(
+    workspaceId: string,
+    role: ResourceRole,
+    collaboratorKind: 'internal' | 'external' | 'guest',
+  ): ResourceRole {
+    if (collaboratorKind === 'guest') return 'viewer'
+    const policy = this.workspacePermissionPolicy(workspaceId)
+    if (role === 'manager') {
+      if (collaboratorKind !== 'internal') {
+        throw new CollabError('外部协作者不支持授予代理的「可管理」权限', 403)
+      }
+      if (!isPolicyAgentManagerShareAllowed(policy)) {
+        throw new CollabError('当前空间未开启「允许将代理分享为可管理」，请先在设置 → 工作区 → 权限中开启', 403)
+      }
+      return 'manager'
+    }
+    if (role === 'editor') {
+      if (!isPolicyAgentEditShareAllowed(policy)) {
+        throw new CollabError('当前空间已关闭代理的「可编辑」分享权限', 403)
+      }
+      return 'editor'
+    }
+    return 'viewer'
+  }
+
+  getWorkspacePermissions(actorId: string, workspaceId: string) {
+    this.requireMember(actorId, workspaceId)
+    const role = this.memberRole(actorId, workspaceId)
+    return {
+      workspaceId,
+      policy: this.workspacePermissionPolicy(workspaceId),
+      canEdit: role === 'owner' || role === 'admin',
+    }
+  }
+
+  updateWorkspacePermissions(actorId: string, workspaceId: string, patch: unknown, now = Date.now()) {
+    this.requireMember(actorId, workspaceId)
+    const role = this.memberRole(actorId, workspaceId)
+    if (role !== 'owner' && role !== 'admin') {
+      throw new CollabError('只有空间所有者或管理员可以修改空间权限设置', 403)
+    }
+    const prev = this.workspacePermissionPolicy(workspaceId)
+    const next = normalizeWorkspacePermissionPolicy(patch, prev)
+    this.db
+      .prepare(
+        `INSERT INTO workspace_permission_policies (workspace_id, policy_json, updated_at)
+         VALUES (?, ?, ?)
+         ON CONFLICT(workspace_id) DO UPDATE SET policy_json = excluded.policy_json, updated_at = excluded.updated_at`,
+      )
+      .run(workspaceId, JSON.stringify(next), now)
+    this.permissionPolicyCache.set(workspaceId, next)
+    this.authorization.invalidate(workspaceId, '/agents')
+    this.recordActivity({
+      workspaceId,
+      actorId,
+      category: 'access',
+      action: 'workspace.permissions.update',
+      detail: `更新空间权限设置（外部分享：${next.allowExternalShare ? '开' : '关'}，代理可管理：${next.allowAgentManagerShare ? '开' : '关'}）`,
+    })
+    return {
+      workspaceId,
+      policy: next,
+      canEdit: true,
+    }
   }
 
   private ensureWorkspaceAvatarColumn() {
@@ -1003,6 +1128,7 @@ export class CollabStore {
     if (targetResource.collection === '/comments' || targetResource.collection === '/editor-blocks') {
       throw new CollabError('该衍生数据类型权限跟随源记录，不支持独立分享', 400)
     }
+    this.assertExternalShareAllowed(workspaceId, targetResource.collection)
     const effectiveResourceRole: 'viewer' | 'editor' =
       targetResource.collection === '/agents' ? 'viewer' : resourceRole
     const decision = this.authorization.authorize(
@@ -1357,7 +1483,8 @@ export class CollabStore {
     if (target.collection === '/comments' || target.collection === '/editor-blocks') {
       throw new CollabError('该衍生数据类型权限跟随源记录，不支持独立分享', 400)
     }
-    const effectiveRole: ResourceRole = target.collection === '/agents' ? 'viewer' : role
+    const effectiveRole: ResourceRole =
+      target.collection === '/agents' ? this.validateAgentShareRole(workspaceId, role, 'internal') : role
     const owned = this.db
       .prepare('SELECT 1 AS ok FROM resource_policies WHERE workspace_id = ? AND collection = ? AND record_id = ?')
       .get(workspaceId, target.collection, target.recordId) as { ok: number } | undefined
@@ -2353,6 +2480,14 @@ export class CollabStore {
       })),
       currentAccountId: actorId,
       roleChain: this.authorization.roleChain(actorId, resource),
+      policy: (() => {
+        const wsPolicy = this.workspacePermissionPolicy(workspaceId)
+        return {
+          allowExternalShare: isPolicyExternalShareAllowed(wsPolicy, target.collection),
+          allowAgentEditShare: isPolicyAgentEditShareAllowed(wsPolicy),
+          allowAgentManagerShare: isPolicyAgentManagerShareAllowed(wsPolicy),
+        }
+      })(),
       inheritance: {
         mode: inheritance.mode,
         hasParent: inheritance.hasParent,
@@ -2473,8 +2608,15 @@ export class CollabStore {
     if (target.collection === '/comments' || target.collection === '/editor-blocks') {
       throw new CollabError('该衍生数据类型权限跟随源记录，不支持独立分享', 400)
     }
-    const effectiveDefaultRole: 'viewer' | 'editor' | undefined =
-      target.collection === '/agents' && accessMode === 'members' ? 'viewer' : memberDefaultRole
+    let effectiveDefaultRole: 'viewer' | 'editor' | undefined = memberDefaultRole
+    if (target.collection === '/agents' && accessMode === 'members') {
+      if (memberDefaultRole === 'editor') {
+        const validated = this.validateAgentShareRole(workspaceId, 'editor', 'internal')
+        effectiveDefaultRole = validated === 'editor' ? 'editor' : 'viewer'
+      } else {
+        effectiveDefaultRole = 'viewer'
+      }
+    }
     if (target.collection === '/views' && accessMode === 'private') {
       this.assertWorkspaceViewRemainsForPrivatize(workspaceId, target.recordId)
     }
@@ -2522,7 +2664,11 @@ export class CollabStore {
     if (target.collection === '/comments' || target.collection === '/editor-blocks') {
       throw new CollabError('该衍生数据类型权限跟随源记录，不支持独立分享', 400)
     }
-    const effectiveRole: ResourceRole = target.collection === '/agents' ? 'viewer' : role
+    if (collaboratorKind === 'external') {
+      this.assertExternalShareAllowed(workspaceId, target.collection)
+    }
+    const effectiveRole: ResourceRole =
+      target.collection === '/agents' ? this.validateAgentShareRole(workspaceId, role, collaboratorKind) : role
     const owned = this.db
       .prepare('SELECT 1 AS ok FROM resource_policies WHERE workspace_id = ? AND collection = ? AND record_id = ?')
       .get(workspaceId, target.collection, target.recordId) as { ok: number } | undefined
@@ -2989,9 +3135,17 @@ export class CollabStore {
       throw new CollabError('该衍生数据类型权限跟随源记录，不支持独立分享', 400)
     }
     if (normalizedCol === '/agents') {
-      if (input.mode === 'grant') input = { ...input, role: 'viewer' }
+      if (input.mode === 'grant' && input.role) {
+        const validated = this.validateAgentShareRole(workspaceId, input.role, 'internal')
+        input = { ...input, role: validated }
+      }
       if (input.mode === 'access_mode' && input.accessMode === 'members') {
-        input = { ...input, memberDefaultRole: 'viewer' }
+        if (input.memberDefaultRole === 'editor') {
+          const validated = this.validateAgentShareRole(workspaceId, 'editor', 'internal')
+          input = { ...input, memberDefaultRole: validated === 'editor' ? 'editor' : 'viewer' }
+        } else {
+          input = { ...input, memberDefaultRole: 'viewer' }
+        }
       }
     }
     const uniqueIds = [...new Set((input.recordIds ?? []).map((item) => String(item ?? '').trim()).filter(Boolean))]

@@ -402,6 +402,7 @@ export class SessionsService extends Service {
           },
           suggestTitle: (id, messages) => this.suggestTitleFromUserMessages(id, messages),
           sendMessage: (id, text, opts) => this.sendMessage(id, text, opts),
+          fork: (id) => this.fork(id),
         }),
       )
     })
@@ -472,6 +473,8 @@ export class SessionsService extends Service {
     this.clearPersistTimer(record.id)
     await this.persist(record)
     this.attachSession(record.id)
+    const database = this.ctx.get('database') as { touchActor?: (collection: string, recordId: string) => Promise<void> } | undefined
+    await database?.touchActor?.('/agents', record.id)
     return record
   }
 
@@ -829,6 +832,8 @@ export class SessionsService extends Service {
     }
     await this.persist(record)
     this.attachSession(record.id)
+    const database = this.ctx.get('database') as { touchActor?: (collection: string, recordId: string) => Promise<void> } | undefined
+    await database?.touchActor?.('/agents', record.id)
     return record
   }
 
