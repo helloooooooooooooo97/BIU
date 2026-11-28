@@ -6,6 +6,7 @@ import {
   BellIcon,
   BellSlashIcon,
   BookmarkIcon,
+  ChatBubbleBottomCenterTextIcon,
   ChatBubbleLeftRightIcon,
   CheckIcon,
   ChevronRightIcon,
@@ -16,7 +17,6 @@ import {
   MagnifyingGlassIcon,
   MegaphoneIcon,
   PlusIcon,
-  RectangleStackIcon,
   TrashIcon,
   UserGroupIcon,
   XMarkIcon,
@@ -301,7 +301,7 @@ export const ChannelSidebarSections = memo(function ChannelSidebarSections({
                 ) : ch.kind === 'announcement' ? (
                   <MegaphoneIcon className="size-3.5 opacity-80" aria-hidden />
                 ) : ch.kind === 'forum' ? (
-                  <RectangleStackIcon className="size-3.5 opacity-80" aria-hidden />
+                  <ChatBubbleLeftRightIcon className="size-3.5 opacity-80" aria-hidden />
                 ) : (ch.shareScope ?? computeChannelShareScope(ch.accessMode, ch.memberCount, ch.kind)) === 'personal' ? (
                   <LockClosedIcon className="size-3.5 opacity-80" aria-hidden />
                 ) : (ch.shareScope ?? computeChannelShareScope(ch.accessMode, ch.memberCount, ch.kind)) === 'shared' ? (
@@ -423,7 +423,7 @@ export const ChannelSidebarSections = memo(function ChannelSidebarSections({
                     ) : ch.kind === 'announcement' ? (
                       <MegaphoneIcon className="size-3.5" data-testid={`sidebar-channel-icon-announcement-${ch.id}`} />
                     ) : ch.kind === 'forum' ? (
-                      <RectangleStackIcon className="size-3.5" data-testid={`sidebar-channel-icon-forum-${ch.id}`} />
+                      <ChatBubbleLeftRightIcon className="size-3.5" data-testid={`sidebar-channel-icon-forum-${ch.id}`} />
                     ) : (ch.shareScope ?? computeChannelShareScope(ch.accessMode, ch.memberCount, ch.kind)) === 'personal' ? (
                       <LockClosedIcon className="size-3.5" data-testid={`sidebar-channel-icon-personal-${ch.id}`} />
                     ) : (ch.shareScope ?? computeChannelShareScope(ch.accessMode, ch.memberCount, ch.kind)) === 'shared' ? (
@@ -627,7 +627,7 @@ export const ChannelSidebarSections = memo(function ChannelSidebarSections({
                                   >
                                     <span className="grid size-6 shrink-0 place-items-center" aria-hidden>
                                       <span className="sidebar-rail-icon">
-                                        <ChatBubbleLeftRightIcon className="size-3.5 opacity-75" />
+                                        <ChatBubbleBottomCenterTextIcon className="size-3.5 opacity-75" />
                                       </span>
                                     </span>
                                     <span className="sidebar-label min-w-0 flex-1 truncate text-[13px]">
@@ -1129,7 +1129,7 @@ function CreateChannelDialog({
                   data-testid="create-channel-kind-forum"
                   onClick={() => setChannelKind('forum')}
                 >
-                  <RectangleStackIcon className="size-3.5" />
+                  <ChatBubbleLeftRightIcon className="size-3.5" />
                   <span>论坛</span>
                 </Button>
               </div>

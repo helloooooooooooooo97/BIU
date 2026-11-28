@@ -7,7 +7,6 @@ import {
   LockClosedIcon,
   MagnifyingGlassIcon,
   PlusIcon,
-  RectangleStackIcon,
   TagIcon,
   XMarkIcon,
 } from '@heroicons/react/16/solid'
@@ -483,7 +482,7 @@ export const ChannelForumBoard = memo(function ChannelForumBoard({
       {/* 帖子列表 */}
       {filteredPosts.length === 0 ? (
         <div className="flex flex-col items-center justify-center rounded-[12px] border border-dashed border-(--biu-color-border) py-14 text-center">
-          <RectangleStackIcon className="mb-2 size-7 text-(--biu-color-text-subtle) opacity-70" aria-hidden />
+          <ChatBubbleLeftRightIcon className="mb-2 size-7 text-(--biu-color-text-subtle) opacity-70" aria-hidden />
           <div className="mb-1 text-[14px] font-semibold text-(--biu-color-text)">
             {posts.length === 0 ? `欢迎来到论坛「${channel.name}」` : '没有匹配的帖子'}
           </div>
