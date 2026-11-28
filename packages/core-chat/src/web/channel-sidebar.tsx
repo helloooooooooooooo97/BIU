@@ -1,9 +1,12 @@
 import { memo, useCallback, useEffect, useMemo, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 import {
   BellSlashIcon,
   BookmarkIcon,
+  ChatBubbleLeftRightIcon,
+  ChevronDownIcon,
+  ChevronRightIcon,
   HashtagIcon,
   LockClosedIcon,
   MagnifyingGlassIcon,
@@ -134,12 +137,15 @@ export const ChannelSidebarSections = memo(function ChannelSidebarSections({
   sessionView?: SessionViewService
 }) {
   const navigate = useNavigate()
+  const location = useLocation()
+  const activeThreadId = useMemo(() => new URLSearchParams(location.search).get('thread') || '', [location.search])
   const channels = useChannelStore((s) => s.channels)
   const loaded = useChannelStore((s) => s.loaded)
   const collapsedMap = useSidebarCollapseStore((s) => s.collapsed)
   const toggleSection = useSidebarCollapseStore((s) => s.toggle)
   const { myAccountId, members } = useWorkspaceMembers()
   const [createOpen, setCreateOpen] = useState(false)
+  const [expandedChannels, setExpandedChannels] = useState<Record<string, boolean>>({})
 
   useEffect(() => {
     if (!loaded) void loadChannels()
@@ -184,7 +190,7 @@ export const ChannelSidebarSections = memo(function ChannelSidebarSections({
 
   if (iconRail) {
     return (
-      <div className="mb-1 flex flex-col gap-0.5 border-b border-(--biu-color-border-subtle) pb-1" data-testid="sidebar-channels-rail">
+      <div className="mb-1 flex flex-col gap-0.5 border-b border-(--biu-color-bg-muted) pb-1" data-testid="sidebar-channels-rail">
         <button
           type="button"
           className="chat-session-row w-full border-0 bg-transparent"
@@ -301,96 +307,150 @@ export const ChannelSidebarSections = memo(function ChannelSidebarSections({
             <div className="sidebar-section-rows flex min-w-0 flex-col pt-0.5">
               {channels.map((ch) => {
                 const isDm = ch.kind === 'dm'
-                const active = ch.id === routeChannelId
+                const isChannelActive = ch.id === routeChannelId
+                const active = isChannelActive && !activeThreadId
                 const peerAvatar = isDm
                   ? (ch.peerAccountId ? memberAvatarById.get(ch.peerAccountId) : undefined) || ch.peerAvatar
                   : undefined
                 const peerOnline = isDm && Boolean(ch.peerAccountId && memberOnlineById.has(ch.peerAccountId))
-                const unread = !active ? (ch.unreadCount ?? 0) : 0
-                const mentions = !active ? (ch.mentionCount ?? 0) : 0
+                const unread = !isChannelActive ? (ch.unreadCount ?? 0) : 0
+                const mentions = !isChannelActive ? (ch.mentionCount ?? 0) : 0
                 const hasUnreadEmphasis = unread > 0 && !ch.muted
                 const timeLabel = formatSidebarTime(ch.lastMessageAt || ch.updatedAt)
+                const subThreads = ch.threads ?? []
+                const hasThreads = subThreads.length > 0
+                const threadExpanded =
+                  hasThreads &&
+                  (expandedChannels[ch.id] ?? (isChannelActive && Boolean(activeThreadId)))
                 return (
-                  <SidebarRow
-                    key={ch.id}
-                    active={active}
-                    main={
-                      <Link
-                        to={channelAppPath(ch.id)}
-                        className={SIDEBAR_ROW_MAIN_CLASS}
-                        title={ch.topic ? `${ch.name} · ${ch.topic}` : ch.name}
-                        onClick={() => popoverClose?.()}
-                      >
-                        <span className="relative grid size-5 shrink-0 place-items-center opacity-85" aria-hidden>
-                          {isDm ? (
-                            peerAvatar ? (
-                              <img src={peerAvatar} alt="" className="size-4.5 rounded-full object-cover" />
-                            ) : (
-                              <AiAvatar seed={ch.peerAccountId || ch.id} size={18} className="rounded-full" />
-                            )
-                          ) : ch.accessMode === 'private' ? (
-                            <LockClosedIcon className="size-3.5" />
-                          ) : (
-                            <HashtagIcon className="size-3.5" />
-                          )}
-                          {peerOnline ? (
-                            <span
-                              className="absolute right-0 bottom-0 size-2 rounded-full bg-emerald-500 ring-[1.5px] ring-(--biu-color-bg-subtle)"
-                              data-testid={`sidebar-dm-online-${ch.id}`}
-                              aria-hidden
-                            />
+                  <div key={ch.id} className="min-w-0">
+                    <SidebarRow
+                      active={active}
+                      main={
+                        <div className="flex min-w-0 flex-1 items-center">
+                          {hasThreads ? (
+                            <button
+                              type="button"
+                              className="mr-0.5 grid size-4 shrink-0 cursor-pointer place-items-center rounded border-0 bg-transparent p-0 text-(--biu-color-text-subtle) hover:bg-(--biu-color-bg-hover) hover:text-(--biu-color-text)"
+                              aria-label={threadExpanded ? `收起 ${ch.name} 的子话题` : `展开 ${ch.name} 的子话题`}
+                              aria-expanded={threadExpanded}
+                              data-testid={`sidebar-channel-threads-toggle-${ch.id}`}
+                              onClick={(e) => {
+                                e.preventDefault()
+                                e.stopPropagation()
+                                setExpandedChannels((prev) => ({ ...prev, [ch.id]: !threadExpanded }))
+                              }}
+                            >
+                              {threadExpanded ? (
+                                <ChevronDownIcon className="size-3" />
+                              ) : (
+                                <ChevronRightIcon className="size-3" />
+                              )}
+                            </button>
                           ) : null}
-                        </span>
-                        <span
-                          className={`sidebar-label min-w-0 flex-1 truncate ${hasUnreadEmphasis ? 'font-semibold text-(--biu-color-text)' : 'font-medium'}`}
-                        >
-                          {ch.name}
-                        </span>
-                        {ch.pinned ? (
-                          <BookmarkIcon
-                            className="size-3 shrink-0 text-(--biu-color-text-subtle)"
-                            title="已置顶"
-                            data-testid={`sidebar-channel-pinned-${ch.id}`}
-                          />
-                        ) : null}
-                        {ch.muted ? (
-                          <BellSlashIcon
-                            className="size-3 shrink-0 text-(--biu-color-text-subtle)"
-                            title="已免打扰"
-                            data-testid={`sidebar-channel-muted-${ch.id}`}
-                          />
-                        ) : null}
-                        {mentions > 0 ? (
-                          <span
-                            className="shrink-0 rounded-full bg-rose-500 px-1.5 py-0.5 text-[10px] leading-none font-semibold text-white tabular-nums"
-                            data-testid={`sidebar-channel-unread-${ch.id}`}
-                            title={`${mentions} 条 @提及`}
+                          <Link
+                            to={channelAppPath(ch.id)}
+                            className={SIDEBAR_ROW_MAIN_CLASS}
+                            title={ch.topic ? `${ch.name} · ${ch.topic}` : ch.name}
+                            onClick={() => popoverClose?.()}
                           >
-                            @{mentions > 99 ? '99+' : mentions}
-                          </span>
-                        ) : unread > 0 && !ch.muted ? (
-                          <span
-                            className="shrink-0 rounded-full bg-(--biu-color-bg-muted) px-1.5 py-0.5 text-[10px] leading-none font-semibold text-(--biu-color-text) tabular-nums"
-                            data-testid={`sidebar-channel-unread-${ch.id}`}
-                            title={`${unread} 条未读消息`}
-                          >
-                            {unread > 99 ? '99+' : unread}
-                          </span>
-                        ) : null}
-                        {timeLabel ? (
-                          <span
-                            className="shrink-0 text-[11px] leading-none text-(--biu-color-text-subtle) tabular-nums"
-                            data-testid="sidebar-channel-time"
-                          >
-                            {timeLabel}
-                          </span>
-                        ) : null}
-                      </Link>
-                    }
-                    onDelete={() => void handleDeleteChannel(ch.id)}
-                    deleteLabel={isDm ? `删除聊天 ${ch.name}` : `解散聊天 ${ch.name}`}
-                    deleteIcon={<TrashGlyph className="size-4 shrink-0" />}
-                  />
+                            <span className="relative grid size-5 shrink-0 place-items-center opacity-85" aria-hidden>
+                              {isDm ? (
+                                peerAvatar ? (
+                                  <img src={peerAvatar} alt="" className="size-4.5 rounded-full object-cover" />
+                                ) : (
+                                  <AiAvatar seed={ch.peerAccountId || ch.id} size={18} className="rounded-full" />
+                                )
+                              ) : ch.accessMode === 'private' ? (
+                                <LockClosedIcon className="size-3.5" />
+                              ) : (
+                                <HashtagIcon className="size-3.5" />
+                              )}
+                              {peerOnline ? (
+                                <span
+                                  className="absolute right-0 bottom-0 size-2 rounded-full bg-emerald-500 ring-[1.5px] ring-(--biu-color-bg-subtle)"
+                                  data-testid={`sidebar-dm-online-${ch.id}`}
+                                  aria-hidden
+                                />
+                              ) : null}
+                            </span>
+                            <span
+                              className={`sidebar-label min-w-0 flex-1 truncate ${hasUnreadEmphasis ? 'font-semibold text-(--biu-color-text)' : 'font-medium'}`}
+                            >
+                              {ch.name}
+                            </span>
+                            {ch.pinned ? (
+                              <BookmarkIcon
+                                className="size-3 shrink-0 text-(--biu-color-text-subtle)"
+                                title="已置顶"
+                                data-testid={`sidebar-channel-pinned-${ch.id}`}
+                              />
+                            ) : null}
+                            {ch.muted ? (
+                              <BellSlashIcon
+                                className="size-3 shrink-0 text-(--biu-color-text-subtle)"
+                                title="已免打扰"
+                                data-testid={`sidebar-channel-muted-${ch.id}`}
+                              />
+                            ) : null}
+                            {mentions > 0 ? (
+                              <span
+                                className="shrink-0 rounded-full bg-rose-500 px-1.5 py-0.5 text-[10px] leading-none font-semibold text-white tabular-nums"
+                                data-testid={`sidebar-channel-unread-${ch.id}`}
+                                title={`${mentions} 条 @提及`}
+                              >
+                                @{mentions > 99 ? '99+' : mentions}
+                              </span>
+                            ) : unread > 0 && !ch.muted ? (
+                              <span
+                                className="shrink-0 rounded-full bg-(--biu-color-bg-muted) px-1.5 py-0.5 text-[10px] leading-none font-semibold text-(--biu-color-text) tabular-nums"
+                                data-testid={`sidebar-channel-unread-${ch.id}`}
+                                title={`${unread} 条未读消息`}
+                              >
+                                {unread > 99 ? '99+' : unread}
+                              </span>
+                            ) : null}
+                            {timeLabel ? (
+                              <span
+                                className="shrink-0 text-[11px] leading-none text-(--biu-color-text-subtle) tabular-nums"
+                                data-testid="sidebar-channel-time"
+                              >
+                                {timeLabel}
+                              </span>
+                            ) : null}
+                          </Link>
+                        </div>
+                      }
+                      onDelete={() => void handleDeleteChannel(ch.id)}
+                      deleteLabel={isDm ? `删除聊天 ${ch.name}` : `解散聊天 ${ch.name}`}
+                      deleteIcon={<TrashGlyph className="size-4 shrink-0" />}
+                    />
+                    {hasThreads ? (
+                      <SidebarFold open={threadExpanded}>
+                        <div className="flex flex-col gap-0.5 py-0.5 pl-5" data-testid={`sidebar-channel-threads-${ch.id}`}>
+                          {subThreads.map((t) => {
+                            const threadActive = isChannelActive && activeThreadId === t.rootId
+                            return (
+                              <Link
+                                key={t.rootId}
+                                to={`${channelAppPath(ch.id)}?thread=${encodeURIComponent(t.rootId)}`}
+                                data-testid={`sidebar-thread-${t.rootId}`}
+                                className={`chat-session-row !h-7 !min-h-7 !gap-1.5 !px-2 text-[12px] ${threadActive ? 'is-active' : 'text-(--biu-color-text-muted)'}`}
+                                title={`${t.title}（${t.replyCount} 条回复）`}
+                                onClick={() => popoverClose?.()}
+                              >
+                                <ChatBubbleLeftRightIcon className="size-3 shrink-0 opacity-70" aria-hidden />
+                                <span className="min-w-0 flex-1 truncate">{t.title}</span>
+                                <span className="shrink-0 text-[10.5px] text-(--biu-color-text-subtle) tabular-nums">
+                                  {t.replyCount}
+                                </span>
+                              </Link>
+                            )
+                          })}
+                        </div>
+                      </SidebarFold>
+                    ) : null}
+                  </div>
                 )
               })}
             </div>

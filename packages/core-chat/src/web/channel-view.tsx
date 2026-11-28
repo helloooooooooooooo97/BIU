@@ -1,10 +1,9 @@
-import { Fragment, memo, useCallback, useEffect, useMemo, useRef, useState, type DragEvent, type FormEvent } from 'react'
+import { Fragment, memo, useCallback, useEffect, useMemo, useRef, useState, type DragEvent } from 'react'
 import { createPortal } from 'react-dom'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import {
   ArrowDownIcon,
   ArrowRightStartOnRectangleIcon,
-  ArrowUpIcon,
   ArrowUturnLeftIcon,
   BellIcon,
   BellSlashIcon,
@@ -18,6 +17,7 @@ import {
   ClockIcon,
   DocumentIcon,
   DocumentPlusIcon,
+  EllipsisHorizontalIcon,
   EyeIcon,
   FaceSmileIcon,
   HashtagIcon,
@@ -73,7 +73,6 @@ import {
   renameChannel,
   saveChannelContentAsPage,
   searchChannelMessages,
-  sendChannelMessage,
   setActiveChannelId,
   summarizeChannel,
   syncChannelToAgent,
@@ -86,6 +85,8 @@ import {
 } from './channel-store.ts'
 
 const QUICK_REACTION_EMOJIS = ['👍', '👀', '✅', '🎉', '❤️', '😂', '🔥', '🤔'] as const
+const EMPTY_MESSAGES: ChannelMessageView[] = []
+const EMPTY_MEMBERS: ChannelMemberView[] = []
 
 function formatSentAt(ts: number) {
   if (!ts) return ''
@@ -319,31 +320,6 @@ function useLiveWorkspaceAvatars() {
   return { resolveAvatar, isOnline }
 }
 
-function MessageCopyAction({ text }: { text: string }) {
-  const [copied, setCopied] = useState(false)
-  const copy = async () => {
-    if (!text.trim()) return
-    try {
-      await navigator.clipboard.writeText(text)
-      setCopied(true)
-      window.setTimeout(() => setCopied(false), 1400)
-    } catch {
-      /* clipboard may be denied */
-    }
-  }
-  return (
-    <button
-      type="button"
-      className={`chat-assistant-action${copied ? ' is-done' : ''}`}
-      title={copied ? '已复制' : '复制'}
-      aria-label={copied ? '已复制' : '复制消息'}
-      onClick={() => void copy()}
-    >
-      {copied ? <CheckIcon className="size-3.5" /> : <Square2StackIcon className="size-3.5" />}
-    </button>
-  )
-}
-
 export const ChannelStage = memo(function ChannelStage({
   channelId,
   leftHidden,
@@ -365,7 +341,9 @@ export const ChannelStage = memo(function ChannelStage({
 }) {
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
+  const activeThreadRootId = searchParams.get('thread') || null
   const detail = useChannelStore((s) => s.details[channelId])
+  const activeThread = useChannelStore((s) => (activeThreadRootId ? s.threads[activeThreadRootId] : undefined))
   const typingUsersRaw = useChannelStore((s) => s.typingByChannel[channelId])
   const workspaceProfile = useWorkspaceProfile()
   const { resolveAvatar, isOnline } = useLiveWorkspaceAvatars()
@@ -378,6 +356,8 @@ export const ChannelStage = memo(function ChannelStage({
   const [savingEdit, setSavingEdit] = useState(false)
   const [error, setError] = useState('')
   const [membersModalOpen, setMembersModalOpen] = useState(false)
+  const [headerMenuOpen, setHeaderMenuOpen] = useState(false)
+  const [msgMenu, setMsgMenu] = useState<{ msg: ChannelMessageView; top: number; left: number } | null>(null)
   const [pinsModalOpen, setPinsModalOpen] = useState(false)
   const [pinnedMessages, setPinnedMessages] = useState<ChannelMessageView[]>([])
   const [savedModalOpen, setSavedModalOpen] = useState(false)
@@ -389,7 +369,6 @@ export const ChannelStage = memo(function ChannelStage({
   const [searching, setSearching] = useState(false)
   const [highlightedMsgId, setHighlightedMsgId] = useState<string | null>(null)
   const [reactPickerMsgId, setReactPickerMsgId] = useState<string | null>(null)
-  const [activeThreadRootId, setActiveThreadRootId] = useState<string | null>(null)
   const [summaryModal, setSummaryModal] = useState<{
     open: boolean
     loading: boolean
@@ -413,6 +392,7 @@ export const ChannelStage = memo(function ChannelStage({
   const scrollRef = useRef<HTMLDivElement>(null)
   const composerRef = useRef<ChannelComposerHandle>(null)
   const titleInputRef = useRef<HTMLInputElement>(null)
+  const headerMenuRef = useRef<HTMLDivElement>(null)
   const nearBottomRef = useRef(true)
   const prevMsgCountRef = useRef(0)
   const prevLastMsgIdRef = useRef('')
@@ -430,7 +410,8 @@ export const ChannelStage = memo(function ChannelStage({
     setUnreadDividerSeq(null)
     setPendingNewCount(0)
     setEditingMsgId(null)
-    setActiveThreadRootId(null)
+    setHeaderMenuOpen(false)
+    setMsgMenu(null)
     nearBottomRef.current = true
     prevMsgCountRef.current = 0
     prevLastMsgIdRef.current = ''
@@ -438,8 +419,58 @@ export const ChannelStage = memo(function ChannelStage({
     void loadChannelDetail(channelId).finally(() => setLoading(false))
   }, [channelId])
 
-  const messages = detail?.messages ?? []
-  const members = detail?.members ?? []
+  useEffect(() => {
+    if (!activeThreadRootId) return
+    setReplyTo(null)
+    setMsgMenu(null)
+    void loadChannelThread(channelId, activeThreadRootId)
+  }, [channelId, activeThreadRootId])
+
+  useEffect(() => {
+    if (!headerMenuOpen && !msgMenu) return
+    const onDown = (e: MouseEvent) => {
+      const target = e.target as Node | null
+      if (headerMenuOpen && headerMenuRef.current && target && !headerMenuRef.current.contains(target)) {
+        setHeaderMenuOpen(false)
+      }
+      if (msgMenu) {
+        const el = target instanceof Element ? target.closest('[data-testid="channel-msg-more-menu"]') : null
+        if (!el) setMsgMenu(null)
+      }
+    }
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setHeaderMenuOpen(false)
+        setMsgMenu(null)
+      }
+    }
+    document.addEventListener('mousedown', onDown)
+    document.addEventListener('keydown', onKey)
+    return () => {
+      document.removeEventListener('mousedown', onDown)
+      document.removeEventListener('keydown', onKey)
+    }
+  }, [headerMenuOpen, msgMenu])
+
+  const mainMessages = detail?.messages ?? EMPTY_MESSAGES
+  const threadRootMessage = useMemo(() => {
+    if (!activeThreadRootId) return null
+    return activeThread?.root ?? mainMessages.find((m) => m.id === activeThreadRootId) ?? null
+  }, [activeThread?.root, activeThreadRootId, mainMessages])
+  const threadReplies = activeThread?.replies ?? EMPTY_MESSAGES
+  const messages = useMemo(() => {
+    if (!activeThreadRootId) return mainMessages
+    return threadRootMessage ? [threadRootMessage, ...threadReplies] : threadReplies
+  }, [activeThreadRootId, mainMessages, threadReplies, threadRootMessage])
+  const threadCrumbTitle = useMemo(() => {
+    const raw = (threadRootMessage?.text ?? '')
+      .replace(/[#>*`[\]()]/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+    if (!raw) return '讨论串'
+    return raw.length > 26 ? `${raw.slice(0, 26)}…` : raw
+  }, [threadRootMessage?.text])
+  const members = detail?.members ?? EMPTY_MEMBERS
   const activities = detail?.activities ?? []
   const channel = detail?.channel
   const myAccountId = detail?.myAccountId || workspaceProfile.accountId || ''
@@ -528,11 +559,19 @@ export const ChannelStage = memo(function ChannelStage({
 
   const openThread = useCallback(
     (rootMsgId: string) => {
-      setActiveThreadRootId(rootMsgId)
+      const next = new URLSearchParams(searchParams)
+      next.set('thread', rootMsgId)
+      setSearchParams(next)
       void loadChannelThread(channelId, rootMsgId)
     },
-    [channelId],
+    [channelId, searchParams, setSearchParams],
   )
+
+  const closeThread = useCallback(() => {
+    const next = new URLSearchParams(searchParams)
+    next.delete('thread')
+    setSearchParams(next)
+  }, [searchParams, setSearchParams])
 
   const handleSummarize = useCallback(
     (unreadOnly = false) => {
@@ -594,20 +633,20 @@ export const ChannelStage = memo(function ChannelStage({
 
   // 进入频道后捕获一次未读游标用于渲染「以下是新消息」分割线，并上报已读
   useEffect(() => {
-    if (!detail || detail.channel.id !== channelId) return
+    if (!detail || detail.channel.id !== channelId || activeThreadRootId) return
     if (unreadAnchorCapturedRef.current !== channelId) {
       unreadAnchorCapturedRef.current = channelId
       const lastRead = detail.channel.lastReadSeq ?? 0
       const hasUnread =
         (detail.channel.unreadCount ?? 0) > 0 &&
-        messages.some((m) => !m.ephemeralTo && !m.deletedAt && m.seq > lastRead && m.senderId !== myAccountId)
+        mainMessages.some((m) => !m.ephemeralTo && !m.deletedAt && m.seq > lastRead && m.senderId !== myAccountId)
       setUnreadDividerSeq(hasUnread ? lastRead : null)
     }
-    const latestSeq = messages.at(-1)?.seq ?? 0
+    const latestSeq = mainMessages.at(-1)?.seq ?? 0
     if (latestSeq > 0 && nearBottomRef.current && ((detail.channel.unreadCount ?? 0) > 0 || latestSeq > (detail.channel.lastReadSeq ?? 0))) {
       void markChannelRead(channelId, latestSeq)
     }
-  }, [channelId, detail, messages, myAccountId])
+  }, [activeThreadRootId, channelId, detail, mainMessages, myAccountId])
 
   // 智能滚动：仅首次加载、自己在底部或自己刚发消息时滚到底部；往上翻历史时显示「N 条新消息」胶囊
   useEffect(() => {
@@ -624,12 +663,18 @@ export const ChannelStage = memo(function ChannelStage({
     if (!el) return
     if (isInitialLoad || sentByMe || nearBottomRef.current) {
       el.scrollTop = el.scrollHeight
-      setPendingNewCount(0)
-      if (lastMsg?.seq) void markChannelRead(channelId, lastMsg.seq)
+      setPendingNewCount((n) => (n === 0 ? n : 0))
+      if (
+        !activeThreadRootId &&
+        lastMsg?.seq &&
+        ((detail?.channel.unreadCount ?? 0) > 0 || lastMsg.seq > (detail?.channel.lastReadSeq ?? 0))
+      ) {
+        void markChannelRead(channelId, lastMsg.seq)
+      }
     } else if (appendedAtEnd) {
       setPendingNewCount((n) => n + 1)
     }
-  }, [channelId, messages, activities.length, myAccountId])
+  }, [activeThreadRootId, channelId, detail?.channel.lastReadSeq, detail?.channel.unreadCount, messages, activities.length, myAccountId])
 
   const handleLoadOlder = useCallback(async () => {
     if (loadingOlder || !detail?.hasMoreMessages) return
@@ -786,9 +831,9 @@ export const ChannelStage = memo(function ChannelStage({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden" data-testid="channel-stage">
-      {/* 顶部栏：与 1v1 Agent 聊天完全统一的 .chat-view-header */}
+      {/* 顶部栏：与 BIU 数据面包屑一致的扁平头部，支持 聊天 / 讨论串 二级面包屑 */}
       <header className="chat-view-header" data-biu-ignore>
-        <div className="chat-view-header-left">
+        <div className="chat-view-header-left min-w-0">
           {leftHidden ? (
             <button
               type="button"
@@ -800,96 +845,128 @@ export const ChannelStage = memo(function ChannelStage({
               <ChevronDoubleRightIcon className="size-4" />
             </button>
           ) : null}
-          {channel?.topic ? (
-            <div className="chat-view-project" title={channel.topic}>
-              <span className="chat-view-project-name text-[12px] font-normal text-(--biu-color-text-subtle)">
-                {channel.topic}
-              </span>
-            </div>
-          ) : null}
-        </div>
 
-        <div className="chat-view-session-title-wrap gap-1.5">
-          {!isDm && channel ? (
-            <button
-              type="button"
-              className="chat-view-session-title-magic"
-              title="根据聊天内容自动命名"
-              aria-label="根据聊天内容自动命名"
-              data-testid="channel-auto-name"
-              disabled={namingTitle}
-              onMouseDown={(event) => event.preventDefault()}
-              onClick={() => void handleAutoName()}
-            >
-              <SparklesIcon aria-hidden className="size-[14px]" />
-            </button>
-          ) : null}
-          {isDm ? (
-            <span className="relative inline-flex shrink-0">
-              <MemberAvatar avatar={peerAvatar} seed={channel?.peerAccountId || channelId} size={18} />
-              {peerOnline ? (
-                <span
-                  className="absolute -right-0.5 -bottom-0.5 size-2 rounded-full bg-emerald-500 ring-[1.5px] ring-(--biu-color-bg)"
-                  title="在线"
-                  aria-label="在线"
-                />
-              ) : null}
-            </span>
-          ) : channel?.accessMode === 'private' ? (
-            <LockClosedIcon className="size-3.5 shrink-0 text-(--biu-color-icon)" aria-hidden />
-          ) : (
-            <HashtagIcon className="size-3.5 shrink-0 text-(--biu-color-icon)" aria-hidden />
-          )}
-          {!isDm && editingTitle ? (
-            <input
-              ref={titleInputRef}
-              className="chat-view-session-title is-editing pointer-events-auto"
-              value={titleDraft}
-              aria-label="聊天名称"
-              data-testid="channel-title-input"
-              size={Math.max(4, titleDraft.length)}
-              autoFocus
-              onChange={(event) => setTitleDraft(event.target.value)}
-              onBlur={() => void commitTitleEdit()}
-              onKeyDown={(event) => {
-                if (event.key === 'Escape') {
-                  setEditingTitle(false)
-                  return
-                }
-                if (event.key === 'Enter') {
-                  event.preventDefault()
-                  void commitTitleEdit()
-                }
-              }}
-            />
-          ) : (
-            <span
-              className={`truncate text-[14px] font-semibold text-(--biu-color-text)${!isDm && detail?.canManageMembers ? ' pointer-events-auto cursor-text rounded px-1 hover:bg-(--biu-color-bg-hover)' : ''}`}
-              data-testid="channel-title"
-              title={!isDm && detail?.canManageMembers ? '点击重命名' : channel?.name}
-              onClick={() => {
-                if (isDm || !detail?.canManageMembers || !channel) return
-                setTitleDraft(channel.name)
-                setEditingTitle(true)
-              }}
-            >
-              {channel?.name ?? (loading ? '加载中…' : '聊天')}
-            </span>
-          )}
-        </div>
-
-        <div className="chat-view-header-right">
-          <button
-            type="button"
-            className="inline-flex h-[var(--biu-size-control-md)] cursor-pointer items-center gap-1 rounded-[6px] border-0 bg-transparent px-2 text-[12px] font-medium text-(--biu-color-text-muted) transition-colors hover:bg-(--biu-color-bg-hover) hover:text-(--biu-color-text)"
-            title="AI 总结本聊天近期/未读要点"
-            aria-label="总结聊天要点"
-            data-testid="channel-summarize-btn"
-            onClick={() => handleSummarize(false)}
+          <nav
+            className="group/title flex min-w-0 items-center gap-1"
+            aria-label="聊天面包屑"
+            data-testid="channel-breadcrumb"
           >
-            <SparklesIcon className="size-3.5 shrink-0" />
-            <span>总结</span>
-          </button>
+            {activeThreadRootId ? (
+              <>
+                <button
+                  type="button"
+                  data-testid="channel-breadcrumb-parent"
+                  className="inline-flex h-7 max-w-[200px] shrink-0 cursor-pointer items-center gap-1.5 rounded-md border-0 bg-transparent px-1.5 text-[13.5px] font-medium text-(--biu-color-text-muted) transition-colors hover:bg-(--biu-color-bg-hover) hover:text-(--biu-color-text)"
+                  title={`返回 ${channel?.name ?? '聊天'}`}
+                  onClick={closeThread}
+                >
+                  {isDm ? (
+                    <MemberAvatar avatar={peerAvatar} seed={channel?.peerAccountId || channelId} size={16} />
+                  ) : channel?.accessMode === 'private' ? (
+                    <LockClosedIcon className="size-3.5 shrink-0 text-(--biu-color-icon)" aria-hidden />
+                  ) : (
+                    <HashtagIcon className="size-3.5 shrink-0 text-(--biu-color-icon)" aria-hidden />
+                  )}
+                  <span className="truncate">{channel?.name ?? '聊天'}</span>
+                </button>
+                <span className="shrink-0 select-none text-[13px] text-(--biu-color-text-subtle)" aria-hidden>
+                  /
+                </span>
+                <span
+                  className="inline-flex min-w-0 items-center gap-1.5 px-1 text-[13.5px] font-semibold text-(--biu-color-text)"
+                  data-testid="channel-thread-crumb"
+                >
+                  <ChatBubbleLeftRightIcon className="size-3.5 shrink-0 text-(--biu-color-icon)" aria-hidden />
+                  <span className="truncate">{threadCrumbTitle}</span>
+                  <span className="shrink-0 text-[11.5px] font-normal text-(--biu-color-text-subtle) tabular-nums">
+                    {threadReplies.length} 条回复
+                  </span>
+                </span>
+              </>
+            ) : (
+              <>
+                <span className="inline-flex shrink-0 items-center">
+                  {isDm ? (
+                    <span className="relative inline-flex shrink-0">
+                      <MemberAvatar avatar={peerAvatar} seed={channel?.peerAccountId || channelId} size={18} />
+                      {peerOnline ? (
+                        <span
+                          className="absolute -right-0.5 -bottom-0.5 size-2 rounded-full bg-emerald-500 ring-[1.5px] ring-(--biu-color-bg)"
+                          title="在线"
+                          aria-label="在线"
+                        />
+                      ) : null}
+                    </span>
+                  ) : channel?.accessMode === 'private' ? (
+                    <LockClosedIcon className="size-3.5 shrink-0 text-(--biu-color-icon)" aria-hidden />
+                  ) : (
+                    <HashtagIcon className="size-3.5 shrink-0 text-(--biu-color-icon)" aria-hidden />
+                  )}
+                </span>
+                {!isDm && editingTitle ? (
+                  <input
+                    ref={titleInputRef}
+                    className="chat-view-session-title is-editing pointer-events-auto"
+                    value={titleDraft}
+                    aria-label="聊天名称"
+                    data-testid="channel-title-input"
+                    size={Math.max(4, titleDraft.length)}
+                    autoFocus
+                    onChange={(event) => setTitleDraft(event.target.value)}
+                    onBlur={() => void commitTitleEdit()}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Escape') {
+                        setEditingTitle(false)
+                        return
+                      }
+                      if (event.key === 'Enter') {
+                        event.preventDefault()
+                        void commitTitleEdit()
+                      }
+                    }}
+                  />
+                ) : (
+                  <span
+                    className={`truncate text-[14px] font-semibold text-(--biu-color-text)${!isDm && detail?.canManageMembers ? ' cursor-text rounded px-1 hover:bg-(--biu-color-bg-hover)' : ''}`}
+                    data-testid="channel-title"
+                    title={!isDm && detail?.canManageMembers ? '点击重命名' : channel?.name}
+                    onClick={() => {
+                      if (isDm || !detail?.canManageMembers || !channel) return
+                      setTitleDraft(channel.name)
+                      setEditingTitle(true)
+                    }}
+                  >
+                    {channel?.name ?? (loading ? '加载中…' : '聊天')}
+                  </span>
+                )}
+                {!isDm && channel ? (
+                  <button
+                    type="button"
+                    className="inline-flex size-6 shrink-0 cursor-pointer items-center justify-center rounded-md border-0 bg-transparent text-(--biu-color-text-subtle) opacity-0 transition-opacity hover:bg-(--biu-color-bg-hover) hover:text-(--biu-color-text) group-hover/title:opacity-100 focus-visible:opacity-100"
+                    title="根据聊天内容自动命名"
+                    aria-label="根据聊天内容自动命名"
+                    data-testid="channel-auto-name"
+                    disabled={namingTitle}
+                    onMouseDown={(event) => event.preventDefault()}
+                    onClick={() => void handleAutoName()}
+                  >
+                    <SparklesIcon aria-hidden className="size-3.5" />
+                  </button>
+                ) : null}
+                {channel?.topic ? (
+                  <span
+                    className="ml-1 hidden truncate text-[12px] font-normal text-(--biu-color-text-subtle) md:inline"
+                    title={channel.topic}
+                  >
+                    · {channel.topic}
+                  </span>
+                ) : null}
+              </>
+            )}
+          </nav>
+        </div>
+
+        <div className="chat-view-header-right shrink-0">
           <button
             type="button"
             className={`inline-flex h-[var(--biu-size-control-md)] cursor-pointer items-center gap-1 rounded-[6px] border-0 bg-transparent px-2 text-[12px] font-medium transition-colors hover:bg-(--biu-color-bg-hover) hover:text-(--biu-color-text)${searchOpen ? ' bg-(--biu-color-bg-hover) text-(--biu-color-text)' : ' text-(--biu-color-text-muted)'}`}
@@ -902,39 +979,80 @@ export const ChannelStage = memo(function ChannelStage({
           </button>
           <button
             type="button"
-            className="inline-flex h-[var(--biu-size-control-md)] cursor-pointer items-center gap-1 rounded-[6px] border-0 bg-transparent px-2 text-[12px] font-medium text-(--biu-color-text-muted) transition-colors hover:bg-(--biu-color-bg-hover) hover:text-(--biu-color-text)"
-            title="查看置顶消息"
-            aria-label="查看置顶消息"
-            data-testid="channel-pins-btn"
-            onClick={openPinsModal}
-          >
-            <BookmarkIcon className="size-3.5 shrink-0" />
-            {messages.filter((m) => m.pinnedAt && !m.deletedAt).length > 0 ? (
-              <span className="tabular-nums">{messages.filter((m) => m.pinnedAt && !m.deletedAt).length}</span>
-            ) : null}
-          </button>
-          <button
-            type="button"
-            className="inline-flex h-[var(--biu-size-control-md)] cursor-pointer items-center gap-1 rounded-[6px] border-0 bg-transparent px-2 text-[12px] font-medium text-(--biu-color-text-muted) transition-colors hover:bg-(--biu-color-bg-hover) hover:text-(--biu-color-text)"
-            title="我的消息收藏"
-            aria-label="我的消息收藏"
-            data-testid="channel-saved-btn"
-            onClick={openSavedModal}
-          >
-            <StarIcon className="size-3.5 shrink-0" />
-          </button>
-          <button
-            type="button"
             className="inline-flex h-[var(--biu-size-control-md)] cursor-pointer items-center gap-1.5 rounded-[6px] border-0 bg-transparent px-2 text-[12px] font-medium text-(--biu-color-text-muted) transition-colors hover:bg-(--biu-color-bg-hover) hover:text-(--biu-color-text)"
             title="管理群成员、偏好与 Agent"
             data-testid="channel-manage-members"
             onClick={() => setMembersModalOpen(true)}
           >
             <UserGroupIcon className="size-3.5 shrink-0 text-(--biu-color-icon-active)" />
-            <span className="tabular-nums">
+            <span className="tabular-nums whitespace-nowrap">
               {humanMembers.length} 人{agentMembers.length > 0 ? ` · ${agentMembers.length} Agent` : ''}
             </span>
           </button>
+          <div ref={headerMenuRef} className="relative">
+            <button
+              type="button"
+              className={`inline-flex h-[var(--biu-size-control-md)] cursor-pointer items-center justify-center rounded-[6px] border-0 bg-transparent px-2 text-(--biu-color-text-muted) transition-colors hover:bg-(--biu-color-bg-hover) hover:text-(--biu-color-text)${headerMenuOpen ? ' bg-(--biu-color-bg-hover) text-(--biu-color-text)' : ''}`}
+              title="更多功能"
+              aria-label="更多功能"
+              data-testid="channel-more-menu-btn"
+              onClick={() => setHeaderMenuOpen((v) => !v)}
+            >
+              <EllipsisHorizontalIcon className="size-4 shrink-0" />
+            </button>
+            {headerMenuOpen ? (
+              <div
+                className="absolute top-[calc(100%+4px)] right-0 z-50 w-44 rounded-[var(--biu-radius-popover)] border border-(--biu-color-border-popover) bg-(--biu-color-bg-popover) p-1 shadow-(--biu-shadow-popover)"
+                role="menu"
+                data-testid="channel-header-menu"
+              >
+                <button
+                  type="button"
+                  role="menuitem"
+                  data-testid="channel-summarize-btn"
+                  className="flex w-full cursor-pointer items-center gap-2 rounded-md border-0 bg-transparent px-2.5 py-1.5 text-left text-[12.5px] text-(--biu-color-text) hover:bg-(--biu-color-bg-popover-hover)"
+                  onClick={() => {
+                    setHeaderMenuOpen(false)
+                    handleSummarize(false)
+                  }}
+                >
+                  <SparklesIcon className="size-3.5 shrink-0 text-(--biu-color-icon)" />
+                  <span>AI 总结要点</span>
+                </button>
+                <button
+                  type="button"
+                  role="menuitem"
+                  data-testid="channel-pins-btn"
+                  className="flex w-full cursor-pointer items-center gap-2 rounded-md border-0 bg-transparent px-2.5 py-1.5 text-left text-[12.5px] text-(--biu-color-text) hover:bg-(--biu-color-bg-popover-hover)"
+                  onClick={() => {
+                    setHeaderMenuOpen(false)
+                    openPinsModal()
+                  }}
+                >
+                  <BookmarkIcon className="size-3.5 shrink-0 text-(--biu-color-icon)" />
+                  <span className="flex-1">置顶消息</span>
+                  {mainMessages.filter((m) => m.pinnedAt && !m.deletedAt).length > 0 ? (
+                    <span className="text-[11px] text-(--biu-color-text-subtle) tabular-nums">
+                      {mainMessages.filter((m) => m.pinnedAt && !m.deletedAt).length}
+                    </span>
+                  ) : null}
+                </button>
+                <button
+                  type="button"
+                  role="menuitem"
+                  data-testid="channel-saved-btn"
+                  className="flex w-full cursor-pointer items-center gap-2 rounded-md border-0 bg-transparent px-2.5 py-1.5 text-left text-[12.5px] text-(--biu-color-text) hover:bg-(--biu-color-bg-popover-hover)"
+                  onClick={() => {
+                    setHeaderMenuOpen(false)
+                    openSavedModal()
+                  }}
+                >
+                  <StarIcon className="size-3.5 shrink-0 text-(--biu-color-icon)" />
+                  <span>我的收藏</span>
+                </button>
+              </div>
+            ) : null}
+          </div>
           {toggleInspector ? (
             <button
               type="button"
@@ -987,7 +1105,7 @@ export const ChannelStage = memo(function ChannelStage({
       {/* 群内聊天记录搜索条 */}
       {searchOpen ? (
         <div
-          className="border-b border-(--biu-color-border-subtle) bg-(--biu-color-bg-subtle) px-4 py-2"
+          className="bg-(--biu-color-bg-subtle) px-4 py-2"
           data-testid="channel-search-panel"
         >
           <div className="mx-auto flex max-w-[var(--biu-chat-max-w,760px)] flex-wrap items-center gap-2">
@@ -1000,7 +1118,7 @@ export const ChannelStage = memo(function ChannelStage({
                 placeholder="搜索本聊天记录或附件文件名…"
                 aria-label="搜索聊天记录"
                 data-testid="channel-search-input"
-                className="h-8 w-full rounded-md border border-(--biu-color-border) bg-(--biu-color-bg) pr-2 pl-8 text-[12.5px] text-(--biu-color-text) outline-none focus:border-(--biu-color-icon-active)"
+                className="h-8 w-full rounded-md border-0 bg-(--biu-color-bg) pr-2 pl-8 text-[12.5px] text-(--biu-color-text) outline-none ring-1 ring-inset ring-(--biu-color-border) focus:ring-(--biu-color-icon-active)"
                 onChange={(e) => setSearchQuery(e.target.value)}
                 onKeyDown={(e) => {
                   if (e.key === 'Escape') setSearchOpen(false)
@@ -1011,7 +1129,7 @@ export const ChannelStage = memo(function ChannelStage({
               value={searchSenderId}
               aria-label="按发送人筛选"
               data-testid="channel-search-sender"
-              className="h-8 rounded-md border border-(--biu-color-border) bg-(--biu-color-bg) px-2 text-[12px] text-(--biu-color-text)"
+              className="h-8 rounded-md border-0 bg-(--biu-color-bg) px-2 text-[12px] text-(--biu-color-text) ring-1 ring-inset ring-(--biu-color-border)"
               onChange={(e) => setSearchSenderId(e.target.value)}
             >
               <option value="">全部发送人</option>
@@ -1031,7 +1149,7 @@ export const ChannelStage = memo(function ChannelStage({
             </button>
           </div>
           {searchQuery.trim() ? (
-            <div className="mx-auto mt-2 max-h-56 max-w-[var(--biu-chat-max-w,760px)] overflow-y-auto rounded-md border border-(--biu-color-border-subtle) bg-(--biu-color-bg)">
+            <div className="mx-auto mt-2 max-h-56 max-w-[var(--biu-chat-max-w,760px)] overflow-y-auto rounded-[var(--biu-radius-popover)] border border-(--biu-color-border-popover) bg-(--biu-color-bg-popover) p-1 shadow-(--biu-shadow-popover)">
               {searching ? (
                 <div className="px-3 py-2 text-[12px] text-(--biu-color-text-subtle)">搜索中…</div>
               ) : searchHits.length === 0 ? (
@@ -1042,8 +1160,9 @@ export const ChannelStage = memo(function ChannelStage({
                     key={hit.id}
                     type="button"
                     data-testid={`channel-search-hit-${hit.id}`}
-                    className="flex w-full cursor-pointer items-start justify-between gap-2 border-0 border-b border-(--biu-color-border-subtle) bg-transparent px-3 py-2 text-left text-[12.5px] last:border-b-0 hover:bg-(--biu-color-bg-hover)"
+                    className="flex w-full cursor-pointer items-start justify-between gap-2 rounded-md border-0 bg-transparent px-2.5 py-2 text-left text-[12.5px] hover:bg-(--biu-color-bg-popover-hover)"
                     onClick={() => {
+                      if (activeThreadRootId) closeThread()
                       void jumpToMessage(hit.id)
                       setSearchOpen(false)
                     }}
@@ -1085,13 +1204,13 @@ export const ChannelStage = memo(function ChannelStage({
           <div className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
             <BiuChatStage variant="center" stageRef={scrollRef}>
               <div className="chat-node-list pt-2" data-testid="channel-messages">
-                {detail?.hasMoreMessages ? (
+                {!activeThreadRootId && detail?.hasMoreMessages ? (
                   <div className="mb-3 flex justify-center">
                     <button
                       type="button"
                       disabled={loadingOlder}
                       data-testid="channel-load-older"
-                      className="cursor-pointer rounded-full border border-(--biu-color-border-subtle) bg-(--biu-color-bg-subtle) px-3 py-1 text-[12px] text-(--biu-color-text-muted) hover:bg-(--biu-color-bg-hover) hover:text-(--biu-color-text) disabled:opacity-50"
+                      className="cursor-pointer rounded-full border-0 bg-(--biu-color-bg-subtle) px-3 py-1 text-[12px] text-(--biu-color-text-muted) hover:bg-(--biu-color-bg-hover) hover:text-(--biu-color-text) disabled:opacity-50"
                       onClick={() => void handleLoadOlder()}
                     >
                       {loadingOlder ? '加载更早消息中…' : '加载更早消息'}
@@ -1244,7 +1363,7 @@ export const ChannelStage = memo(function ChannelStage({
                                       <button
                                         key={att.id}
                                         type="button"
-                                        className="group/img relative cursor-zoom-in overflow-hidden rounded-lg border border-(--biu-color-border-subtle) bg-(--biu-color-bg-subtle) p-0"
+                                        className="group/img relative cursor-zoom-in overflow-hidden rounded-lg border-0 bg-(--biu-color-bg-muted)/60 p-0"
                                         title={`点击查看大图：${att.name}`}
                                         onClick={() => setLightboxImage({ url: att.url, name: att.name })}
                                       >
@@ -1262,7 +1381,7 @@ export const ChannelStage = memo(function ChannelStage({
                                         download={att.name}
                                         target="_blank"
                                         rel="noreferrer"
-                                        className="inline-flex max-w-xs items-center gap-2 rounded-lg border border-(--biu-color-border-subtle) bg-(--biu-color-bg-subtle) px-2.5 py-1.5 text-[12px] text-(--biu-color-text) no-underline hover:bg-(--biu-color-bg-hover)"
+                                        className="inline-flex max-w-xs items-center gap-2 rounded-lg bg-(--biu-color-bg-muted)/70 px-2.5 py-1.5 text-[12px] text-(--biu-color-text) no-underline hover:bg-(--biu-color-bg-hover)"
                                       >
                                         <DocumentIcon className="size-4 shrink-0 text-(--biu-color-icon)" />
                                         <span className="truncate font-medium">{att.name}</span>
@@ -1285,10 +1404,10 @@ export const ChannelStage = memo(function ChannelStage({
                                       type="button"
                                       title={r.accountNames.join('、')}
                                       data-testid={`channel-msg-reaction-${msg.id}-${r.emoji}`}
-                                      className={`inline-flex cursor-pointer items-center gap-1 rounded-full border px-2 py-0.5 text-[12px] leading-none transition-colors ${
+                                      className={`inline-flex cursor-pointer items-center gap-1 rounded-full border-0 px-2 py-0.5 text-[12px] leading-none transition-colors ${
                                         r.reactedByMe
-                                          ? 'border-(--biu-color-icon-active) bg-(--biu-color-bg-hover) font-medium text-(--biu-color-text)'
-                                          : 'border-(--biu-color-border-subtle) bg-(--biu-color-bg-subtle) text-(--biu-color-text-muted) hover:bg-(--biu-color-bg-hover)'
+                                          ? 'bg-(--biu-color-bg-hover) font-medium text-(--biu-color-text) ring-1 ring-inset ring-(--biu-color-border)'
+                                          : 'bg-(--biu-color-bg-muted)/70 text-(--biu-color-text-muted) hover:bg-(--biu-color-bg-hover)'
                                       }`}
                                       onClick={() => void toggleChannelReaction(channelId, msg.id, r.emoji)}
                                     >
@@ -1301,14 +1420,14 @@ export const ChannelStage = memo(function ChannelStage({
 
                               {reactPickerMsgId === msg.id ? (
                                 <div
-                                  className="mt-2 inline-flex flex-wrap items-center gap-1 rounded-lg border border-(--biu-color-border) bg-(--biu-color-bg) p-1 shadow-md"
+                                  className="mt-2 inline-flex flex-wrap items-center gap-0.5 rounded-[var(--biu-radius-popover)] border border-(--biu-color-border-popover) bg-(--biu-color-bg-popover) p-1 shadow-(--biu-shadow-popover)"
                                   data-testid={`channel-msg-react-picker-${msg.id}`}
                                 >
                                   {QUICK_REACTION_EMOJIS.map((em) => (
                                     <button
                                       key={em}
                                       type="button"
-                                      className="grid size-7 cursor-pointer place-items-center rounded border-0 bg-transparent text-[15px] hover:bg-(--biu-color-bg-hover)"
+                                      className="grid size-7 cursor-pointer place-items-center rounded border-0 bg-transparent text-[15px] hover:bg-(--biu-color-bg-popover-hover)"
                                       onClick={() => {
                                         setReactPickerMsgId(null)
                                         void toggleChannelReaction(channelId, msg.id, em)
@@ -1320,26 +1439,26 @@ export const ChannelStage = memo(function ChannelStage({
                                 </div>
                               ) : null}
 
-                              {msg.threadSummary && msg.threadSummary.replyCount > 0 ? (
+                              {!activeThreadRootId && msg.threadSummary && msg.threadSummary.replyCount > 0 ? (
                                 <button
                                   type="button"
                                   data-testid={`channel-thread-bar-${msg.id}`}
-                                  className="mt-2 inline-flex cursor-pointer items-center gap-2 rounded-md border border-(--biu-color-border-subtle) bg-(--biu-color-bg-subtle) px-2.5 py-1 text-[12px] text-(--biu-color-text-muted) transition-colors hover:bg-(--biu-color-bg-hover) hover:text-(--biu-color-text)"
+                                  className="mt-2 inline-flex max-w-full cursor-pointer items-center gap-1.5 overflow-hidden rounded-md border-0 bg-(--biu-color-bg-muted)/60 px-2.5 py-1 text-[12px] text-(--biu-color-text-muted) transition-colors hover:bg-(--biu-color-bg-hover) hover:text-(--biu-color-text)"
                                   onClick={() => openThread(msg.id)}
                                 >
-                                  <ChatBubbleLeftRightIcon className="size-3.5 shrink-0 text-(--biu-color-icon-active)" />
-                                  <span className="font-medium text-(--biu-color-text)">
+                                  <ChatBubbleLeftRightIcon className="size-3.5 shrink-0 text-(--biu-color-icon)" />
+                                  <span className="shrink-0 whitespace-nowrap font-medium text-(--biu-color-text)">
                                     {msg.threadSummary.replyCount} 条回复
                                   </span>
                                   {msg.threadSummary.participantNames.length > 0 ? (
-                                    <span className="max-w-[180px] truncate text-[11.5px] text-(--biu-color-text-subtle)">
+                                    <span className="min-w-0 truncate text-[11.5px] text-(--biu-color-text-subtle)">
                                       {msg.threadSummary.participantNames.join('、')}
                                     </span>
                                   ) : null}
-                                  <span className="text-[11px] text-(--biu-color-text-subtle) tabular-nums">
+                                  <span className="shrink-0 whitespace-nowrap text-[11px] text-(--biu-color-text-subtle) tabular-nums">
                                     {formatSentAt(msg.threadSummary.lastReplyAt)}
                                   </span>
-                                  <ChevronRightIcon className="size-3.5 shrink-0" />
+                                  <ChevronRightIcon className="size-3.5 shrink-0 opacity-70" />
                                 </button>
                               ) : null}
                             </>
@@ -1410,7 +1529,7 @@ export const ChannelStage = memo(function ChannelStage({
                                 <span className="truncate font-medium">{msg.senderName}</span>
                                 {msg.viaAgentId ? (
                                   <span
-                                    className="inline-flex shrink-0 items-center gap-1 rounded-full border border-(--biu-color-border-subtle) bg-(--biu-color-bg) px-1.5 py-0.5 text-[11px] font-normal text-(--biu-color-text-muted)"
+                                    className="inline-flex shrink-0 items-center gap-1 rounded-full bg-(--biu-color-bg-muted) px-1.5 py-0.5 text-[11px] font-normal text-(--biu-color-text-muted)"
                                     title={`由 Agent「${msg.viaAgentName || msg.viaAgentId}」代发`}
                                     data-testid="channel-msg-via-agent"
                                   >
@@ -1433,116 +1552,46 @@ export const ChannelStage = memo(function ChannelStage({
                                 仅你可见
                               </span>
                             ) : !isRecalled ? (
-                              <>
-                                {isAgent ? <MessageCopyAction text={msg.text} /> : null}
-                                {isAgent && memberById.get(`agent:${msg.senderId}`)?.isOwn ? (
-                                  <button
-                                    type="button"
-                                    className="inline-flex shrink-0 cursor-pointer items-center gap-1 rounded-md border border-transparent bg-transparent px-1.5 py-0.5 text-(length:--biu-chat-ui-font-size) leading-none text-(--biu-color-text-subtle) opacity-0 transition-opacity hover:bg-(--biu-color-bg-hover) hover:text-(--biu-color-text) group-hover:opacity-100"
-                                    title="仅归属人可见：将本条结论手动沉淀回该代理的 1v1 主工作台"
-                                    data-testid={`channel-msg-sync-${msg.id}`}
-                                    onClick={() => {
-                                      void syncChannelToAgent(channelId, msg.senderId, msg.id)
-                                        .then(() => {
-                                          setSyncedMsgIds((prev) => ({ ...prev, [msg.id]: true }))
-                                          window.setTimeout(() => {
-                                            setSyncedMsgIds((prev) => ({ ...prev, [msg.id]: false }))
-                                          }, 1800)
-                                        })
-                                        .catch((err) => setError(err instanceof Error ? err.message : String(err)))
-                                    }}
-                                  >
-                                    {syncedMsgIds[msg.id] ? (
-                                      <CheckIcon className="size-3 text-emerald-500" />
-                                    ) : (
-                                      <BookmarkSquareIcon className="size-3" />
-                                    )}
-                                    <span>{syncedMsgIds[msg.id] ? '已同步' : '同步到 1v1'}</span>
-                                  </button>
-                                ) : null}
+                              <div className="inline-flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
                                 <button
                                   type="button"
-                                  className="inline-flex shrink-0 cursor-pointer items-center gap-1 rounded-md border border-transparent bg-transparent px-1.5 py-0.5 text-(length:--biu-chat-ui-font-size) leading-none text-(--biu-color-text-subtle) opacity-0 transition-opacity hover:bg-(--biu-color-bg-hover) hover:text-(--biu-color-text) group-hover:opacity-100"
+                                  className="inline-flex size-6 shrink-0 cursor-pointer items-center justify-center rounded-md border-0 bg-transparent text-(--biu-color-text-subtle) hover:bg-(--biu-color-bg-hover) hover:text-(--biu-color-text)"
                                   title="添加表情回应"
+                                  aria-label="添加表情回应"
                                   data-testid={`channel-msg-react-${msg.id}`}
                                   onClick={() => setReactPickerMsgId((cur) => (cur === msg.id ? null : msg.id))}
                                 >
-                                  <FaceSmileIcon className="size-3" />
+                                  <FaceSmileIcon className="size-3.5" />
                                 </button>
+                                {!activeThreadRootId ? (
+                                  <button
+                                    type="button"
+                                    className="inline-flex size-6 shrink-0 cursor-pointer items-center justify-center rounded-md border-0 bg-transparent text-(--biu-color-text-subtle) hover:bg-(--biu-color-bg-hover) hover:text-(--biu-color-text)"
+                                    title="在讨论串中展开回复"
+                                    aria-label="在讨论串中展开回复"
+                                    data-testid={`channel-msg-thread-${msg.id}`}
+                                    onClick={() => openThread(msg.id)}
+                                  >
+                                    <ChatBubbleLeftRightIcon className="size-3.5" />
+                                  </button>
+                                ) : null}
                                 <button
                                   type="button"
-                                  className="inline-flex shrink-0 cursor-pointer items-center gap-1 rounded-md border border-transparent bg-transparent px-1.5 py-0.5 text-(length:--biu-chat-ui-font-size) leading-none text-(--biu-color-text-subtle) opacity-0 transition-opacity hover:bg-(--biu-color-bg-hover) hover:text-(--biu-color-text) group-hover:opacity-100"
-                                  title="在讨论串（Thread）中展开聚焦回复"
-                                  data-testid={`channel-msg-thread-${msg.id}`}
-                                  onClick={() => openThread(msg.id)}
-                                >
-                                  <ChatBubbleLeftRightIcon className="size-3" />
-                                  <span>话题</span>
-                                </button>
-                                <button
-                                  type="button"
-                                  className="inline-flex shrink-0 cursor-pointer items-center gap-1 rounded-md border border-transparent bg-transparent px-1.5 py-0.5 text-(length:--biu-chat-ui-font-size) leading-none text-(--biu-color-text-subtle) opacity-0 transition-opacity hover:bg-(--biu-color-bg-hover) hover:text-(--biu-color-text) group-hover:opacity-100"
-                                  onClick={() => {
-                                    setReplyTo(msg)
-                                    composerRef.current?.focus()
+                                  className="inline-flex size-6 shrink-0 cursor-pointer items-center justify-center rounded-md border-0 bg-transparent text-(--biu-color-text-subtle) hover:bg-(--biu-color-bg-hover) hover:text-(--biu-color-text)"
+                                  title="更多操作"
+                                  aria-label="更多操作"
+                                  data-testid={`channel-msg-more-${msg.id}`}
+                                  onClick={(e) => {
+                                    const rect = e.currentTarget.getBoundingClientRect()
+                                    const menuW = 168
+                                    const left = Math.max(8, Math.min(rect.left, window.innerWidth - menuW - 8))
+                                    const top = Math.min(rect.bottom + 4, window.innerHeight - 260)
+                                    setMsgMenu((cur) => (cur?.msg.id === msg.id ? null : { msg, top, left }))
                                   }}
                                 >
-                                  <ArrowUturnLeftIcon className="size-3" />
-                                  <span>回复</span>
+                                  <EllipsisHorizontalIcon className="size-3.5" />
                                 </button>
-                                <button
-                                  type="button"
-                                  className="inline-flex shrink-0 cursor-pointer items-center gap-1 rounded-md border border-transparent bg-transparent px-1.5 py-0.5 text-(length:--biu-chat-ui-font-size) leading-none text-(--biu-color-text-subtle) opacity-0 transition-opacity hover:bg-(--biu-color-bg-hover) hover:text-(--biu-color-text) group-hover:opacity-100"
-                                  title="一键存为 BIU 页面"
-                                  data-testid={`channel-msg-to-page-${msg.id}`}
-                                  onClick={() => void handleSaveMessageAsPage(msg)}
-                                >
-                                  <DocumentPlusIcon className="size-3" />
-                                </button>
-                                <button
-                                  type="button"
-                                  className={`inline-flex shrink-0 cursor-pointer items-center gap-1 rounded-md border border-transparent bg-transparent px-1.5 py-0.5 text-(length:--biu-chat-ui-font-size) leading-none transition-opacity hover:bg-(--biu-color-bg-hover) hover:text-(--biu-color-text) ${msg.pinnedAt ? 'text-amber-500 opacity-100' : 'text-(--biu-color-text-subtle) opacity-0 group-hover:opacity-100'}`}
-                                  title={msg.pinnedAt ? '取消置顶' : '置顶此消息'}
-                                  data-testid={`channel-msg-pin-${msg.id}`}
-                                  onClick={() => void toggleChannelPinMessage(channelId, msg.id)}
-                                >
-                                  <BookmarkIcon className="size-3" />
-                                </button>
-                                <button
-                                  type="button"
-                                  className={`inline-flex shrink-0 cursor-pointer items-center gap-1 rounded-md border border-transparent bg-transparent px-1.5 py-0.5 text-(length:--biu-chat-ui-font-size) leading-none transition-opacity hover:bg-(--biu-color-bg-hover) hover:text-(--biu-color-text) ${msg.savedByMe ? 'text-amber-400 opacity-100' : 'text-(--biu-color-text-subtle) opacity-0 group-hover:opacity-100'}`}
-                                  title={msg.savedByMe ? '取消收藏' : '收藏此消息'}
-                                  data-testid={`channel-msg-save-${msg.id}`}
-                                  onClick={() => void toggleChannelSaveMessage(channelId, msg.id)}
-                                >
-                                  <StarIcon className="size-3" />
-                                </button>
-                                {canEdit ? (
-                                  <button
-                                    type="button"
-                                    className="inline-flex shrink-0 cursor-pointer items-center gap-1 rounded-md border border-transparent bg-transparent px-1.5 py-0.5 text-(length:--biu-chat-ui-font-size) leading-none text-(--biu-color-text-subtle) opacity-0 transition-opacity hover:bg-(--biu-color-bg-hover) hover:text-(--biu-color-text) group-hover:opacity-100"
-                                    data-testid={`channel-msg-edit-${msg.id}`}
-                                    onClick={() => {
-                                      setEditingMsgId(msg.id)
-                                      setEditingDraft(msg.text)
-                                    }}
-                                  >
-                                    <PencilSquareIcon className="size-3" />
-                                    <span>编辑</span>
-                                  </button>
-                                ) : null}
-                                {canRecall ? (
-                                  <button
-                                    type="button"
-                                    className="inline-flex shrink-0 cursor-pointer items-center gap-1 rounded-md border border-transparent bg-transparent px-1.5 py-0.5 text-(length:--biu-chat-ui-font-size) leading-none text-(--biu-color-text-subtle) opacity-0 transition-opacity hover:bg-(--biu-color-bg-hover) hover:text-(--biu-color-danger) group-hover:opacity-100"
-                                    data-testid={`channel-msg-recall-${msg.id}`}
-                                    onClick={() => void handleRecallMessage(msg.id)}
-                                  >
-                                    <TrashIcon className="size-3" />
-                                    <span>撤回</span>
-                                  </button>
-                                ) : null}
-                              </>
+                              </div>
                             ) : null}
 
                             {msg.traceId && (isAgent || isSystemAgent) ? (
@@ -1581,18 +1630,19 @@ export const ChannelStage = memo(function ChannelStage({
                       </div>
                     )
 
+                    const isThreadRootCard = Boolean(activeThreadRootId) && msg.id === activeThreadRootId
                     return (
                       <div key={msg.id} className="w-full space-y-2">
-                        {showDayDivider ? (
+                        {!activeThreadRootId && showDayDivider ? (
                           <div className="my-2 flex items-center gap-3" data-testid="channel-day-divider">
-                            <span className="h-px flex-1 bg-(--biu-color-border-subtle)" />
+                            <span className="h-px flex-1 bg-(--biu-color-bg-muted)" />
                             <span className="text-[11px] font-medium text-(--biu-color-text-subtle)">
                               {formatDayDivider(msg.createdAt)}
                             </span>
-                            <span className="h-px flex-1 bg-(--biu-color-border-subtle)" />
+                            <span className="h-px flex-1 bg-(--biu-color-bg-muted)" />
                           </div>
                         ) : null}
-                        {showUnreadDivider ? (
+                        {!activeThreadRootId && showUnreadDivider ? (
                           <div className="my-2 flex items-center gap-3" data-testid="channel-unread-divider">
                             <span className="h-px flex-1 bg-rose-500/40" />
                             <span className="text-[11px] font-medium text-rose-500">以下是新消息</span>
@@ -1600,13 +1650,30 @@ export const ChannelStage = memo(function ChannelStage({
                           </div>
                         ) : null}
                         <div
-                          data-testid={isEphemeral ? 'channel-ephemeral-msg' : 'channel-message'}
+                          data-testid={
+                            isEphemeral
+                              ? 'channel-ephemeral-msg'
+                              : activeThreadRootId && !isThreadRootCard
+                                ? `channel-thread-reply-${msg.id}`
+                                : 'channel-message'
+                          }
                           data-sender-type={msg.senderType}
                           data-self={isSelf ? 'true' : 'false'}
                           className={`flex w-full items-start ${isSelf ? 'justify-end' : 'justify-start'}`}
                         >
                           {cardNode}
                         </div>
+                        {isThreadRootCard ? (
+                          <div className="my-3 flex items-center gap-3" data-testid="channel-thread-divider">
+                            <span className="h-px flex-1 bg-(--biu-color-bg-muted)" />
+                            <span className="text-[11.5px] font-medium text-(--biu-color-text-subtle)">
+                              {threadReplies.length > 0
+                                ? `${threadReplies.length} 条讨论串回复`
+                                : '暂无回复 · 在下方输入即可开启讨论串'}
+                            </span>
+                            <span className="h-px flex-1 bg-(--biu-color-bg-muted)" />
+                          </div>
+                        ) : null}
                       </div>
                     )
                   })
@@ -1694,6 +1761,7 @@ export const ChannelStage = memo(function ChannelStage({
                   <ChannelComposer
                     ref={composerRef}
                     channelId={channelId}
+                    threadRootId={activeThreadRootId}
                     isDm={isDm}
                     members={members}
                     resolveAvatar={resolveAvatar}
@@ -1706,17 +1774,155 @@ export const ChannelStage = memo(function ChannelStage({
               </ChatDockStack>
             </div>
           </div>
-          {activeThreadRootId ? (
-            <ChannelThreadPanel
-              channelId={channelId}
-              rootMsgId={activeThreadRootId}
-              members={members}
-              resolveAvatar={resolveAvatar}
-              onClose={() => setActiveThreadRootId(null)}
-            />
-          ) : null}
         </div>
       </div>
+
+      {/* 单条消息「⋯ 更多」浮动菜单（Portal 渲染，避免被 .chat-user-card overflow:hidden 裁切） */}
+      {msgMenu
+        ? (() => {
+            const targetMsg = msgMenu.msg
+            const mIsAgent = targetMsg.senderType === 'agent'
+            const mIsSelf =
+              targetMsg.senderType === 'account' &&
+              !targetMsg.ephemeralTo &&
+              Boolean(myAccountId) &&
+              targetMsg.senderId === myAccountId
+            const mCanEdit = mIsSelf && !targetMsg.deletedAt
+            const mCanRecall = !targetMsg.ephemeralTo && !targetMsg.deletedAt && (mIsSelf || Boolean(detail?.canManageMembers))
+            const mIsOwnAgent = mIsAgent && Boolean(memberById.get(`agent:${targetMsg.senderId}`)?.isOwn)
+            return createPortal(
+              <div
+                data-testid="channel-msg-more-menu"
+                role="menu"
+                style={{ top: msgMenu.top, left: msgMenu.left }}
+                className="fixed z-50 w-44 rounded-[var(--biu-radius-popover)] border border-(--biu-color-border-popover) bg-(--biu-color-bg-popover) p-1 shadow-(--biu-shadow-popover)"
+              >
+                <button
+                  type="button"
+                  role="menuitem"
+                  className="flex w-full cursor-pointer items-center gap-2 rounded-md border-0 bg-transparent px-2.5 py-1.5 text-left text-[12.5px] text-(--biu-color-text) hover:bg-(--biu-color-bg-popover-hover)"
+                  onClick={() => {
+                    setMsgMenu(null)
+                    setReplyTo(targetMsg)
+                    composerRef.current?.focus()
+                  }}
+                >
+                  <ArrowUturnLeftIcon className="size-3.5 shrink-0 text-(--biu-color-icon)" />
+                  <span>引用回复</span>
+                </button>
+                <button
+                  type="button"
+                  role="menuitem"
+                  className="flex w-full cursor-pointer items-center gap-2 rounded-md border-0 bg-transparent px-2.5 py-1.5 text-left text-[12.5px] text-(--biu-color-text) hover:bg-(--biu-color-bg-popover-hover)"
+                  onClick={() => {
+                    setMsgMenu(null)
+                    if (targetMsg.text.trim()) void navigator.clipboard?.writeText(targetMsg.text)
+                  }}
+                >
+                  <Square2StackIcon className="size-3.5 shrink-0 text-(--biu-color-icon)" />
+                  <span>复制内容</span>
+                </button>
+                <button
+                  type="button"
+                  role="menuitem"
+                  data-testid={`channel-msg-pin-${targetMsg.id}`}
+                  className="flex w-full cursor-pointer items-center gap-2 rounded-md border-0 bg-transparent px-2.5 py-1.5 text-left text-[12.5px] text-(--biu-color-text) hover:bg-(--biu-color-bg-popover-hover)"
+                  onClick={() => {
+                    setMsgMenu(null)
+                    void toggleChannelPinMessage(channelId, targetMsg.id)
+                  }}
+                >
+                  <BookmarkIcon className={`size-3.5 shrink-0 ${targetMsg.pinnedAt ? 'text-amber-500' : 'text-(--biu-color-icon)'}`} />
+                  <span>{targetMsg.pinnedAt ? '取消置顶' : '置顶消息'}</span>
+                </button>
+                <button
+                  type="button"
+                  role="menuitem"
+                  data-testid={`channel-msg-save-${targetMsg.id}`}
+                  className="flex w-full cursor-pointer items-center gap-2 rounded-md border-0 bg-transparent px-2.5 py-1.5 text-left text-[12.5px] text-(--biu-color-text) hover:bg-(--biu-color-bg-popover-hover)"
+                  onClick={() => {
+                    setMsgMenu(null)
+                    void toggleChannelSaveMessage(channelId, targetMsg.id)
+                  }}
+                >
+                  <StarIcon className={`size-3.5 shrink-0 ${targetMsg.savedByMe ? 'text-amber-400' : 'text-(--biu-color-icon)'}`} />
+                  <span>{targetMsg.savedByMe ? '取消收藏' : '收藏消息'}</span>
+                </button>
+                <button
+                  type="button"
+                  role="menuitem"
+                  data-testid={`channel-msg-to-page-${targetMsg.id}`}
+                  className="flex w-full cursor-pointer items-center gap-2 rounded-md border-0 bg-transparent px-2.5 py-1.5 text-left text-[12.5px] text-(--biu-color-text) hover:bg-(--biu-color-bg-popover-hover)"
+                  onClick={() => {
+                    setMsgMenu(null)
+                    void handleSaveMessageAsPage(targetMsg)
+                  }}
+                >
+                  <DocumentPlusIcon className="size-3.5 shrink-0 text-(--biu-color-icon)" />
+                  <span>存为页面</span>
+                </button>
+                {mIsOwnAgent ? (
+                  <button
+                    type="button"
+                    role="menuitem"
+                    data-testid={`channel-msg-sync-${targetMsg.id}`}
+                    className="flex w-full cursor-pointer items-center gap-2 rounded-md border-0 bg-transparent px-2.5 py-1.5 text-left text-[12.5px] text-(--biu-color-text) hover:bg-(--biu-color-bg-popover-hover)"
+                    onClick={() => {
+                      setMsgMenu(null)
+                      void syncChannelToAgent(channelId, targetMsg.senderId, targetMsg.id)
+                        .then(() => {
+                          setSyncedMsgIds((prev) => ({ ...prev, [targetMsg.id]: true }))
+                          window.setTimeout(() => {
+                            setSyncedMsgIds((prev) => ({ ...prev, [targetMsg.id]: false }))
+                          }, 1800)
+                        })
+                        .catch((err) => setError(err instanceof Error ? err.message : String(err)))
+                    }}
+                  >
+                    {syncedMsgIds[targetMsg.id] ? (
+                      <CheckIcon className="size-3.5 shrink-0 text-emerald-500" />
+                    ) : (
+                      <BookmarkSquareIcon className="size-3.5 shrink-0 text-(--biu-color-icon)" />
+                    )}
+                    <span>{syncedMsgIds[targetMsg.id] ? '已同步到 1v1' : '同步到 1v1'}</span>
+                  </button>
+                ) : null}
+                {mCanEdit ? (
+                  <button
+                    type="button"
+                    role="menuitem"
+                    data-testid={`channel-msg-edit-${targetMsg.id}`}
+                    className="flex w-full cursor-pointer items-center gap-2 rounded-md border-0 bg-transparent px-2.5 py-1.5 text-left text-[12.5px] text-(--biu-color-text) hover:bg-(--biu-color-bg-popover-hover)"
+                    onClick={() => {
+                      setMsgMenu(null)
+                      setEditingMsgId(targetMsg.id)
+                      setEditingDraft(targetMsg.text)
+                    }}
+                  >
+                    <PencilSquareIcon className="size-3.5 shrink-0 text-(--biu-color-icon)" />
+                    <span>编辑</span>
+                  </button>
+                ) : null}
+                {mCanRecall ? (
+                  <button
+                    type="button"
+                    role="menuitem"
+                    data-testid={`channel-msg-recall-${targetMsg.id}`}
+                    className="flex w-full cursor-pointer items-center gap-2 rounded-md border-0 bg-transparent px-2.5 py-1.5 text-left text-[12.5px] text-(--biu-color-danger) hover:bg-(--biu-color-bg-popover-hover)"
+                    onClick={() => {
+                      setMsgMenu(null)
+                      void handleRecallMessage(targetMsg.id)
+                    }}
+                  >
+                    <TrashIcon className="size-3.5 shrink-0" />
+                    <span>撤回</span>
+                  </button>
+                ) : null}
+              </div>,
+              document.body,
+            )
+          })()
+        : null}
 
       {/* AI 聊天要点总结弹窗 */}
       {summaryModal.open
@@ -1775,7 +1981,7 @@ export const ChannelStage = memo(function ChannelStage({
                     <div className="scfg-error">{summaryModal.error}</div>
                   ) : (
                     <>
-                      <div className="max-h-[52vh] overflow-y-auto rounded-lg border border-(--biu-color-border-subtle) bg-(--biu-color-bg-subtle) p-3 text-[13px]">
+                      <div className="max-h-[52vh] overflow-y-auto rounded-[var(--biu-radius-md)] bg-(--biu-color-bg-subtle) p-3 text-[13px]">
                         <MarkdownBody text={summaryModal.summary} />
                       </div>
                       <div className="flex items-center justify-end gap-2">
@@ -1881,7 +2087,7 @@ export const ChannelStage = memo(function ChannelStage({
                       {pinnedMessages.map((pm) => (
                         <div
                           key={pm.id}
-                          className="rounded-lg border border-(--biu-color-border-subtle) bg-(--biu-color-bg-subtle) p-3"
+                          className="rounded-[var(--biu-radius-md)] bg-(--biu-color-bg-subtle) p-3"
                         >
                           <div className="mb-1 flex items-center justify-between gap-2 text-[12px] text-(--biu-color-text-muted)">
                             <span className="font-medium text-(--biu-color-text)">{pm.senderName}</span>
@@ -1946,7 +2152,7 @@ export const ChannelStage = memo(function ChannelStage({
                       {savedMessages.map((item) => (
                         <div
                           key={item.message.id}
-                          className="rounded-lg border border-(--biu-color-border-subtle) bg-(--biu-color-bg-subtle) p-3"
+                          className="rounded-[var(--biu-radius-md)] bg-(--biu-color-bg-subtle) p-3"
                         >
                           <div className="mb-1 flex items-center justify-between gap-2 text-[12px] text-(--biu-color-text-muted)">
                             <span>
@@ -2056,7 +2262,7 @@ export const ChannelStage = memo(function ChannelStage({
                         {agentCard.model ? ` · ${agentCard.model}` : ''}
                       </div>
                       {agentCard.systemPrompt ? (
-                        <div className="rounded-[var(--biu-radius-md)] border border-(--biu-color-border-subtle) bg-(--biu-color-bg-subtle) p-3 text-[12.5px] leading-relaxed text-(--biu-color-text-muted)">
+                        <div className="rounded-[var(--biu-radius-md)] bg-(--biu-color-bg-subtle) p-3 text-[12.5px] leading-relaxed text-(--biu-color-text-muted)">
                           {agentCard.systemPrompt}
                         </div>
                       ) : null}
@@ -2414,231 +2620,5 @@ function ChannelMembersModal({
       </div>
     </div>,
     document.body,
-  )
-}
-
-function ChannelThreadPanel({
-  channelId,
-  rootMsgId,
-  members,
-  resolveAvatar,
-  onClose,
-}: {
-  channelId: string
-  rootMsgId: string
-  members: ChannelMemberView[]
-  resolveAvatar: (accountId?: string, serverAvatar?: string) => string | undefined
-  onClose: () => void
-}) {
-  const thread = useChannelStore((s) => s.threads[rootMsgId])
-  const [text, setText] = useState('')
-  const [sending, setSending] = useState(false)
-  const [error, setError] = useState('')
-  const listRef = useRef<HTMLDivElement>(null)
-
-  useEffect(() => {
-    void loadChannelThread(channelId, rootMsgId)
-  }, [channelId, rootMsgId])
-
-  useEffect(() => {
-    const el = listRef.current
-    if (!el) return
-    el.scrollTop = el.scrollHeight
-  }, [thread?.replies.length])
-
-  const sendReply = async (event?: FormEvent) => {
-    event?.preventDefault()
-    const body = text.trim()
-    if (!body || sending) return
-    setSending(true)
-    setError('')
-    try {
-      await sendChannelMessage(channelId, {
-        text: body,
-        threadRootId: rootMsgId,
-      })
-      setText('')
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err))
-    } finally {
-      setSending(false)
-    }
-  }
-
-  const agentHint = members.filter((m) => m.memberType === 'agent').map((m) => `@${m.name}`).slice(0, 2).join(' ')
-
-  return (
-    <aside
-      className="flex h-full w-[min(380px,42vw)] shrink-0 flex-col border-l border-(--biu-color-border-subtle) bg-(--biu-color-bg)"
-      data-testid="channel-thread-panel"
-      aria-label="讨论串"
-    >
-      <div className="flex h-11 shrink-0 items-center justify-between border-b border-(--biu-color-border-subtle) px-3">
-        <div className="flex items-center gap-1.5 text-[13px] font-semibold text-(--biu-color-text)">
-          <ChatBubbleLeftRightIcon className="size-4 text-(--biu-color-icon-active)" />
-          <span>讨论串</span>
-          {thread ? (
-            <span className="text-[11.5px] font-normal text-(--biu-color-text-subtle)">
-              {thread.replies.length} 条回复
-            </span>
-          ) : null}
-        </div>
-        <button
-          type="button"
-          className="inline-flex size-7 cursor-pointer items-center justify-center rounded-md border-0 bg-transparent text-(--biu-color-text-muted) hover:bg-(--biu-color-bg-hover)"
-          title="关闭讨论串"
-          aria-label="关闭讨论串"
-          onClick={onClose}
-        >
-          <XMarkIcon className="size-4" />
-        </button>
-      </div>
-
-      <div ref={listRef} className="min-h-0 flex-1 space-y-3 overflow-y-auto p-3">
-        {!thread ? (
-          <div className="py-8 text-center text-[12.5px] text-(--biu-color-text-subtle)">加载讨论串中…</div>
-        ) : (
-          <>
-            {/* 根消息 */}
-            <div className="rounded-lg border border-(--biu-color-border) bg-(--biu-color-bg-subtle) p-2.5">
-              <div className="mb-1 flex items-center gap-1.5 text-[12px] text-(--biu-color-text-muted)">
-                {thread.root.senderType === 'agent' ? (
-                  <SidebarMascot
-                    size={16}
-                    sessionId={thread.root.senderId}
-                    identity={resolveSessionMascot(thread.root.senderId, thread.root.senderMascot)}
-                    animate={false}
-                    title=""
-                  />
-                ) : (
-                  <MemberAvatar
-                    avatar={resolveAvatar(thread.root.senderId, thread.root.senderAvatar)}
-                    seed={thread.root.senderId}
-                    size={16}
-                  />
-                )}
-                <span className="font-medium text-(--biu-color-text)">{thread.root.senderName}</span>
-                {thread.root.viaAgentId ? (
-                  <span
-                    className="inline-flex shrink-0 items-center gap-1 rounded-full border border-(--biu-color-border-subtle) bg-(--biu-color-bg) px-1.5 py-0.5 text-[11px] font-normal text-(--biu-color-text-muted)"
-                    title={`由 Agent「${thread.root.viaAgentName || thread.root.viaAgentId}」代发`}
-                    data-testid="channel-msg-via-agent"
-                  >
-                    <SidebarMascot
-                      size={12}
-                      sessionId={thread.root.viaAgentId}
-                      identity={resolveSessionMascot(thread.root.viaAgentId, thread.root.viaAgentMascot)}
-                      animate={false}
-                      title=""
-                    />
-                    <span className="max-w-[96px] truncate">{thread.root.viaAgentName || thread.root.viaAgentId}</span>
-                  </span>
-                ) : null}
-                <span className="ml-auto text-[11px] tabular-nums">{formatSentAt(thread.root.createdAt)}</span>
-              </div>
-              <div className="text-[13px] text-(--biu-color-text)">
-                <MarkdownBody text={formatChannelMessageMarkdown(thread.root.text, thread.root.mentions)} />
-              </div>
-            </div>
-
-            {thread.replies.length > 0 ? (
-              <div className="flex items-center gap-2 text-[11px] text-(--biu-color-text-subtle)">
-                <span className="h-px flex-1 bg-(--biu-color-border-subtle)" />
-                <span>{thread.replies.length} 条回复</span>
-                <span className="h-px flex-1 bg-(--biu-color-border-subtle)" />
-              </div>
-            ) : (
-              <div className="py-2 text-center text-[12px] text-(--biu-color-text-subtle)">
-                还没有回复。在此处回复不会打断主聊天流，@Agent 也仅聚焦当前话题。
-              </div>
-            )}
-
-            {thread.replies.map((reply) => (
-              <div
-                key={reply.id}
-                data-testid={`channel-thread-reply-${reply.id}`}
-                className="rounded-lg border border-(--biu-color-border-subtle) bg-(--biu-color-bg-subtle)/60 p-2.5"
-              >
-                <div className="mb-1 flex items-center gap-1.5 text-[12px] text-(--biu-color-text-muted)">
-                  {reply.senderType === 'agent' ? (
-                    <SidebarMascot
-                      size={16}
-                      sessionId={reply.senderId}
-                      identity={resolveSessionMascot(reply.senderId, reply.senderMascot)}
-                      animate={false}
-                      title=""
-                    />
-                  ) : (
-                    <MemberAvatar
-                      avatar={resolveAvatar(reply.senderId, reply.senderAvatar)}
-                      seed={reply.senderId}
-                      size={16}
-                    />
-                  )}
-                  <span className="font-medium text-(--biu-color-text)">{reply.senderName}</span>
-                  {reply.viaAgentId ? (
-                    <span
-                      className="inline-flex shrink-0 items-center gap-1 rounded-full border border-(--biu-color-border-subtle) bg-(--biu-color-bg) px-1.5 py-0.5 text-[11px] font-normal text-(--biu-color-text-muted)"
-                      title={`由 Agent「${reply.viaAgentName || reply.viaAgentId}」代发`}
-                      data-testid="channel-msg-via-agent"
-                    >
-                      <SidebarMascot
-                        size={12}
-                        sessionId={reply.viaAgentId}
-                        identity={resolveSessionMascot(reply.viaAgentId, reply.viaAgentMascot)}
-                        animate={false}
-                        title=""
-                      />
-                      <span className="max-w-[96px] truncate">{reply.viaAgentName || reply.viaAgentId}</span>
-                    </span>
-                  ) : null}
-                  <span className="ml-auto text-[11px] tabular-nums">{formatSentAt(reply.createdAt)}</span>
-                </div>
-                {reply.deletedAt ? (
-                  <div className="text-[12.5px] italic text-(--biu-color-text-subtle)">此消息已撤回</div>
-                ) : (
-                  <div className="text-[13px] text-(--biu-color-text)">
-                    <MarkdownBody text={formatChannelMessageMarkdown(reply.text, reply.mentions)} />
-                  </div>
-                )}
-              </div>
-            ))}
-          </>
-        )}
-      </div>
-
-      <form
-        onSubmit={(e) => void sendReply(e)}
-        className="shrink-0 border-t border-(--biu-color-border-subtle) p-2.5"
-      >
-        {error ? <div className="mb-1.5 text-[11.5px] text-(--biu-color-danger)">{error}</div> : null}
-        <div className="flex items-end gap-1.5 rounded-lg border border-(--biu-color-border) bg-(--biu-color-bg-subtle) px-2.5 py-1.5">
-          <textarea
-            rows={2}
-            value={text}
-            data-testid="channel-thread-input"
-            placeholder={agentHint ? `在讨论串中回复…（可 ${agentHint}）` : '在讨论串中回复…'}
-            className="min-w-0 flex-1 resize-none border-0 bg-transparent text-[13px] text-(--biu-color-text) outline-none placeholder:text-(--biu-color-text-placeholder)"
-            onChange={(e) => setText(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
-                e.preventDefault()
-                void sendReply()
-              }
-            }}
-          />
-          <button
-            type="submit"
-            disabled={!text.trim() || sending}
-            data-testid="channel-thread-send"
-            className="composer-send shrink-0"
-            aria-label="发送讨论串回复"
-            title="发送"
-          >
-            <ArrowUpIcon className="size-3.5" aria-hidden />
-          </button>
-        </div>
-      </form>
-    </aside>
   )
 }

@@ -48,6 +48,13 @@ export interface ChannelAttachment {
   kind: 'image' | 'file'
 }
 
+export interface ChannelSidebarThreadItem {
+  rootId: string
+  title: string
+  replyCount: number
+  lastReplyAt: number
+}
+
 export interface ChannelSummary {
   id: string
   workspaceId: string
@@ -72,6 +79,7 @@ export interface ChannelSummary {
   lastReadSeq?: number
   muted?: boolean
   pinned?: boolean
+  threads?: ChannelSidebarThreadItem[]
 }
 
 export interface ChannelMemberView {
