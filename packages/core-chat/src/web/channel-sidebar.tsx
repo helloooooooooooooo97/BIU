@@ -456,6 +456,13 @@ export const ChannelSidebarSections = memo(function ChannelSidebarSections({
                   <div key={ch.id} className="min-w-0">
                     <SidebarRow
                       active={active}
+                      attrs={{
+                        'data-biu-kind': 'channel',
+                        'data-biu-id': ch.id,
+                        'data-biu-label': ch.name,
+                        'data-biu-title': ch.name,
+                        'data-biu-path': `/channels/${ch.id}`,
+                      }}
                       main={
                         <SidebarRowMain>
                           {hasThreads ? (
@@ -557,6 +564,13 @@ export const ChannelSidebarSections = memo(function ChannelSidebarSections({
                               <SidebarRow
                                 key={t.rootId}
                                 active={threadActive}
+                                attrs={{
+                                  'data-biu-kind': 'thread',
+                                  'data-biu-id': `${ch.id}:${t.rootId}`,
+                                  'data-biu-label': t.title,
+                                  'data-biu-title': t.title,
+                                  'data-biu-path': `/channels/${ch.id}`,
+                                }}
                                 main={
                                   <Link
                                     to={`${channelAppPath(ch.id)}?thread=${encodeURIComponent(t.rootId)}`}

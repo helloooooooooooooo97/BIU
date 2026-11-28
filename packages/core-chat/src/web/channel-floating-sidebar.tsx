@@ -19,6 +19,7 @@ import {
 import { AiAvatar } from '@biu/biu-ui/ai-avatar'
 import { apiFetch } from '@biu/biu-ui/api-client'
 import { readStorageString, writeStorageString } from '@biu/biu-ui/client-storage'
+import { pickPreview } from '@biu/core-pick/web'
 import { SidebarMascot, resolveSessionMascot } from '@biu/public-mascot'
 import type { bindSessionView } from '@biu/web-session-view'
 import type {
@@ -513,6 +514,7 @@ export const ChannelFloatingSidebar = memo(function ChannelFloatingSidebar({
   if (!open && members.length === 0) return null
 
   const isSubView = currentTab === 'manage' || currentTab === 'agent-card'
+  const channelPath = channelId ? `/channels/${channelId}` : undefined
 
   return (
     <aside
@@ -675,6 +677,10 @@ export const ChannelFloatingSidebar = memo(function ChannelFloatingSidebar({
                           <div
                             key={`account:${member.memberId}`}
                             data-testid={`channel-roster-member-${member.memberId}`}
+                            data-biu-kind="member"
+                            data-biu-id={member.memberId}
+                            data-biu-label={member.name}
+                            data-biu-path={`/workspace-members/${member.memberId}`}
                             className="group/row flex items-center gap-2 rounded-[9px] px-2 py-1.5 transition-colors hover:bg-(--biu-color-bg-popover-hover)"
                           >
                             <span
@@ -762,6 +768,9 @@ export const ChannelFloatingSidebar = memo(function ChannelFloatingSidebar({
                           <div
                             key={`agent:${ag.memberId}`}
                             data-testid={`channel-roster-agent-${ag.memberId}`}
+                            data-biu-kind="session"
+                            data-biu-id={ag.memberId}
+                            data-biu-label={ag.name}
                             className="group/row flex items-center gap-2 rounded-[9px] px-2 py-1.5 transition-colors hover:bg-(--biu-color-bg-popover-hover)"
                           >
                             <button
@@ -902,11 +911,18 @@ export const ChannelFloatingSidebar = memo(function ChannelFloatingSidebar({
                       暂无聊天记录
                     </div>
                   ) : (
-                    recentChatMessages.map((msg) => (
+                    recentChatMessages.map((msg) => {
+                      const msgText = msg.text || '[附件消息]'
+                      return (
                       <button
                         key={msg.id}
                         type="button"
                         data-testid={`channel-chat-msg-${msg.id}`}
+                        data-biu-kind={msg.senderType === 'agent' || msg.senderType === 'system' ? 'reply' : 'message'}
+                        data-biu-id={msg.id}
+                        data-biu-label={pickPreview(`${msg.senderName}：${msgText}`, 60) || msg.id}
+                        data-biu-path={channelPath}
+                        data-biu-text={pickPreview(msgText, 200) || undefined}
                         className="flex w-full cursor-pointer flex-col gap-0.5 rounded-[10px] border-0 bg-(--biu-color-bg-muted)/40 px-2.5 py-2 text-left transition-colors hover:bg-(--biu-color-bg-popover-hover)"
                         onClick={() => onJumpToMessage?.(msg.id)}
                       >
@@ -915,21 +931,29 @@ export const ChannelFloatingSidebar = memo(function ChannelFloatingSidebar({
                           <span className="shrink-0 tabular-nums">{formatCompactTime(msg.createdAt)}</span>
                         </div>
                         <div className="line-clamp-2 text-[12px] leading-relaxed text-(--biu-color-text-muted)">
-                          {msg.text || '[附件消息]'}
+                          {msgText}
                         </div>
                       </button>
-                    ))
+                      )
+                    })
                   )
                 ) : searching ? (
                   <div className="py-8 text-center text-[12px] text-(--biu-color-text-subtle)">搜索中…</div>
                 ) : searchHits.length === 0 ? (
                   <div className="py-8 text-center text-[12px] text-(--biu-color-text-subtle)">未找到匹配消息</div>
                 ) : (
-                  searchHits.map((hit) => (
+                  searchHits.map((hit) => {
+                    const hitText = hit.text || '[附件消息]'
+                    return (
                     <button
                       key={hit.id}
                       type="button"
                       data-testid={`channel-search-hit-${hit.id}`}
+                      data-biu-kind={hit.senderType === 'agent' || hit.senderType === 'system' ? 'reply' : 'message'}
+                      data-biu-id={hit.id}
+                      data-biu-label={pickPreview(`${hit.senderName}：${hitText}`, 60) || hit.id}
+                      data-biu-path={channelPath}
+                      data-biu-text={pickPreview(hitText, 200) || undefined}
                       className="flex w-full cursor-pointer flex-col gap-0.5 rounded-[10px] border-0 bg-(--biu-color-bg-muted)/40 px-2.5 py-2 text-left transition-colors hover:bg-(--biu-color-bg-popover-hover)"
                       onClick={() => onJumpToMessage?.(hit.id)}
                     >
@@ -941,7 +965,8 @@ export const ChannelFloatingSidebar = memo(function ChannelFloatingSidebar({
                         {hit.text}
                       </div>
                     </button>
-                  ))
+                    )
+                  })
                 )}
               </div>
             </div>
@@ -956,9 +981,16 @@ export const ChannelFloatingSidebar = memo(function ChannelFloatingSidebar({
                   <span>当前聊天暂无置顶消息</span>
                 </div>
               ) : (
-                pinnedMessages.map((pm) => (
+                pinnedMessages.map((pm) => {
+                  const pmText = pm.text || '[附件消息]'
+                  return (
                   <div
                     key={pm.id}
+                    data-biu-kind={pm.senderType === 'agent' || pm.senderType === 'system' ? 'reply' : 'message'}
+                    data-biu-id={pm.id}
+                    data-biu-label={pickPreview(`${pm.senderName}：${pmText}`, 60) || pm.id}
+                    data-biu-path={channelPath}
+                    data-biu-text={pickPreview(pmText, 200) || undefined}
                     className="group/card rounded-[10px] bg-(--biu-color-bg-muted)/45 p-2.5 transition-colors hover:bg-(--biu-color-bg-popover-hover)"
                   >
                     <div className="mb-1 flex items-center justify-between gap-2 text-[11px] text-(--biu-color-text-subtle)">
@@ -985,10 +1017,11 @@ export const ChannelFloatingSidebar = memo(function ChannelFloatingSidebar({
                       className="line-clamp-3 w-full cursor-pointer border-0 bg-transparent p-0 text-left text-[12.5px] leading-relaxed text-(--biu-color-text)"
                       onClick={() => onJumpToMessage?.(pm.id)}
                     >
-                      {pm.text || '[附件消息]'}
+                      {pmText}
                     </button>
                   </div>
-                ))
+                  )
+                })
               )}
             </div>
           ) : null}
@@ -1002,9 +1035,16 @@ export const ChannelFloatingSidebar = memo(function ChannelFloatingSidebar({
                   <span>暂无收藏的消息</span>
                 </div>
               ) : (
-                savedMessages.map((item) => (
+                savedMessages.map((item) => {
+                  const savedText = item.message.text || '[附件消息]'
+                  return (
                   <div
                     key={item.message.id}
+                    data-biu-kind={item.message.senderType === 'agent' || item.message.senderType === 'system' ? 'reply' : 'message'}
+                    data-biu-id={item.message.id}
+                    data-biu-label={pickPreview(`${item.message.senderName}：${savedText}`, 60) || item.message.id}
+                    data-biu-path={`/channels/${item.channelId}`}
+                    data-biu-text={pickPreview(savedText, 200) || undefined}
                     className="group/card rounded-[10px] bg-(--biu-color-bg-muted)/45 p-2.5 transition-colors hover:bg-(--biu-color-bg-popover-hover)"
                   >
                     <div className="mb-1 flex items-center justify-between gap-2 text-[11px] text-(--biu-color-text-subtle)">
@@ -1034,10 +1074,11 @@ export const ChannelFloatingSidebar = memo(function ChannelFloatingSidebar({
                       className="line-clamp-3 w-full cursor-pointer border-0 bg-transparent p-0 text-left text-[12.5px] leading-relaxed text-(--biu-color-text)"
                       onClick={() => onJumpToSavedMessage?.(item)}
                     >
-                      {item.message.text || '[附件消息]'}
+                      {savedText}
                     </button>
                   </div>
-                ))
+                  )
+                })
               )}
             </div>
           ) : null}
@@ -1120,7 +1161,16 @@ export const ChannelFloatingSidebar = memo(function ChannelFloatingSidebar({
                     </button>
                   </div>
                 ) : summaryState?.summary ? (
-                  <MarkdownBody text={summaryState.summary} />
+                  <div
+                    data-testid="channel-summary-content"
+                    data-biu-kind="text"
+                    data-biu-id={`channel-summary:${channelId || 'current'}`}
+                    data-biu-label={`${channel?.name || '聊天'} · AI 总结`}
+                    data-biu-path={channelPath}
+                    data-biu-text={pickPreview(summaryState.summary, 240) || undefined}
+                  >
+                    <MarkdownBody text={summaryState.summary} />
+                  </div>
                 ) : (
                   <div className="flex flex-col items-center justify-center gap-2.5 py-8 text-center">
                     <span className="inline-flex size-8 items-center justify-center rounded-full bg-(--biu-color-bg-elevated)/80 text-(--biu-color-text-muted) shadow-xs">

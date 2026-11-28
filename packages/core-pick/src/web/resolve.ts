@@ -55,7 +55,7 @@ function inHiddenPane(node: Element | null) {
   return Boolean(
     composedClosest(
       node,
-      '.inspector-stage-pane:not(.is-active), .app-stage-pane:not(.is-active), .session-inspector.is-closed, .app-side-bar.is-closed',
+      '.inspector-stage-pane:not(.is-active), .app-stage-pane:not(.is-active), .session-inspector.is-closed, .app-side-bar.is-closed, .sidebar-fold:not(.is-open), [inert]',
     ),
   )
 }
@@ -65,7 +65,7 @@ function isOpenPickSurface(node: HTMLElement | null): node is HTMLElement {
 }
 
 const PICK_SURFACE_SEL =
-  '[data-testid="session-inspector"], .session-inspector, .app-side-bar, [data-testid="chat-overlay-panel"]'
+  '[data-testid="session-inspector"], .session-inspector, .app-side-bar, [data-testid="chat-overlay-panel"], [data-testid="channel-floating-panel"]'
 
 /** 点落在哪一栏：检查器 / 侧栏 / 悬浮窗 / 中间台。框选和点选都不跨栏。 */
 export function pickSurfaceFromNode(node: Element | null): HTMLElement | null {
