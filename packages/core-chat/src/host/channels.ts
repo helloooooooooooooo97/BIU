@@ -1543,6 +1543,96 @@ export class ChannelService {
     return members
   }
 
+  /**
+   * 批量静态导入成员或 Agent（例如按成员视图 / Agent 视图的瞬时快照一次性导入，不建立动态绑定）。
+   * 已在群内或无权限（非本空间成员 / 他人归属 Agent）的条目会自动跳过并在结果中汇报。
+   */
+  addMembers(
+    channelId: string,
+    memberType: ChannelMemberType,
+    memberIds: string[],
+    contextMode: ChannelAgentContextMode = 'summary',
+  ): {
+    members: ChannelMemberView[]
+    addedIds: string[]
+    skippedExistingIds: string[]
+    skippedForbiddenIds: string[]
+  } {
+    const { accountId } = this.currentActorIds()
+    const row = this.requireChannelRow(channelId, accountId)
+    if (memberType === 'account' && row.kind === 'dm') {
+      throw new Error('1v1 私聊不支持添加新成员，请新建群聊')
+    }
+    const uniqueIds = [...new Set((memberIds ?? []).map((id) => String(id ?? '').trim()).filter(Boolean))]
+    if (uniqueIds.length === 0) {
+      return {
+        members: this.listMembers(channelId, accountId, row.workspace_id),
+        addedIds: [],
+        skippedExistingIds: [],
+        skippedForbiddenIds: [],
+      }
+    }
+
+    const db = this.db()
+    const existingRows = db
+      .prepare(
+        `SELECT member_id FROM channel_members
+         WHERE channel_id = ? AND member_type = ? AND hidden_at = 0`,
+      )
+      .all(channelId, memberType) as Array<{ member_id: string }>
+    const existingSet = new Set(existingRows.map((r) => r.member_id))
+
+    const addedIds: string[] = []
+    const skippedExistingIds: string[] = []
+    const skippedForbiddenIds: string[] = []
+    const now = Date.now()
+    const safeMode = normalizeAgentContextMode(contextMode)
+    const store = memberType === 'account' ? this.accountStore() : undefined
+    const upsertStmt = db.prepare(
+      `INSERT INTO channel_members (channel_id, member_type, member_id, role, context_mode, added_by, added_at)
+       VALUES (?, ?, ?, 'member', ?, ?, ?)
+       ON CONFLICT(channel_id, member_type, member_id) DO UPDATE SET hidden_at = 0`,
+    )
+
+    for (const cleanId of uniqueIds) {
+      if (existingSet.has(cleanId)) {
+        skippedExistingIds.push(cleanId)
+        continue
+      }
+      if (memberType === 'account') {
+        if (row.workspace_id && accountId !== 'local' && store?.isMember && !store.isMember(cleanId, row.workspace_id)) {
+          skippedForbiddenIds.push(cleanId)
+          continue
+        }
+      } else {
+        const meta = this.agentMeta(cleanId)
+        if (accountId !== 'local' && meta.ownerAccountId !== 'local' && meta.ownerAccountId !== accountId) {
+          skippedForbiddenIds.push(cleanId)
+          continue
+        }
+      }
+      upsertStmt.run(channelId, memberType, cleanId, safeMode, accountId, now)
+      existingSet.add(cleanId)
+      addedIds.push(cleanId)
+    }
+
+    if (addedIds.length > 0) {
+      db.prepare(`UPDATE channels SET updated_at = ? WHERE id = ?`).run(now, channelId)
+    }
+
+    const members = this.listMembers(channelId, accountId, row.workspace_id)
+    if (addedIds.length > 0) {
+      this.broadcastToChannel(channelId, row.workspace_id, 'channel/members', { channelId, members })
+      if (memberType === 'account') {
+        for (const invitedId of addedIds) {
+          const invitedSummary = this.toSummary(row, invitedId)
+          this.broadcastToAccounts([invitedId], row.workspace_id, 'channel/updated', { channel: invitedSummary })
+        }
+      }
+    }
+    return { members, addedIds, skippedExistingIds, skippedForbiddenIds }
+  }
+
   /** 仅 Agent 归属人可切换该 Agent 在当前群聊的只读投影模式（summary / isolated）。 */
   updateAgentContextMode(channelId: string, agentId: string, contextMode: ChannelAgentContextMode): ChannelMemberView[] {
     const { accountId } = this.currentActorIds()
@@ -3931,9 +4021,14 @@ export function registerChannelRoutes(ctx: Context, resolveLlm: (sessionId?: str
       const body = (await route.json()) as {
         memberType?: ChannelMemberType
         memberId?: string
+        memberIds?: string[]
         contextMode?: ChannelAgentContextMode
       }
       const memberType: ChannelMemberType = body?.memberType === 'agent' ? 'agent' : 'account'
+      if (Array.isArray(body?.memberIds)) {
+        route.send(200, service.addMembers(route.params.id, memberType, body.memberIds, body?.contextMode))
+        return
+      }
       route.send(
         200,
         { members: service.addMember(route.params.id, memberType, body?.memberId ?? '', body?.contextMode) },

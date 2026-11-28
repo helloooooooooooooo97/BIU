@@ -46,6 +46,7 @@ import type {
 } from '../shared/channel-types.ts'
 import {
   addChannelMember,
+  addChannelMembers,
   createChannelWebhook,
   deleteChannel,
   deleteChannelWebhook,
@@ -60,6 +61,11 @@ import {
   updateChannelPreferences,
   updateChannelWebhook,
 } from './channel-store.ts'
+import {
+  fetchCollectionViews,
+  resolveCollectionViewIds,
+  type SavedCollectionViewOption,
+} from './channel-view-import.ts'
 import { MarkdownBody } from './markdown.tsx'
 
 export type ChannelFloatingTab = 'roster' | 'search' | 'pins' | 'saved' | 'summary' | 'manage' | 'agent-card'
@@ -263,6 +269,9 @@ export const ChannelFloatingSidebar = memo(function ChannelFloatingSidebar({
   const [memberSearch, setMemberSearch] = useState('')
   const [addAgentOpen, setAddAgentOpen] = useState(false)
   const [agentSearch, setAgentSearch] = useState('')
+  const [memberViews, setMemberViews] = useState<SavedCollectionViewOption[]>([])
+  const [agentViews, setAgentViews] = useState<SavedCollectionViewOption[]>([])
+  const [importingViewKey, setImportingViewKey] = useState<string | null>(null)
 
   // Webhook 消息源管理状态（原地内嵌在管理子视图中）
   const [webhooks, setWebhooks] = useState<ChannelWebhookView[]>([])
@@ -318,6 +327,14 @@ export const ChannelFloatingSidebar = memo(function ChannelFloatingSidebar({
         )
       })
       .catch(() => undefined)
+    if (!isDm) {
+      void fetchCollectionViews('/workspace-members').then((list) => {
+        if (!cancelled) setMemberViews(list)
+      })
+    }
+    void fetchCollectionViews('/agents').then((list) => {
+      if (!cancelled) setAgentViews(list)
+    })
     if (!isDm && channelId) {
       setWebhooksLoading(true)
       void loadChannelWebhooks(channelId)
@@ -622,6 +639,51 @@ export const ChannelFloatingSidebar = memo(function ChannelFloatingSidebar({
       await addChannelMember(channelId, type, id)
     } catch (err) {
       setManageError(err instanceof Error ? err.message : String(err))
+    }
+  }
+
+  const handleImportFromView = async (type: 'account' | 'agent', view: SavedCollectionViewOption) => {
+    if (!channelId || importingViewKey) return
+    const key = `${type}:${view.id}`
+    setImportingViewKey(key)
+    setManageError('')
+    setSyncNotice('')
+    try {
+      const path = type === 'account' ? '/workspace-members' : '/agents'
+      const snapshot = await resolveCollectionViewIds(path, view.id)
+      const kindLabel = type === 'account' ? '成员' : 'Agent'
+      const unit = type === 'account' ? '位成员' : '个 Agent'
+      if (snapshot.ids.length === 0) {
+        setSyncNotice(`${kindLabel}视图「${view.name}」当前暂无匹配${kindLabel}`)
+        return
+      }
+      const res = await addChannelMembers(channelId, type, snapshot.ids)
+      const skippedParts: string[] = []
+      if (res.skippedExistingIds.length > 0) {
+        skippedParts.push(`${res.skippedExistingIds.length} ${unit}已在群内`)
+      }
+      if (res.skippedForbiddenIds.length > 0) {
+        skippedParts.push(
+          type === 'agent'
+            ? `${res.skippedForbiddenIds.length} 个他人归属已跳过`
+            : `${res.skippedForbiddenIds.length} 位非本空间成员已跳过`,
+        )
+      }
+      if (res.addedIds.length > 0) {
+        setSyncNotice(
+          `已从${kindLabel}视图「${view.name}」静态导入 ${res.addedIds.length} ${unit}${
+            skippedParts.length > 0 ? `（${skippedParts.join('，')}）` : ''
+          }`,
+        )
+      } else if (skippedParts.length > 0) {
+        setSyncNotice(`${kindLabel}视图「${view.name}」无新增可导入项（${skippedParts.join('，')}）`)
+      } else {
+        setSyncNotice(`${kindLabel}视图「${view.name}」当前暂无匹配${kindLabel}`)
+      }
+    } catch (err) {
+      setManageError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setImportingViewKey(null)
     }
   }
 
@@ -1386,7 +1448,10 @@ export const ChannelFloatingSidebar = memo(function ChannelFloatingSidebar({
                 </div>
               ) : null}
               {syncNotice ? (
-                <div className="rounded-[9px] bg-emerald-500/12 px-2.5 py-2 text-[11.5px] text-emerald-400">
+                <div
+                  className="rounded-[9px] bg-emerald-500/12 px-2.5 py-2 text-[11.5px] text-emerald-400"
+                  data-testid="channel-manage-notice"
+                >
                   {syncNotice}
                 </div>
               ) : null}
@@ -1521,6 +1586,32 @@ export const ChannelFloatingSidebar = memo(function ChannelFloatingSidebar({
                 </div>
                 {addAgentOpen ? (
                   <div className="space-y-2 rounded-[10px] bg-(--biu-color-bg-muted)/50 p-2" data-testid="channel-add-agent-panel">
+                    {agentViews.length > 0 ? (
+                      <div className="space-y-1" data-testid="channel-import-agent-views">
+                        <div className="flex items-center justify-between text-[10.5px] text-(--biu-color-text-subtle)">
+                          <span>按 Agent 视图批量导入</span>
+                          <span>静态快照</span>
+                        </div>
+                        <div className="flex flex-wrap gap-1">
+                          {agentViews.map((v) => {
+                            const busyThis = importingViewKey === `agent:${v.id}`
+                            return (
+                              <button
+                                key={v.id}
+                                type="button"
+                                disabled={importingViewKey !== null}
+                                data-testid={`channel-import-agent-view-${v.id}`}
+                                title={`仅静态导入视图「${v.name}」当前匹配的本人 Agent，不动态绑定视图`}
+                                className="inline-flex h-6 cursor-pointer items-center gap-1 rounded-[6px] border border-(--biu-color-border-popover) bg-(--biu-color-bg-popover) px-2 text-[11px] text-(--biu-color-text-muted) transition-colors hover:bg-(--biu-color-bg-popover-hover) hover:text-(--biu-color-text) disabled:opacity-50"
+                                onClick={() => void handleImportFromView('agent', v)}
+                              >
+                                <span className="max-w-[140px] truncate">{busyThis ? '导入中…' : v.name}</span>
+                              </button>
+                            )
+                          })}
+                        </div>
+                      </div>
+                    ) : null}
                     {myAddableAgents.length > 0 ? (
                       <>
                         <input
@@ -1658,6 +1749,32 @@ export const ChannelFloatingSidebar = memo(function ChannelFloatingSidebar({
                 </div>
                 {!isDm && addMemberOpen ? (
                   <div className="space-y-2 rounded-[10px] bg-(--biu-color-bg-muted)/50 p-2" data-testid="channel-add-member-panel">
+                    {memberViews.length > 0 ? (
+                      <div className="space-y-1" data-testid="channel-import-member-views">
+                        <div className="flex items-center justify-between text-[10.5px] text-(--biu-color-text-subtle)">
+                          <span>按成员视图批量导入</span>
+                          <span>静态快照</span>
+                        </div>
+                        <div className="flex flex-wrap gap-1">
+                          {memberViews.map((v) => {
+                            const busyThis = importingViewKey === `account:${v.id}`
+                            return (
+                              <button
+                                key={v.id}
+                                type="button"
+                                disabled={importingViewKey !== null}
+                                data-testid={`channel-import-member-view-${v.id}`}
+                                title={`仅静态导入视图「${v.name}」当前的成员名单，不动态绑定视图`}
+                                className="inline-flex h-6 cursor-pointer items-center gap-1 rounded-[6px] border border-(--biu-color-border-popover) bg-(--biu-color-bg-popover) px-2 text-[11px] text-(--biu-color-text-muted) transition-colors hover:bg-(--biu-color-bg-popover-hover) hover:text-(--biu-color-text) disabled:opacity-50"
+                                onClick={() => void handleImportFromView('account', v)}
+                              >
+                                <span className="max-w-[140px] truncate">{busyThis ? '导入中…' : v.name}</span>
+                              </button>
+                            )
+                          })}
+                        </div>
+                      </div>
+                    ) : null}
                     {addableHumans.length > 0 ? (
                       <>
                         <input

@@ -556,6 +556,129 @@ test('CreateChannelDialog replaces name/topic fields with search box and builds 
   })
 })
 
+test('CreateChannelDialog supports one-time static batch import from member views and agent views', async () => {
+  let postedBody: Record<string, unknown> | null = null
+  const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = new URL(String(input), 'http://test.local')
+    if (url.pathname === '/api/channels' && init?.method === 'POST') {
+      postedBody = JSON.parse(String(init.body ?? '{}')) as Record<string, unknown>
+      return new Response(
+        JSON.stringify({
+          channel: {
+            id: 'ch-view-import',
+            workspaceId: 'ws-1',
+            kind: 'channel',
+            dmKey: '',
+            name: String(postedBody.name ?? ''),
+            topic: '',
+            accessMode: 'private',
+            createdBy: 'acc-alice',
+            createdAt: 1,
+            updatedAt: 1,
+            memberCount: 3,
+            agentCount: 1,
+            lastMessageAt: 1,
+            lastMessageText: '',
+          },
+          members: [],
+          messages: [],
+          activities: [],
+          myAccountId: 'acc-alice',
+          canManageMembers: true,
+        }),
+        { status: 200 },
+      )
+    }
+    if (url.pathname === '/api/channels') {
+      return new Response(JSON.stringify({ channels: [] }), { status: 200 })
+    }
+    if (url.pathname === '/api/account/workspace-profile') {
+      return new Response(JSON.stringify({ accountId: 'acc-alice' }), { status: 200 })
+    }
+    if (url.pathname === '/api/db/saved-views') {
+      const p = url.searchParams.get('path')
+      if (p === '/workspace-members') {
+        return new Response(JSON.stringify({ views: [{ id: 'mv-core', name: '核心成员' }] }), { status: 200 })
+      }
+      if (p === '/agents') {
+        return new Response(JSON.stringify({ views: [{ id: 'av-code', name: '代码助手' }] }), { status: 200 })
+      }
+      return new Response(JSON.stringify({ views: [] }), { status: 200 })
+    }
+    if (url.pathname === '/api/db/list') {
+      const p = url.searchParams.get('path')
+      const viewId = url.searchParams.get('view_id')
+      if (p === '/workspace-members' && viewId === 'mv-core') {
+        return new Response(
+          JSON.stringify({ items: [{ id: 'acc-alice' }, { id: 'acc-97' }, { id: 'acc-bob' }], total: 3 }),
+          { status: 200 },
+        )
+      }
+      if (p === '/agents' && viewId === 'av-code') {
+        return new Response(
+          JSON.stringify({ items: [{ id: 'ag-1' }, { id: 'ag-foreign' }], total: 2 }),
+          { status: 200 },
+        )
+      }
+      return new Response(
+        JSON.stringify({
+          items: [
+            { id: 'acc-alice', title: 'Alice' },
+            { id: 'acc-97', title: '97', email: '97@example.com' },
+            { id: 'acc-bob', title: 'Bob', email: 'bob@example.com' },
+          ],
+        }),
+        { status: 200 },
+      )
+    }
+    return new Response(JSON.stringify({}), { status: 200 })
+  })
+  vi.stubGlobal('fetch', fetchMock)
+
+  const fakeUseSessionView = ((selector: (s: { sessions: Array<{ id: string; title: string; createdBy?: string }> }) => unknown) =>
+    selector({
+      sessions: [
+        { id: 'ag-1', title: '赤板灵', createdBy: 'acc-alice' },
+        { id: 'ag-2', title: '紫晶美', createdBy: 'acc-alice' },
+      ],
+    })) as unknown as Parameters<typeof ChannelSidebarSections>[0]['useSessionView']
+
+  const view = render(
+    <MemoryRouter initialEntries={['/']}>
+      <ChannelSidebarSections routeChannelId={null} useSessionView={fakeUseSessionView} />
+    </MemoryRouter>,
+  )
+
+  fireEvent.click(view.getByTestId('sidebar-create-channel'))
+  await waitFor(() => view.getByTestId('create-channel-dialog'))
+
+  // 从成员视图静态批量勾选（排除自己）
+  const memberViewBtn = await waitFor(() => view.getByTestId('create-import-member-view-mv-core'))
+  fireEvent.click(memberViewBtn)
+  await waitFor(() => {
+    const notice = view.getByTestId('create-channel-view-import-notice').textContent ?? ''
+    assert.ok(notice.includes('静态勾选 2 位成员'))
+  })
+
+  // 从 Agent 视图静态批量勾选（自动忽略他人归属的 ag-foreign）
+  const agentViewBtn = await waitFor(() => view.getByTestId('create-import-agent-view-av-code'))
+  fireEvent.click(agentViewBtn)
+  await waitFor(() => {
+    const notice = view.getByTestId('create-channel-view-import-notice').textContent ?? ''
+    assert.ok(notice.includes('静态勾选 1 个 Agent'))
+    assert.ok(notice.includes('1 个他人归属已忽略'))
+  })
+
+  // 因为是静态快照，用户仍可手动取消勾选其中某位成员（Bob）
+  fireEvent.click(view.getByText('Bob'))
+
+  fireEvent.click(view.getByTestId('create-channel-submit'))
+  await waitFor(() => {
+    assert.deepEqual(postedBody?.memberAccountIds, ['acc-97'])
+    assert.deepEqual(postedBody?.agentIds, ['ag-1'])
+  })
+})
+
 test('ChannelStage allows agent owner to toggle contextMode and manually sync conclusions back to 1v1', async () => {
   let patchedMode: string | null = null
   let syncedPayload: Record<string, unknown> | null = null

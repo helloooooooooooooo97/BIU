@@ -185,3 +185,141 @@ test('ChannelFloatingSidebar collapses to avatar rail, expands on hover, persist
     assert.equal(Boolean(remounted.queryByTestId('channel-floating-rail')), true)
   })
 })
+
+test('ChannelFloatingSidebar manage tab batch-imports members and agents statically from saved views', async () => {
+  const memberBatchBodies: Array<Record<string, unknown>> = []
+  const listCalls: Array<{ path: string; viewId: string }> = []
+  const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = new URL(String(input), 'http://test.local')
+    if (url.pathname === '/api/db/saved-views') {
+      const p = url.searchParams.get('path')
+      if (p === '/workspace-members') {
+        return new Response(JSON.stringify({ views: [{ id: 'mv-data', name: '数据团队' }] }), { status: 200 })
+      }
+      if (p === '/agents') {
+        return new Response(JSON.stringify({ views: [{ id: 'av-rd', name: '研发助手' }] }), { status: 200 })
+      }
+      return new Response(JSON.stringify({ views: [] }), { status: 200 })
+    }
+    if (url.pathname === '/api/db/list') {
+      const p = url.searchParams.get('path') ?? ''
+      const viewId = url.searchParams.get('view_id') ?? ''
+      listCalls.push({ path: p, viewId })
+      if (p === '/workspace-members' && viewId === 'mv-data') {
+        return new Response(
+          JSON.stringify({ items: [{ id: 'acc-lulu' }, { id: 'acc-bob' }, { id: 'acc-carol' }], total: 3 }),
+          { status: 200 },
+        )
+      }
+      if (p === '/workspace-members') {
+        return new Response(
+          JSON.stringify({
+            items: [
+              { id: 'acc-97', title: '97' },
+              { id: 'acc-lulu', title: 'lulu@qq.com' },
+              { id: 'acc-bob', title: 'Bob' },
+              { id: 'acc-carol', title: 'Carol' },
+            ],
+          }),
+          { status: 200 },
+        )
+      }
+      if (p === '/agents' && viewId === 'av-rd') {
+        return new Response(
+          JSON.stringify({ items: [{ id: 'ag-1' }, { id: 'ag-2' }, { id: 'ag-other' }], total: 3 }),
+          { status: 200 },
+        )
+      }
+      return new Response(JSON.stringify({ items: [] }), { status: 200 })
+    }
+    if (url.pathname === '/api/channels/ch-1/webhooks') {
+      return new Response(JSON.stringify({ webhooks: [] }), { status: 200 })
+    }
+    if (url.pathname === '/api/channels/ch-1/members' && init?.method === 'POST') {
+      const body = JSON.parse(String(init.body ?? '{}')) as Record<string, unknown>
+      memberBatchBodies.push(body)
+      if (body.memberType === 'account') {
+        return new Response(
+          JSON.stringify({
+            members: MEMBERS,
+            addedIds: ['acc-bob', 'acc-carol'],
+            skippedExistingIds: ['acc-lulu'],
+            skippedForbiddenIds: [],
+          }),
+          { status: 200 },
+        )
+      }
+      return new Response(
+        JSON.stringify({
+          members: MEMBERS,
+          addedIds: ['ag-2'],
+          skippedExistingIds: ['ag-1'],
+          skippedForbiddenIds: ['ag-other'],
+        }),
+        { status: 200 },
+      )
+    }
+    return new Response(JSON.stringify({}), { status: 200 })
+  })
+  vi.stubGlobal('fetch', fetchMock)
+
+  const view = render(
+    <ChannelFloatingSidebar
+      channelId="ch-1"
+      channel={CHANNEL}
+      isDm={false}
+      members={MEMBERS}
+      activities={[]}
+      myAccountId="acc-97"
+      canManageMembers
+      pinnedMessageCount={0}
+      activeTab="manage"
+      resolveAvatar={() => undefined}
+      isOnline={() => false}
+      onMention={() => {}}
+      onAgentClick={() => {}}
+      onOpenDm={() => {}}
+      onOpenManageMembers={() => {}}
+      onOpenPins={() => {}}
+      onOpenSaved={() => {}}
+      onSummarize={() => {}}
+      onToggleSearch={() => {}}
+      onToggleChannelPinned={() => {}}
+      onToggleChannelMuted={() => {}}
+    />,
+  )
+
+  // 展开添加成员面板并点击成员视图「数据团队」一键静态导入
+  fireEvent.click(view.getByTestId('channel-open-add-member'))
+  const memberViewBtn = await waitFor(() => view.getByTestId('channel-import-member-view-mv-data'))
+  fireEvent.click(memberViewBtn)
+
+  await waitFor(() => {
+    const notice = view.getByTestId('channel-manage-notice').textContent ?? ''
+    assert.ok(notice.includes('静态导入 2 位成员'))
+    assert.ok(notice.includes('1 位成员已在群内'))
+  })
+
+  // 展开添加 Agent 面板并点击 Agent 视图「研发助手」一键静态导入
+  fireEvent.click(view.getByTestId('channel-open-add-agent'))
+  const agentViewBtn = await waitFor(() => view.getByTestId('channel-import-agent-view-av-rd'))
+  fireEvent.click(agentViewBtn)
+
+  await waitFor(() => {
+    const notice = view.getByTestId('channel-manage-notice').textContent ?? ''
+    assert.ok(notice.includes('静态导入 1 个 Agent'))
+    assert.ok(notice.includes('1 个他人归属已跳过'))
+  })
+
+  assert.deepEqual(
+    listCalls.filter((c) => c.viewId),
+    [
+      { path: '/workspace-members', viewId: 'mv-data' },
+      { path: '/agents', viewId: 'av-rd' },
+    ],
+  )
+  assert.deepEqual(memberBatchBodies, [
+    { memberType: 'account', memberIds: ['acc-lulu', 'acc-bob', 'acc-carol'] },
+    { memberType: 'agent', memberIds: ['ag-1', 'ag-2', 'ag-other'] },
+  ])
+})

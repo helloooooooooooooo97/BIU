@@ -407,6 +407,44 @@ export async function addChannelMember(
   return members
 }
 
+export type BatchAddChannelMembersResult = {
+  members: ChannelMemberView[]
+  addedIds: string[]
+  skippedExistingIds: string[]
+  skippedForbiddenIds: string[]
+}
+
+/** 批量静态导入成员或 Agent（一次性写入快照名单，不动态绑定源视图）。 */
+export async function addChannelMembers(
+  channelId: string,
+  memberType: ChannelMemberType,
+  memberIds: string[],
+  contextMode?: ChannelAgentContextMode,
+): Promise<BatchAddChannelMembersResult> {
+  const res = await apiFetch(`/api/channels/${encodeURIComponent(channelId)}/members`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ memberType, memberIds, ...(contextMode ? { contextMode } : {}) }),
+  })
+  const body = (await res.json()) as Partial<BatchAddChannelMembersResult> & { error?: string }
+  if (!res.ok) throw new Error(body.error || '批量导入失败')
+  const members = body.members ?? []
+  setState((prev) => {
+    const detail = prev.details[channelId]
+    if (!detail) return prev
+    return {
+      ...prev,
+      details: { ...prev.details, [channelId]: { ...detail, members } },
+    }
+  })
+  return {
+    members,
+    addedIds: body.addedIds ?? [],
+    skippedExistingIds: body.skippedExistingIds ?? [],
+    skippedForbiddenIds: body.skippedForbiddenIds ?? [],
+  }
+}
+
 export async function updateChannelAgentContextMode(
   channelId: string,
   agentId: string,
