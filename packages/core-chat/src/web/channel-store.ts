@@ -20,6 +20,8 @@ import type {
   ChannelSummary,
   ChannelThreadPayload,
   ChannelWebhookView,
+  ForumPostStatus,
+  GroupChannelKind,
 } from '../shared/channel-types.ts'
 
 export type ChannelTypingUser = {
@@ -107,7 +109,11 @@ function sortChannels(channels: ChannelSummary[]): ChannelSummary[] {
   )
 }
 
-function formatSidebarThreadTitle(msg: Pick<ChannelMessageView, 'text' | 'attachments'>): string {
+function formatSidebarThreadTitle(msg: Pick<ChannelMessageView, 'text' | 'attachments' | 'meta'>): string {
+  const postTitle = String(msg.meta?.postTitle ?? '').trim()
+  if (postTitle) {
+    return postTitle.length > 28 ? `${postTitle.slice(0, 28)}…` : postTitle
+  }
   const cleanLine = String(msg.text ?? '')
     .replace(/[#>*`[\]()]/g, ' ')
     .replace(/\s+/g, ' ')
@@ -268,7 +274,9 @@ export async function loadChannelDetail(channelId: string): Promise<ChannelDetai
 export async function createChannel(input: {
   name?: string
   topic?: string
+  kind?: GroupChannelKind
   accessMode?: ChannelAccessMode
+  forumTags?: string[]
   memberAccountIds?: string[]
   agentIds?: string[]
   agentContextMode?: ChannelAgentContextMode
@@ -305,16 +313,29 @@ function applyChannelSummaryUpdate(channel: ChannelSummary) {
   })
 }
 
-export async function renameChannel(channelId: string, name: string): Promise<ChannelSummary> {
+export async function updateChannel(
+  channelId: string,
+  patch: {
+    name?: string
+    topic?: string
+    accessMode?: ChannelAccessMode
+    kind?: GroupChannelKind
+    forumTags?: string[]
+  },
+): Promise<ChannelSummary> {
   const res = await apiFetch(`/api/channels/${encodeURIComponent(channelId)}`, {
     method: 'PATCH',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ name }),
+    body: JSON.stringify(patch),
   })
   const body = (await res.json()) as { channel?: ChannelSummary; error?: string }
-  if (!res.ok || !body.channel) throw new Error(body.error || '重命名失败')
+  if (!res.ok || !body.channel) throw new Error(body.error || '更新频道设置失败')
   applyChannelSummaryUpdate(body.channel)
   return body.channel
+}
+
+export async function renameChannel(channelId: string, name: string): Promise<ChannelSummary> {
+  return updateChannel(channelId, { name })
 }
 
 export async function autoNameChannel(channelId: string): Promise<ChannelSummary> {
@@ -459,6 +480,9 @@ export async function sendChannelMessage(
     threadRootId?: string
     mentions?: ChannelMention[]
     attachments?: ChannelAttachment[]
+    postTitle?: string
+    postTags?: string[]
+    postStatus?: ForumPostStatus
   },
 ): Promise<{ message: ChannelMessageView; triggeredRunIds: string[] }> {
   const res = await apiFetch(`/api/channels/${encodeURIComponent(channelId)}/messages`, {
@@ -661,6 +685,30 @@ export async function editChannelMessage(
   )
   const body = (await res.json()) as { message?: ChannelMessageView; error?: string }
   if (!res.ok || !body.message) throw new Error(body.error || '编辑消息失败')
+  upsertChannelMessage(body.message, true)
+  return body.message
+}
+
+export async function updateForumPost(
+  channelId: string,
+  messageId: string,
+  patch: {
+    text?: string
+    postTitle?: string
+    postTags?: string[]
+    postStatus?: ForumPostStatus
+  },
+): Promise<ChannelMessageView> {
+  const res = await apiFetch(
+    `/api/channels/${encodeURIComponent(channelId)}/messages/${encodeURIComponent(messageId)}`,
+    {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(patch),
+    },
+  )
+  const body = (await res.json()) as { message?: ChannelMessageView; error?: string }
+  if (!res.ok || !body.message) throw new Error(body.error || '更新帖子失败')
   upsertChannelMessage(body.message, true)
   return body.message
 }

@@ -1511,4 +1511,138 @@ describe('Slack-style Group Channels: RBAC, Mention Dispatch, Per-Invoker Queue,
       rmSync(dir, { recursive: true, force: true })
     }
   })
+
+  it('supports announcement mode permissions (admin-only top-level posts, member thread replies) and forum mode posts/status/agent-in-thread', async () => {
+    const llmCalls: Array<{ agentId: string; userText: string }> = []
+    const env = makeFakeEnv({
+      agents: [{ id: 'ag-helper', title: '架构助手', ownerAccountId: '' }],
+      llm: (agentId) => ({
+        chat: async (messages) => {
+          const userText = messages.filter((m) => m.role === 'user').map((m) => String(m.content)).join('\n')
+          llmCalls.push({ agentId, userText })
+          return { content: '我已在帖子讨论串内回复', toolCalls: [] }
+        },
+      }),
+    })
+    const { alice, bob, carol, ws, store, service: svc, asUser } = env
+    asUser(alice.id, () => store.attach(ws.id, '/agents', 'ag-helper', Date.now(), { accessMode: 'private' }))
+    ;(svc as any).ctx.sessions = {
+      peekSummary: (id: string) =>
+        id === 'ag-helper' ? { id: 'ag-helper', title: '架构助手', config: { systemPrompt: '' } } : null,
+    }
+
+    try {
+      // 1. 公告频道：群主可发顶层公告，普通成员禁止发顶层消息，但允许在公告下发 Thread 回复与表情回应
+      const ann = asUser(alice.id, () =>
+        svc.createChannel({
+          name: '产品发版公告',
+          kind: 'announcement',
+          accessMode: 'workspace',
+          memberAccountIds: [bob.id, carol.id],
+        }),
+      )
+      assert.equal(ann.channel.kind, 'announcement')
+      assert.equal(ann.channel.canPost, true)
+
+      const bobAnnDetail = asUser(bob.id, () => svc.getChannelDetail(ann.channel.id))
+      assert.equal(bobAnnDetail.channel.kind, 'announcement')
+      assert.equal(bobAnnDetail.channel.canPost, false)
+
+      const annPost = asUser(alice.id, () => svc.sendMessage(ann.channel.id, { text: 'v2.5 正式发布！' }))
+      assert.equal(annPost.message.text, 'v2.5 正式发布！')
+
+      assert.throws(
+        () => asUser(bob.id, () => svc.sendMessage(ann.channel.id, { text: '普通成员尝试直接发公告' })),
+        /permission denied.*公告频道仅群主或管理员可发布公告/,
+      )
+
+      const bobReply = asUser(bob.id, () =>
+        svc.sendMessage(ann.channel.id, {
+          text: '收到，请问移动端什么时候同步？',
+          threadRootId: annPost.message.id,
+        }),
+      )
+      assert.equal(bobReply.message.threadRootId, annPost.message.id)
+      const reaction = asUser(bob.id, () => svc.toggleReaction(ann.channel.id, annPost.message.id, '🎉'))
+      assert.equal(reaction.reactions[0]?.emoji, '🎉')
+
+      // 2. 论坛频道：发帖写入结构化标题/标签/状态；发帖时 @Agent 自动把回复落入该帖子讨论串，不生成新帖子
+      const forum = asUser(alice.id, () =>
+        svc.createChannel({
+          name: '技术方案讨论',
+          kind: 'forum',
+          accessMode: 'workspace',
+          forumTags: ['架构', '性能'],
+          memberAccountIds: [bob.id, carol.id],
+          agentIds: ['ag-helper'],
+        }),
+      )
+      assert.equal(forum.channel.kind, 'forum')
+      assert.deepEqual(forum.channel.forumTags, ['架构', '性能'])
+
+      const createdPost = asUser(bob.id, () =>
+        svc.sendMessage(forum.channel.id, {
+          postTitle: '首屏加载耗时优化方案',
+          postTags: ['性能', '架构'],
+          text: '建议做按需拆包， @架构助手 怎么看？',
+        }),
+      )
+      assert.equal(createdPost.message.meta?.postTitle, '首屏加载耗时优化方案')
+      assert.deepEqual(createdPost.message.meta?.postTags, ['性能', '架构'])
+      assert.equal(createdPost.message.meta?.postStatus, 'open')
+      assert.equal(createdPost.triggeredRunIds.length, 1)
+
+      const deadline = Date.now() + 3000
+      while (Date.now() < deadline) {
+        const th = asUser(bob.id, () => svc.getThread(forum.channel.id, createdPost.message.id))
+        if (th.replies.length > 0) break
+        await new Promise((r) => setTimeout(r, 20))
+      }
+      assert.equal(llmCalls.length, 1)
+      assert.ok(llmCalls[0]!.userText.includes('【帖子：首屏加载耗时优化方案】'))
+
+      // 顶层帖子依然只有 1 篇，Agent 回复落在帖子 Thread 下
+      const forumTopMsgs = asUser(bob.id, () => svc.listMessages(forum.channel.id))
+      assert.equal(forumTopMsgs.length, 1)
+      assert.equal(forumTopMsgs[0]!.threadSummary?.replyCount, 1)
+      const threadPayload = asUser(bob.id, () => svc.getThread(forum.channel.id, createdPost.message.id))
+      assert.equal(threadPayload.replies[0]?.senderType, 'agent')
+      assert.equal(threadPayload.replies[0]?.threadRootId, createdPost.message.id)
+
+      // 侧边栏子讨论串优先展示帖子标题
+      const bobSummary = asUser(bob.id, () => svc.getChannelDetail(forum.channel.id)).channel
+      assert.equal(bobSummary.threads?.[0]?.title, '首屏加载耗时优化方案')
+
+      // 3. 帖子状态更新与权限控制：非作者普通成员不可改，作者/管理员可标为已解决/关闭；关闭后禁止新回复
+      assert.throws(
+        () => asUser(carol.id, () => svc.updateForumPost(forum.channel.id, createdPost.message.id, { postStatus: 'resolved' })),
+        /permission denied/,
+      )
+      const resolvedPost = asUser(bob.id, () =>
+        svc.updateForumPost(forum.channel.id, createdPost.message.id, { postStatus: 'resolved', postTags: ['性能'] }),
+      )
+      assert.equal(resolvedPost.meta?.postStatus, 'resolved')
+      assert.deepEqual(resolvedPost.meta?.postTags, ['性能'])
+
+      const closedPost = asUser(alice.id, () =>
+        svc.updateForumPost(forum.channel.id, createdPost.message.id, { postStatus: 'closed' }),
+      )
+      assert.equal(closedPost.meta?.postStatus, 'closed')
+      assert.throws(
+        () =>
+          asUser(bob.id, () =>
+            svc.sendMessage(forum.channel.id, { text: '已关闭后尝试回复', threadRootId: createdPost.message.id }),
+          ),
+        /已关闭/,
+      )
+
+      // 4. 群主可在不同频道模式间无缝切换（底层数据保留），但私聊不支持切换
+      const switched = asUser(alice.id, () => svc.updateChannel(ann.channel.id, { kind: 'forum' }))
+      assert.equal(switched.kind, 'forum')
+      const dm = asUser(alice.id, () => svc.openOrCreateDm(bob.id))
+      assert.throws(() => asUser(alice.id, () => svc.updateChannel(dm.channel.id, { kind: 'announcement' })), /私聊不支持切换/)
+    } finally {
+      env.cleanup()
+    }
+  })
 })

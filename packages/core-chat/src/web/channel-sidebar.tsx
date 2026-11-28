@@ -13,7 +13,9 @@ import {
   HashtagIcon,
   LockClosedIcon,
   MagnifyingGlassIcon,
+  MegaphoneIcon,
   PlusIcon,
+  RectangleStackIcon,
   TrashIcon,
   UserGroupIcon,
   XMarkIcon,
@@ -36,6 +38,7 @@ import {
   buildDefaultChannelName,
   type ChannelAccessMode,
   type ChannelAgentContextMode,
+  type GroupChannelKind,
 } from '../shared/channel-types.ts'
 import {
   createChannel,
@@ -282,6 +285,10 @@ export const ChannelSidebarSections = memo(function ChannelSidebarSections({
                   ) : (
                     <AiAvatar seed={ch.peerAccountId || ch.id} size={20} className="shrink-0 rounded-full" />
                   )
+                ) : ch.kind === 'announcement' ? (
+                  <MegaphoneIcon className="size-3.5 opacity-80" aria-hidden />
+                ) : ch.kind === 'forum' ? (
+                  <RectangleStackIcon className="size-3.5 opacity-80" aria-hidden />
                 ) : ch.accessMode === 'private' ? (
                   <LockClosedIcon className="size-3.5 opacity-80" aria-hidden />
                 ) : (
@@ -380,6 +387,10 @@ export const ChannelSidebarSections = memo(function ChannelSidebarSections({
                       ) : (
                         <AiAvatar seed={ch.peerAccountId || ch.id} size={18} className="shrink-0 rounded-full" />
                       )
+                    ) : ch.kind === 'announcement' ? (
+                      <MegaphoneIcon className="size-3.5" data-testid={`sidebar-channel-icon-announcement-${ch.id}`} />
+                    ) : ch.kind === 'forum' ? (
+                      <RectangleStackIcon className="size-3.5" data-testid={`sidebar-channel-icon-forum-${ch.id}`} />
                     ) : ch.accessMode === 'private' ? (
                       <LockClosedIcon className="size-3.5" />
                     ) : (
@@ -708,6 +719,8 @@ function CreateChannelDialog({
     () => allSessions.filter((s) => !myAccountId || !s.createdBy || s.createdBy === myAccountId),
     [allSessions, myAccountId],
   )
+  const [channelKind, setChannelKind] = useState<GroupChannelKind>('channel')
+  const [customName, setCustomName] = useState('')
   const [search, setSearch] = useState('')
   const [accessMode, setAccessMode] = useState<ChannelAccessMode>('private')
   const [agentContextMode, setAgentContextMode] = useState<ChannelAgentContextMode>('summary')
@@ -742,19 +755,26 @@ function CreateChannelDialog({
     const pickedAgentNames = pickedAgents
       .map((id) => myAgents.find((a) => a.id === id)?.title ?? '')
       .filter(Boolean)
+    if (pickedHumanNames.length === 0 && pickedAgentNames.length === 0) {
+      if (channelKind === 'announcement') return '新公告频道'
+      if (channelKind === 'forum') return '新论坛频道'
+    }
     const humanNames = selfName ? [selfName, ...pickedHumanNames] : pickedHumanNames
     return buildDefaultChannelName(humanNames, pickedAgentNames)
-  }, [members, myAgents, pickedAgents, pickedMembers, selfName])
+  }, [channelKind, members, myAgents, pickedAgents, pickedMembers, selfName])
 
   const hasSelection = pickedMembers.length + pickedAgents.length > 0
+  const effectiveName = customName.trim() || defaultName
+  const canCreate = channelKind !== 'channel' || hasSelection
 
   const submit = async () => {
-    if (!hasSelection || submitting) return
+    if (!canCreate || submitting) return
     setSubmitting(true)
     setError('')
     try {
       const detail = await createChannel({
-        name: defaultName,
+        name: effectiveName,
+        kind: channelKind,
         accessMode,
         memberAccountIds: pickedMembers,
         agentIds: pickedAgents,
@@ -803,6 +823,55 @@ function CreateChannelDialog({
 
           <div className="scfg-sections">
             <div className="scfg-section">
+              <div className="flex gap-1.5" role="radiogroup" aria-label="频道模式">
+                <Button
+                  variant={channelKind === 'channel' ? 'default' : 'secondary'}
+                  className="h-8 flex-1 text-[12px]"
+                  data-testid="create-channel-kind-channel"
+                  onClick={() => setChannelKind('channel')}
+                >
+                  <HashtagIcon className="size-3.5" />
+                  <span>普通群聊</span>
+                </Button>
+                <Button
+                  variant={channelKind === 'announcement' ? 'default' : 'secondary'}
+                  className="h-8 flex-1 text-[12px]"
+                  data-testid="create-channel-kind-announcement"
+                  onClick={() => setChannelKind('announcement')}
+                >
+                  <MegaphoneIcon className="size-3.5" />
+                  <span>公告</span>
+                </Button>
+                <Button
+                  variant={channelKind === 'forum' ? 'default' : 'secondary'}
+                  className="h-8 flex-1 text-[12px]"
+                  data-testid="create-channel-kind-forum"
+                  onClick={() => setChannelKind('forum')}
+                >
+                  <RectangleStackIcon className="size-3.5" />
+                  <span>论坛</span>
+                </Button>
+              </div>
+              <span className="scfg-hint">
+                {channelKind === 'announcement'
+                  ? '仅群主或管理员可发布顶层公告，成员可表情回应或在单条公告下展开讨论串。'
+                  : channelKind === 'forum'
+                    ? '按独立帖子分话题讨论，支持标题、标签与解决状态，Agent 上下文按帖隔离。'
+                    : '实时流式对话，支持 @Agent 协作与消息讨论串。'}
+              </span>
+
+              {channelKind !== 'channel' ? (
+                <input
+                  type="text"
+                  value={customName}
+                  onChange={(e) => setCustomName(e.target.value)}
+                  placeholder={channelKind === 'announcement' ? '频道名称（如：产品发版公告）…' : '频道名称（如：需求评审与讨论）…'}
+                  data-testid="create-channel-name"
+                  className="scfg-input"
+                  maxLength={80}
+                />
+              ) : null}
+
               <div className="relative flex items-center">
                 <MagnifyingGlassIcon
                   className="pointer-events-none absolute left-2.5 size-4 text-(--biu-color-icon)"
@@ -954,9 +1023,9 @@ function CreateChannelDialog({
               <span
                 className="scfg-hint min-w-0 truncate"
                 data-testid="create-channel-default-name"
-                title={hasSelection ? `默认名称：${defaultName}（聊天后也会根据内容自动命名）` : undefined}
+                title={canCreate ? `默认名称：${effectiveName}` : undefined}
               >
-                {hasSelection ? `默认名称：${defaultName}` : '请选择成员或 Agent'}
+                {canCreate ? `${customName.trim() ? '名称：' : '默认名称：'}${effectiveName}` : '请选择成员或 Agent'}
               </span>
               <div className="flex shrink-0 gap-2">
                 <Button variant="secondary" onClick={onClose}>
@@ -964,10 +1033,16 @@ function CreateChannelDialog({
                 </Button>
                 <Button
                   data-testid="create-channel-submit"
-                  disabled={!hasSelection || submitting}
+                  disabled={!canCreate || submitting}
                   onClick={() => void submit()}
                 >
-                  {submitting ? '创建中…' : '创建聊天'}
+                  {submitting
+                    ? '创建中…'
+                    : channelKind === 'announcement'
+                      ? '创建公告'
+                      : channelKind === 'forum'
+                        ? '创建论坛'
+                        : '创建聊天'}
                 </Button>
               </div>
             </div>

@@ -23,7 +23,9 @@ import {
   HashtagIcon,
   LockClosedIcon,
   MagnifyingGlassIcon,
+  MegaphoneIcon,
   PencilSquareIcon,
+  RectangleStackIcon,
   ShieldCheckIcon,
   SparklesIcon,
   Square2StackIcon,
@@ -47,9 +49,16 @@ import type {
   ChannelMessageView,
   ChannelSavedMessageView,
   ChannelSearchHit,
+  ForumPostStatus,
 } from '../shared/channel-types.ts'
 import { ChannelComposer, type ChannelComposerHandle } from './channel-composer.tsx'
 import { ChannelFloatingSidebar, type ChannelFloatingTab } from './channel-floating-sidebar.tsx'
+import {
+  ChannelForumBoard,
+  ForumStatusBadge,
+  getForumPostStatus,
+  getForumPostTitle,
+} from './channel-forum-view.tsx'
 import { MarkdownBody } from './markdown.tsx'
 import {
   autoNameChannel,
@@ -77,6 +86,7 @@ import {
   toggleChannelReaction,
   toggleChannelSaveMessage,
   updateChannelPreferences,
+  updateForumPost,
   useChannelStore,
 } from './channel-store.ts'
 
@@ -468,13 +478,15 @@ export const ChannelStage = memo(function ChannelStage({
     return threadRootMessage ? [threadRootMessage, ...threadReplies] : threadReplies
   }, [activeThreadRootId, mainMessages, threadReplies, threadRootMessage])
   const threadCrumbTitle = useMemo(() => {
+    const postTitle = String(threadRootMessage?.meta?.postTitle ?? '').trim()
+    if (postTitle) return postTitle.length > 32 ? `${postTitle.slice(0, 32)}…` : postTitle
     const raw = (threadRootMessage?.text ?? '')
       .replace(/[#>*`[\]()]/g, ' ')
       .replace(/\s+/g, ' ')
       .trim()
     if (!raw) return '讨论串'
     return raw.length > 26 ? `${raw.slice(0, 26)}…` : raw
-  }, [threadRootMessage?.text])
+  }, [threadRootMessage?.meta?.postTitle, threadRootMessage?.text])
   const members = detail?.members ?? EMPTY_MEMBERS
   const activities = detail?.activities ?? []
   const channel = detail?.channel
@@ -809,8 +821,33 @@ export const ChannelStage = memo(function ChannelStage({
   }
 
   const isDm = channel?.kind === 'dm'
+  const isAnnouncement = channel?.kind === 'announcement'
+  const isForum = channel?.kind === 'forum'
+  const canPostAnnouncement = !isAnnouncement || (channel?.canPost ?? Boolean(detail?.canManageMembers))
+  const activeForumPostStatus = isForum && activeThreadRootId ? getForumPostStatus(threadRootMessage) : null
+  const canManageActiveForumPost =
+    isForum &&
+    Boolean(threadRootMessage) &&
+    (Boolean(detail?.canManageMembers) ||
+      (threadRootMessage?.senderType === 'account' &&
+        Boolean(myAccountId) &&
+        threadRootMessage.senderId === myAccountId))
+  const [updatingForumStatus, setUpdatingForumStatus] = useState(false)
   const peerAvatar = resolveAvatar(channel?.peerAccountId, channel?.peerAvatar)
   const peerOnline = isDm && isOnline(channel?.peerAccountId)
+
+  const handleUpdateActiveForumStatus = async (nextStatus: ForumPostStatus) => {
+    if (!activeThreadRootId || updatingForumStatus) return
+    setUpdatingForumStatus(true)
+    setError('')
+    try {
+      await updateForumPost(channelId, activeThreadRootId, { postStatus: nextStatus })
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setUpdatingForumStatus(false)
+    }
+  }
 
   const handleAutoName = async () => {
     if (isDm || namingTitle) return
@@ -868,6 +905,10 @@ export const ChannelStage = memo(function ChannelStage({
                 >
                   {isDm ? (
                     <MemberAvatar avatar={peerAvatar} seed={channel?.peerAccountId || channelId} size={16} />
+                  ) : isAnnouncement ? (
+                    <MegaphoneIcon className="size-3.5 shrink-0 text-(--biu-color-icon)" aria-hidden />
+                  ) : isForum ? (
+                    <RectangleStackIcon className="size-3.5 shrink-0 text-(--biu-color-icon)" aria-hidden />
                   ) : channel?.accessMode === 'private' ? (
                     <LockClosedIcon className="size-3.5 shrink-0 text-(--biu-color-icon)" aria-hidden />
                   ) : (
@@ -884,10 +925,37 @@ export const ChannelStage = memo(function ChannelStage({
                 >
                   <ChatBubbleLeftRightIcon className="size-3.5 shrink-0 text-(--biu-color-icon)" aria-hidden />
                   <span className="truncate">{threadCrumbTitle}</span>
+                  {activeForumPostStatus ? <ForumStatusBadge status={activeForumPostStatus} /> : null}
                   <span className="shrink-0 text-[11.5px] font-normal text-(--biu-color-text-subtle) tabular-nums">
                     {threadReplies.length} 条回复
                   </span>
                 </span>
+                {canManageActiveForumPost && activeForumPostStatus ? (
+                  <div className="ml-1 inline-flex shrink-0 items-center gap-1" data-testid="forum-thread-status-actions">
+                    <button
+                      type="button"
+                      disabled={updatingForumStatus}
+                      data-testid="forum-thread-toggle-resolved"
+                      className="inline-flex h-6 cursor-pointer items-center rounded-md border-0 bg-(--biu-color-bg-muted) px-2 text-[11.5px] font-medium text-(--biu-color-text) transition-colors hover:bg-(--biu-color-bg-hover) disabled:opacity-50"
+                      onClick={() =>
+                        void handleUpdateActiveForumStatus(activeForumPostStatus === 'resolved' ? 'open' : 'resolved')
+                      }
+                    >
+                      {activeForumPostStatus === 'resolved' ? '重开' : '标为已解决'}
+                    </button>
+                    <button
+                      type="button"
+                      disabled={updatingForumStatus}
+                      data-testid="forum-thread-toggle-closed"
+                      className="inline-flex h-6 cursor-pointer items-center rounded-md border-0 bg-transparent px-2 text-[11.5px] font-medium text-(--biu-color-text-muted) transition-colors hover:bg-(--biu-color-bg-hover) hover:text-(--biu-color-text) disabled:opacity-50"
+                      onClick={() =>
+                        void handleUpdateActiveForumStatus(activeForumPostStatus === 'closed' ? 'open' : 'closed')
+                      }
+                    >
+                      {activeForumPostStatus === 'closed' ? '重新打开' : '关闭帖子'}
+                    </button>
+                  </div>
+                ) : null}
                 <button
                   type="button"
                   disabled={togglingThreadFollow}
@@ -930,6 +998,10 @@ export const ChannelStage = memo(function ChannelStage({
                         />
                       ) : null}
                     </span>
+                  ) : isAnnouncement ? (
+                    <MegaphoneIcon className="size-3.5 shrink-0 text-(--biu-color-icon)" aria-hidden />
+                  ) : isForum ? (
+                    <RectangleStackIcon className="size-3.5 shrink-0 text-(--biu-color-icon)" aria-hidden />
                   ) : channel?.accessMode === 'private' ? (
                     <LockClosedIcon className="size-3.5 shrink-0 text-(--biu-color-icon)" aria-hidden />
                   ) : (
@@ -1157,7 +1229,32 @@ export const ChannelStage = memo(function ChannelStage({
         <div className="absolute inset-0 z-1 flex min-h-0 overflow-hidden">
           <div className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
             <BiuChatStage variant="center" stageRef={scrollRef}>
+              {isForum && !activeThreadRootId && channel ? (
+                <ChannelForumBoard
+                  channelId={channelId}
+                  channel={channel}
+                  messages={mainMessages}
+                  members={members}
+                  myAccountId={myAccountId}
+                  canManage={Boolean(detail?.canManageMembers)}
+                  resolveAvatar={resolveAvatar}
+                  onOpenPost={openThread}
+                  onError={setError}
+                />
+              ) : (
               <div className="chat-node-list pt-2" data-testid="channel-messages">
+                {isAnnouncement && !activeThreadRootId ? (
+                  <div
+                    className="mb-3 flex items-center gap-2 rounded-[10px] border border-(--biu-color-border) bg-(--biu-color-bg-subtle) px-3 py-2 text-[12px] text-(--biu-color-text-muted)"
+                    data-testid="channel-announcement-banner"
+                  >
+                    <MegaphoneIcon className="size-4 shrink-0 text-(--biu-color-icon-active)" aria-hidden />
+                    <span>
+                      公告频道 · 仅群主或管理员可发布顶层公告，成员可在单条公告下添加表情回应或展开讨论串。
+                    </span>
+                  </div>
+                ) : null}
+
                 {!activeThreadRootId && detail?.hasMoreMessages ? (
                   <div className="mb-3 flex justify-center">
                     <button
@@ -1177,13 +1274,25 @@ export const ChannelStage = memo(function ChannelStage({
                     <div className="mb-2 flex items-center gap-2 text-[16px] font-semibold text-(--biu-color-text)">
                       {isDm ? (
                         <MemberAvatar avatar={peerAvatar} seed={channel?.peerAccountId || channelId} size={24} />
+                      ) : isAnnouncement ? (
+                        <MegaphoneIcon className="size-5 text-(--biu-color-icon-active)" aria-hidden />
                       ) : null}
-                      <span>{isDm ? `与 ${channel?.name ?? '成员'} 的私聊` : `# ${channel?.name ?? ''}`}</span>
+                      <span>
+                        {isDm
+                          ? `与 ${channel?.name ?? '成员'} 的私聊`
+                          : isAnnouncement
+                            ? `${channel?.name ?? '公告频道'}`
+                            : `# ${channel?.name ?? ''}`}
+                      </span>
                     </div>
                     <p className="max-w-md text-[13px] text-(--biu-color-text-subtle)">
-                      {members.some((m) => m.memberType === 'agent')
-                        ? '平常对话时群内 Agent 保持静默，输入 @Agent名称 或 @所有人 即可召唤对应 Agent 协作。'
-                        : '直接发送消息开始对话，或在右侧悬浮面板拉入空间成员与你的 Agent。'}
+                      {isAnnouncement
+                        ? canPostAnnouncement
+                          ? '在下方发布第一条公告，或配置 Webhook 自动推送重要动态与汇报。'
+                          : '暂无公告，管理员发布新公告后可在此查看并在下方讨论串交流。'
+                        : members.some((m) => m.memberType === 'agent')
+                          ? '平常对话时群内 Agent 保持静默，输入 @Agent名称 或 @所有人 即可召唤对应 Agent 协作。'
+                          : '直接发送消息开始对话，或在右侧悬浮面板拉入空间成员与你的 Agent。'}
                     </p>
                   </div>
                 ) : null}
@@ -1234,6 +1343,7 @@ export const ChannelStage = memo(function ChannelStage({
                     const msgPickLabel =
                       pickPreview(msg.senderName ? `${msg.senderName}：${msgPickBody}` : msgPickBody, 60) || msg.id
                     const msgPickText = pickPreview(msgPickBody, 200)
+                    const isThreadRootCard = Boolean(activeThreadRootId) && msg.id === activeThreadRootId
                     const cardNode = (
                       <div
                         data-msg-id={msg.id}
@@ -1245,6 +1355,37 @@ export const ChannelStage = memo(function ChannelStage({
                         className={`chat-user-card group !w-3/4 min-w-0 transition-shadow${isEphemeral ? ' opacity-95' : ''}${isHighlighted ? ' ring-2 ring-amber-400/80' : ''}`}
                       >
                         <div className="chat-user-card-body text-(--biu-color-text)">
+                          {isAnnouncement && !activeThreadRootId && !isEphemeral && !isRecalled ? (
+                            <div
+                              className="mb-1.5 mr-1.5 inline-flex items-center gap-1 rounded bg-(--biu-color-bg-muted) px-1.5 py-0.5 text-[11px] font-medium text-(--biu-color-text-muted)"
+                              data-testid={`channel-announcement-badge-${msg.id}`}
+                            >
+                              <MegaphoneIcon className="size-3" />
+                              <span>公告</span>
+                            </div>
+                          ) : null}
+                          {isForum && isThreadRootCard && !isRecalled ? (
+                            <div className="mb-2 space-y-1.5 border-b border-(--biu-color-bg-muted) pb-2" data-testid="forum-post-detail-header">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <ForumStatusBadge status={getForumPostStatus(msg)} />
+                                <h2 className="m-0 text-[16px] font-semibold text-(--biu-color-text)">
+                                  {getForumPostTitle(msg)}
+                                </h2>
+                              </div>
+                              {msg.meta?.postTags && msg.meta.postTags.length > 0 ? (
+                                <div className="flex flex-wrap items-center gap-1">
+                                  {msg.meta.postTags.map((tag) => (
+                                    <span
+                                      key={tag}
+                                      className="rounded-full bg-(--biu-color-bg-muted) px-2 py-0.5 text-[11px] text-(--biu-color-text-muted)"
+                                    >
+                                      {tag}
+                                    </span>
+                                  ))}
+                                </div>
+                              ) : null}
+                            </div>
+                          ) : null}
                           {msg.pinnedAt && !isRecalled ? (
                             <div
                               className="mb-1.5 inline-flex items-center gap-1 rounded bg-amber-500/10 px-1.5 py-0.5 text-[11px] font-medium text-amber-500"
@@ -1614,7 +1755,6 @@ export const ChannelStage = memo(function ChannelStage({
                       </div>
                     )
 
-                    const isThreadRootCard = Boolean(activeThreadRootId) && msg.id === activeThreadRootId
                     return (
                       <div key={msg.id} className="w-full space-y-2">
                         {!activeThreadRootId && showDayDivider ? (
@@ -1663,13 +1803,15 @@ export const ChannelStage = memo(function ChannelStage({
                   })
                 })()}
               </div>
+              )}
             </BiuChatStage>
 
             {/* 底部悬浮胶囊发送栏：完全复用 .chat-composer-dock + .composer-stack + .composer-pill */}
+            {!(isForum && !activeThreadRootId && activities.length === 0 && !error) ? (
             <div className="chat-composer-dock pointer-events-none absolute inset-x-0 bottom-0 bg-transparent px-[var(--biu-pad-page)] pb-[calc(1rem+5px)]">
               <ChatDockStack>
                 <div className="composer-stack" data-biu-ignore>
-                  {pendingNewCount > 0 ? (
+                  {pendingNewCount > 0 && !(isForum && !activeThreadRootId) ? (
                     <div className="pointer-events-auto flex justify-center">
                       <button
                         type="button"
@@ -1742,21 +1884,53 @@ export const ChannelStage = memo(function ChannelStage({
                     </div>
                   ) : null}
 
-                  <ChannelComposer
-                    ref={composerRef}
-                    channelId={channelId}
-                    threadRootId={activeThreadRootId}
-                    isDm={isDm}
-                    members={members}
-                    resolveAvatar={resolveAvatar}
-                    replyTo={replyTo}
-                    onClearReplyTo={clearReplyTo}
-                    onError={setError}
-                    pick={pick}
-                  />
+                  {isForum && !activeThreadRootId ? null : isAnnouncement && !activeThreadRootId && !canPostAnnouncement ? (
+                    <div
+                      className="pointer-events-auto flex items-center justify-center gap-2 rounded-full border border-(--biu-color-border) bg-(--biu-color-bg-subtle)/95 px-4 py-2.5 text-[12.5px] text-(--biu-color-text-muted) shadow-xs backdrop-blur-md"
+                      data-testid="channel-announcement-readonly-bar"
+                    >
+                      <MegaphoneIcon className="size-4 shrink-0 text-(--biu-color-icon)" aria-hidden />
+                      <span>仅群主或管理员可发布公告 · 点击任意公告下的讨论串图标可参与讨论</span>
+                    </div>
+                  ) : isForum && activeThreadRootId && activeForumPostStatus === 'closed' ? (
+                    <div
+                      className="pointer-events-auto flex items-center justify-between gap-3 rounded-full border border-(--biu-color-border) bg-(--biu-color-bg-subtle)/95 px-4 py-2 text-[12.5px] text-(--biu-color-text-muted) shadow-xs backdrop-blur-md"
+                      data-testid="forum-post-closed-bar"
+                    >
+                      <span className="inline-flex items-center gap-1.5">
+                        <LockClosedIcon className="size-3.5 shrink-0" aria-hidden />
+                        <span>该帖子已关闭，暂时无法新增回复</span>
+                      </span>
+                      {canManageActiveForumPost ? (
+                        <Button
+                          variant="secondary"
+                          className="h-7 shrink-0 px-3 text-[12px]"
+                          disabled={updatingForumStatus}
+                          onClick={() => void handleUpdateActiveForumStatus('open')}
+                        >
+                          重新打开
+                        </Button>
+                      ) : null}
+                    </div>
+                  ) : (
+                    <ChannelComposer
+                      ref={composerRef}
+                      channelId={channelId}
+                      threadRootId={activeThreadRootId}
+                      isDm={isDm}
+                      channelKind={channel?.kind}
+                      members={members}
+                      resolveAvatar={resolveAvatar}
+                      replyTo={replyTo}
+                      onClearReplyTo={clearReplyTo}
+                      onError={setError}
+                      pick={pick}
+                    />
+                  )}
                 </div>
               </ChatDockStack>
             </div>
+            ) : null}
           </div>
         </div>
 

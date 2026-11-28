@@ -1,11 +1,13 @@
 import { currentActorContext } from '@biu/host-plugin-loader/data-dir'
 import { currentSessionId } from '@biu/host-sessions/scope'
 import { recordBuiltinValues, type CollectionSpec, type DbRecord } from '@biu/type-file-system'
-import type {
-  ChannelDetailPayload,
-  ChannelMention,
-  ChannelMessageView,
-  ChannelSummary,
+import {
+  channelKindLabel,
+  normalizeForumTags,
+  type ChannelDetailPayload,
+  type ChannelMention,
+  type ChannelMessageView,
+  type ChannelSummary,
 } from '../shared/channel-types.ts'
 import type { ChannelService } from './channels.ts'
 
@@ -29,7 +31,7 @@ function formatMessageTime(ts: number): string {
 function formatChannelContent(detail: ChannelDetailPayload): string {
   const { channel, members, messages } = detail
   const lines: string[] = []
-  const kindLabel = channel.kind === 'dm' ? '私聊' : '群聊'
+  const kindLabel = channelKindLabel(channel.kind)
   lines.push(`# ${channel.name}（${kindLabel}）`)
   if (channel.topic) lines.push(`> 主题：${channel.topic}`)
 
@@ -62,8 +64,17 @@ function formatChannelContent(detail: ChannelDetailPayload): string {
         ? ` [附件: ${msg.attachments.map((a) => a.name).join(', ')}]`
         : ''
     const body = msg.text.replace(/\r?\n/g, ' ↵ ').trim() || (attachTag ? '' : '（空）')
+    const postTitleTag = msg.meta?.postTitle ? `【${msg.meta.postTitle}】` : ''
+    const postStatusTag =
+      msg.meta?.postStatus === 'resolved'
+        ? '[已解决] '
+        : msg.meta?.postStatus === 'closed'
+          ? '[已关闭] '
+          : ''
+    const postTagsTag =
+      msg.meta?.postTags && msg.meta.postTags.length > 0 ? ` [${msg.meta.postTags.join(', ')}]` : ''
     lines.push(
-      `- [#${msg.seq} | id=${msg.id} | ${formatMessageTime(msg.createdAt)}] **${msg.senderName}${agentTag}${viaTag}**${replyTag}${threadTag}: ${body}${attachTag}`,
+      `- [#${msg.seq} | id=${msg.id} | ${formatMessageTime(msg.createdAt)}] **${msg.senderName}${agentTag}${viaTag}**${replyTag}${threadTag}: ${postStatusTag}${postTitleTag}${postTitleTag && body ? ' ' : ''}${body}${postTagsTag}${attachTag}`,
     )
   }
   return lines.join('\n')
@@ -145,7 +156,7 @@ export function channelsCollection(service: ChannelService): CollectionSpec {
       columns: ['title', 'kind', 'memberCount', 'agentCount', 'unreadCount', 'lastMessageText', 'updatedAt'],
       fields: {
         title: { type: 'string', label: '聊天名称' },
-        kind: { type: 'select', label: '类型', enum: ['channel', 'dm'] },
+        kind: { type: 'select', label: '类型', enum: ['channel', 'dm', 'announcement', 'forum'] },
         topic: { type: 'string', label: '主题' },
         accessMode: { type: 'select', label: '可见性', enum: ['private', 'workspace'] },
         peerName: { type: 'string', label: '私聊对象' },
@@ -182,6 +193,12 @@ export function channelsCollection(service: ChannelService): CollectionSpec {
             text: { type: 'string', description: '必填，要发送的消息正文（支持 Markdown 与 @提及）' },
             replyToId: { type: 'string', description: '可选，引用回复的消息 id' },
             threadRootId: { type: 'string', description: '可选，讨论串（Thread）根消息 id' },
+            postTitle: { type: 'string', description: '可选，论坛频道发新帖时的标题' },
+            postTags: {
+              type: 'array',
+              description: '可选，论坛频道发新帖时的标签列表',
+              items: { type: 'string' },
+            },
             mentions: {
               type: 'array',
               description: '可选，显式提及列表 [{ kind: "account"|"agent"|"everyone", id, label }]',
@@ -195,12 +212,16 @@ export function channelsCollection(service: ChannelService): CollectionSpec {
           if (!text) throw new Error('消息内容不能为空')
           const replyToId = String(args?.replyToId ?? '').trim() || undefined
           const threadRootId = String(args?.threadRootId ?? '').trim() || undefined
+          const postTitle = String(args?.postTitle ?? '').trim() || undefined
+          const postTags = normalizeForumTags(args?.postTags)
           const mentions = normalizeMentionsArg(args?.mentions)
           const viaAgentId = resolveCurrentAgentId()
           const res = service.sendMessage(id, {
             text,
             ...(replyToId ? { replyToId } : {}),
             ...(threadRootId ? { threadRootId } : {}),
+            ...(postTitle ? { postTitle } : {}),
+            ...(postTags.length ? { postTags } : {}),
             ...(mentions ? { mentions } : {}),
             ...(viaAgentId ? { viaAgentId, suppressAgentTrigger: true } : {}),
           })

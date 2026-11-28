@@ -1,6 +1,52 @@
 import type { SessionMascot } from '@biu/type-session'
 
-export type ChannelKind = 'channel' | 'dm'
+export type ChannelKind = 'channel' | 'dm' | 'announcement' | 'forum'
+export type GroupChannelKind = 'channel' | 'announcement' | 'forum'
+export type ForumPostStatus = 'open' | 'resolved' | 'closed'
+
+export const DEFAULT_FORUM_TAGS = ['讨论', '问题', '建议', '方案'] as const
+
+export function normalizeChannelKind(raw?: unknown): ChannelKind {
+  if (raw === 'dm' || raw === 'announcement' || raw === 'forum') return raw
+  return 'channel'
+}
+
+export function normalizeGroupChannelKind(raw?: unknown): GroupChannelKind {
+  if (raw === 'announcement' || raw === 'forum') return raw
+  return 'channel'
+}
+
+export function normalizeForumPostStatus(raw?: unknown): ForumPostStatus {
+  if (raw === 'resolved' || raw === 'closed') return raw
+  return 'open'
+}
+
+export function normalizeForumTags(raw?: unknown, maxCount = 5): string[] {
+  if (!Array.isArray(raw)) return []
+  const out: string[] = []
+  const seen = new Set<string>()
+  for (const item of raw) {
+    const clean = String(item ?? '').trim().slice(0, 20)
+    if (!clean || seen.has(clean)) continue
+    seen.add(clean)
+    out.push(clean)
+    if (out.length >= maxCount) break
+  }
+  return out
+}
+
+export function channelKindLabel(kind?: ChannelKind): string {
+  switch (kind) {
+    case 'dm':
+      return '私聊'
+    case 'announcement':
+      return '公告'
+    case 'forum':
+      return '论坛'
+    default:
+      return '群聊'
+  }
+}
 
 /** 按「人类成员优先在前，其次 Agent」拼接默认聊天名称。 */
 export function buildDefaultChannelName(
@@ -100,6 +146,10 @@ export interface ChannelSummary {
   pinned?: boolean
   hidden?: boolean
   canManage?: boolean
+  /** 公告频道仅管理员可发顶层公告，普通成员仍可在公告下回复讨论串 */
+  canPost?: boolean
+  /** 论坛频道可用标签预设 */
+  forumTags?: string[]
   threads?: ChannelSidebarThreadItem[]
 }
 
@@ -138,6 +188,10 @@ export interface ChannelMessageMeta {
   /** Incoming Webhook 推送消息时记录消息源信息，便于历史展示且不依赖后续删改。 */
   webhookId?: string
   webhookName?: string
+  /** 论坛频道顶层帖子的结构化元数据（复用 channel_messages.meta_json，零额外表） */
+  postTitle?: string
+  postTags?: string[]
+  postStatus?: ForumPostStatus
 }
 
 export interface ChannelMessageReplyPreview {
