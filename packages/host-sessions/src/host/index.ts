@@ -1,5 +1,6 @@
 import { Service, type Context } from 'cordis'
 import { getAccountService } from '@biu/host-account'
+import { cloudUserWorkRoot, resolveCloudFolderPhysical } from '@biu/host-plugin-loader/cloud-folders'
 import { getRuntimePolicy } from '@biu/host-plugin-loader/runtime'
 import { basename, isAbsolute, resolve } from 'node:path'
 import { realpath, stat } from 'node:fs/promises'
@@ -831,14 +832,16 @@ export class SessionsService extends Service {
     return record
   }
 
-  async setProject(id: string, project: { path: string } | null) {
+  async setProject(id: string, project: { path: string; create?: boolean } | null) {
     const record = await this.require(id)
     if (!project) {
       delete record.project
       await this.persist(record)
       return undefined
     }
-    record.project = await resolveHostProject(project.path)
+    record.project = getRuntimePolicy().allowHostPathBinding
+      ? await resolveHostProject(project.path)
+      : await resolveCloudProject(project.path, { create: project.create })
     await this.persist(record)
     return record.project
   }
@@ -1007,6 +1010,12 @@ export class SessionsService extends Service {
  */
 function normalizePathForFs(input: string): string {
   return platform() === 'darwin' ? input.normalize('NFD') : input
+}
+
+async function resolveCloudProject(input: string, opts: { create?: boolean } = {}): Promise<SessionProject> {
+  const userRoot = cloudUserWorkRoot()
+  const resolved = await resolveCloudFolderPhysical(userRoot, input, { create: opts.create })
+  return { name: resolved.name, path: resolved.logical, boundAt: Date.now() }
 }
 
 async function resolveHostProject(input: string): Promise<SessionProject> {
