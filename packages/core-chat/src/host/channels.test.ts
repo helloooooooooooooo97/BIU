@@ -1376,4 +1376,139 @@ describe('Slack-style Group Channels: RBAC, Mention Dispatch, Per-Invoker Queue,
       rmSync(dir, { recursive: true, force: true })
     }
   })
+
+  it('supports incoming channel webhooks: CRUD, token rotation, payload formats, auto-trigger agent, and permissions', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'biu-ch-wh-'))
+    const db = openAndMigrateBiu(join(dir, 'biu.sqlite'))
+    const store = new CollabStore(db)
+    const alice = store.register('Alice', Date.now(), 'pass123456', 'alice@example.com')
+    const bob = store.register('Bob', Date.now(), 'pass123456', 'bob@example.com')
+    const carol = store.register('Carol', Date.now(), 'pass123456', 'carol@example.com')
+    const ws = store.createWorkspace(alice.id, 'Webhook WS')
+    store.addMemberByEmail(alice.id, ws.id, 'bob@example.com')
+    store.addMemberByEmail(alice.id, ws.id, 'carol@example.com')
+
+    const sessionsMap = new Map<string, { id: string; title: string; createdBy: string }>([
+      ['ag-ops', { id: 'ag-ops', title: '运维助手', createdBy: alice.id }],
+    ])
+    const llmCalls: Array<{ agentId: string; userText: string }> = []
+    const fakeCtx = {
+      get: (key: string) => (key === 'account' ? { store } : undefined),
+      account: { store },
+      sessions: {
+        peekSummary: (id: string) => {
+          const s = sessionsMap.get(id)
+          return s ? { id: s.id, title: s.title, createdBy: s.createdBy } : null
+        },
+        get: (id: string) => {
+          const s = sessionsMap.get(id)
+          return s ? { id: s.id, title: s.title, createdBy: s.createdBy, events: [] } : null
+        },
+      },
+      tools: { schemas: () => [], invoke: async () => ({ ok: true }) },
+      http: { broadcast: () => undefined, broadcastAccount: () => undefined },
+      effect: () => undefined,
+    } as unknown as Context
+
+    const svc = new ChannelService(
+      fakeCtx,
+      (agentId) => ({
+        chat: async (messages) => {
+          const lastUser = [...messages].reverse().find((m) => m.role === 'user')?.content ?? ''
+          llmCalls.push({ agentId, userText: String(lastUser) })
+          return { content: '已收到告警，正在排查根因。', toolCalls: [] }
+        },
+      }),
+      { db },
+    )
+    const asUser = <T,>(uid: string, fn: () => T) => runWithAccount(uid, () => runWithRequestWorkspace(ws.id, fn))
+
+    try {
+      const dm = asUser(alice.id, () => svc.openOrCreateDm(bob.id))
+      assert.throws(() => asUser(alice.id, () => svc.createWebhook(dm.channel.id, { name: 'GitHub' })), /私聊暂不支持创建 Webhook/)
+
+      const created = asUser(alice.id, () =>
+        svc.createChannel({ name: '监控告警群', memberAccountIds: [bob.id, carol.id], agentIds: ['ag-ops'] }),
+      )
+      const chId = created.channel.id
+
+      // 1. Bob（普通成员）创建自己的 Webhook，仅 Bob 与群主 Alice 可见密钥，Carol（非管理员）仅透明可见名称且无密钥
+      const wh = asUser(bob.id, () => svc.createWebhook(chId, { name: 'Sentry 告警', autoTriggerAgentId: 'ag-ops' }))
+      assert.equal(wh.name, 'Sentry 告警')
+      assert.equal(wh.enabled, true)
+      assert.ok(wh.token.startsWith('wh_'))
+      assert.ok(wh.url.includes(wh.token))
+      assert.equal(wh.autoTriggerAgentId, 'ag-ops')
+      assert.equal(wh.canManage, true)
+
+      const carolView = asUser(carol.id, () => svc.listWebhooks(chId))[0]!
+      assert.equal(carolView.name, 'Sentry 告警')
+      assert.equal(carolView.canManage, false)
+      assert.equal(carolView.token, '')
+      assert.equal(carolView.url, '')
+      assert.throws(() => asUser(carol.id, () => svc.deleteWebhook(chId, wh.id)), /permission denied/)
+
+      const aliceView = asUser(alice.id, () => svc.listWebhooks(chId))[0]!
+      assert.equal(aliceView.canManage, true)
+      assert.equal(aliceView.token, wh.token)
+
+      // Webhook 不进入群成员列表（不可被 @）
+      const members = asUser(alice.id, () => svc.listMembers(chId))
+      assert.equal(members.some((m) => m.memberId === wh.id), false)
+
+      // 2. 免登录通过公开 token 推送消息（兼容 Slack text / Discord content + username / title）
+      const delivered = svc.receiveWebhookByToken(wh.token, {
+        title: 'API 502 突增',
+        content: '边缘节点响应超时',
+        username: 'Sentry Prod',
+      })
+      assert.equal(delivered.ok, true)
+      assert.equal(delivered.message.senderType, 'webhook')
+      assert.equal(delivered.message.senderName, 'Sentry Prod')
+      assert.ok(delivered.message.text.includes('**API 502 突增**'))
+      assert.ok(delivered.message.text.includes('边缘节点响应超时'))
+      assert.equal(delivered.triggeredRunIds.length, 1)
+
+      // 等待自动唤醒的 Agent 跑完并写回消息
+      const deadline = Date.now() + 3000
+      while (Date.now() < deadline && llmCalls.length === 0) {
+        await new Promise((r) => setTimeout(r, 20))
+      }
+      assert.equal(llmCalls.length, 1)
+      assert.equal(llmCalls[0]!.agentId, 'ag-ops')
+      assert.ok(llmCalls[0]!.userText.includes('Webhook · Sentry Prod'))
+
+      // lastUsedAt 已更新，且支持原始 JSON 载荷兜底
+      assert.ok(asUser(bob.id, () => svc.listWebhooks(chId))[0]!.lastUsedAt > 0)
+      const rawDelivered = svc.receiveWebhookByToken(wh.token, { rawBody: { event: 'deploy.succeeded', env: 'prod' } })
+      assert.ok(rawDelivered.message.text.includes('deploy.succeeded'))
+
+      // 3. 一键测试推送
+      const tested = asUser(bob.id, () => svc.testWebhook(chId, wh.id))
+      assert.equal(tested.message.senderType, 'webhook')
+      assert.ok(tested.message.text.includes('连通性测试'))
+
+      // 4. 停用后拒收；重新启用并重置密钥后旧密钥失效、新密钥可用
+      asUser(alice.id, () => svc.updateWebhook(chId, wh.id, { enabled: false }))
+      assert.throws(() => svc.receiveWebhookByToken(wh.token, { text: 'should fail' }), /已停用/)
+      asUser(alice.id, () => svc.updateWebhook(chId, wh.id, { enabled: true }))
+      const rotated = asUser(alice.id, () => svc.rotateWebhookToken(chId, wh.id))
+      assert.notEqual(rotated.token, wh.token)
+      assert.throws(() => svc.receiveWebhookByToken(wh.token, { text: 'old token' }), /无效的 Webhook/)
+      const afterRotate = svc.receiveWebhookByToken(rotated.token, { text: '新密钥可用' })
+      assert.equal(afterRotate.message.text, '新密钥可用')
+
+      // 5. 移除被绑定的 Agent 自动清理 autoTriggerAgentId；删除 Webhook 后失效
+      asUser(alice.id, () => svc.removeMember(chId, 'agent', 'ag-ops'))
+      assert.equal(asUser(alice.id, () => svc.listWebhooks(chId))[0]!.autoTriggerAgentId, undefined)
+      asUser(bob.id, () => svc.deleteWebhook(chId, wh.id))
+      assert.equal(asUser(alice.id, () => svc.listWebhooks(chId)).length, 0)
+      assert.throws(() => svc.receiveWebhookByToken(rotated.token, { text: 'deleted' }), /无效的 Webhook/)
+      await new Promise((r) => setTimeout(r, 30))
+    } finally {
+      svc.dispose()
+      db.close()
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
 })

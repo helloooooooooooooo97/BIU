@@ -5,11 +5,17 @@ import {
   AtSymbolIcon,
   BellIcon,
   BellSlashIcon,
+  BoltIcon,
   BookmarkIcon,
   ChatBubbleLeftEllipsisIcon,
+  CheckIcon,
   Cog6ToothIcon,
+  DocumentDuplicateIcon,
   MagnifyingGlassIcon,
   MapPinIcon,
+  PaperAirplaneIcon,
+  PlusIcon,
+  ArrowPathIcon,
   SparklesIcon,
   StarIcon,
   TrashIcon,
@@ -19,6 +25,7 @@ import {
 import { AiAvatar } from '@biu/biu-ui/ai-avatar'
 import { apiFetch } from '@biu/biu-ui/api-client'
 import { readStorageString, writeStorageString } from '@biu/biu-ui/client-storage'
+import { getWorkspaceEndpoint } from '@biu/biu-ui/workspace-transport'
 import { pickPreview } from '@biu/core-pick/web'
 import { SidebarMascot, resolveSessionMascot } from '@biu/public-mascot'
 import type { bindSessionView } from '@biu/web-session-view'
@@ -31,15 +38,22 @@ import type {
   ChannelSavedMessageView,
   ChannelSearchHit,
   ChannelSummary,
+  ChannelWebhookView,
 } from '../shared/channel-types.ts'
 import {
   addChannelMember,
+  createChannelWebhook,
   deleteChannel,
+  deleteChannelWebhook,
   leaveChannel,
+  loadChannelWebhooks,
   removeChannelMember,
+  rotateChannelWebhook,
   syncChannelToAgent,
+  testChannelWebhook,
   updateChannelAgentContextMode,
   updateChannelPreferences,
+  updateChannelWebhook,
 } from './channel-store.ts'
 import { MarkdownBody } from './markdown.tsx'
 
@@ -245,6 +259,16 @@ export const ChannelFloatingSidebar = memo(function ChannelFloatingSidebar({
   const [addAgentOpen, setAddAgentOpen] = useState(false)
   const [agentSearch, setAgentSearch] = useState('')
 
+  // Webhook 消息源管理状态（原地内嵌在管理子视图中）
+  const [webhooks, setWebhooks] = useState<ChannelWebhookView[]>([])
+  const [webhooksLoading, setWebhooksLoading] = useState(false)
+  const [addWebhookOpen, setAddWebhookOpen] = useState(false)
+  const [newWebhookName, setNewWebhookName] = useState('')
+  const [newWebhookAgentId, setNewWebhookAgentId] = useState('')
+  const [creatingWebhook, setCreatingWebhook] = useState(false)
+  const [busyWebhookId, setBusyWebhookId] = useState<string | null>(null)
+  const [copiedWebhookKey, setCopiedWebhookKey] = useState<string | null>(null)
+
   const currentTab: ChannelFloatingTab = controlledTab ?? internalTab
   const isToolTab = currentTab !== 'roster'
 
@@ -260,9 +284,13 @@ export const ChannelFloatingSidebar = memo(function ChannelFloatingSidebar({
   useEffect(() => {
     setSummaryUnreadOnly(false)
     setRosterQuery('')
+    setWebhooks([])
+    setAddWebhookOpen(false)
+    setNewWebhookName('')
+    setNewWebhookAgentId('')
   }, [channelId])
 
-  // 打开管理视图时拉取空间成员列表
+  // 打开管理视图时拉取空间成员列表与本频道 Webhook 消息源
   useEffect(() => {
     if (currentTab !== 'manage') return
     let cancelled = false
@@ -285,10 +313,131 @@ export const ChannelFloatingSidebar = memo(function ChannelFloatingSidebar({
         )
       })
       .catch(() => undefined)
+    if (!isDm && channelId) {
+      setWebhooksLoading(true)
+      void loadChannelWebhooks(channelId)
+        .then((list) => {
+          if (!cancelled) setWebhooks(list)
+        })
+        .catch(() => undefined)
+        .finally(() => {
+          if (!cancelled) setWebhooksLoading(false)
+        })
+    }
     return () => {
       cancelled = true
     }
-  }, [currentTab])
+  }, [channelId, currentTab, isDm])
+
+  const resolveWebhookFullUrl = useCallback((relUrl: string) => {
+    if (!relUrl) return ''
+    if (/^https?:\/\//i.test(relUrl)) return relUrl
+    const origin =
+      getWorkspaceEndpoint().origin ||
+      (typeof window !== 'undefined' && window.location?.origin ? window.location.origin : '')
+    return origin ? `${origin.replace(/\/+$/, '')}${relUrl}` : relUrl
+  }, [])
+
+  const copyWebhookText = useCallback((key: string, text: string) => {
+    void navigator.clipboard?.writeText(text)
+    setCopiedWebhookKey(key)
+    window.setTimeout(() => {
+      setCopiedWebhookKey((cur) => (cur === key ? null : cur))
+    }, 1500)
+  }, [])
+
+  const handleCreateWebhook = async () => {
+    const cleanName = newWebhookName.trim()
+    if (!channelId || !cleanName || creatingWebhook) return
+    setCreatingWebhook(true)
+    setManageError('')
+    try {
+      const created = await createChannelWebhook(channelId, {
+        name: cleanName,
+        ...(newWebhookAgentId ? { autoTriggerAgentId: newWebhookAgentId } : {}),
+      })
+      setWebhooks((prev) => [created, ...prev])
+      setNewWebhookName('')
+      setNewWebhookAgentId('')
+      setAddWebhookOpen(false)
+      setSyncNotice(`已生成 Webhook「${created.name}」，可复制链接给外部系统推送消息。`)
+    } catch (err) {
+      setManageError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setCreatingWebhook(false)
+    }
+  }
+
+  const handleToggleWebhookEnabled = async (wh: ChannelWebhookView) => {
+    if (!channelId || busyWebhookId) return
+    setBusyWebhookId(wh.id)
+    setManageError('')
+    try {
+      const updated = await updateChannelWebhook(channelId, wh.id, { enabled: !wh.enabled })
+      setWebhooks((prev) => prev.map((item) => (item.id === wh.id ? updated : item)))
+    } catch (err) {
+      setManageError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setBusyWebhookId(null)
+    }
+  }
+
+  const handleUpdateWebhookAgent = async (wh: ChannelWebhookView, agentId: string) => {
+    if (!channelId || busyWebhookId) return
+    setBusyWebhookId(wh.id)
+    setManageError('')
+    try {
+      const updated = await updateChannelWebhook(channelId, wh.id, { autoTriggerAgentId: agentId })
+      setWebhooks((prev) => prev.map((item) => (item.id === wh.id ? updated : item)))
+    } catch (err) {
+      setManageError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setBusyWebhookId(null)
+    }
+  }
+
+  const handleRotateWebhook = async (wh: ChannelWebhookView) => {
+    if (!channelId || busyWebhookId) return
+    setBusyWebhookId(wh.id)
+    setManageError('')
+    try {
+      const updated = await rotateChannelWebhook(channelId, wh.id)
+      setWebhooks((prev) => prev.map((item) => (item.id === wh.id ? updated : item)))
+      setSyncNotice(`已重置「${wh.name}」的 Webhook 密钥，旧链接已失效。`)
+    } catch (err) {
+      setManageError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setBusyWebhookId(null)
+    }
+  }
+
+  const handleTestWebhook = async (wh: ChannelWebhookView) => {
+    if (!channelId || busyWebhookId) return
+    setBusyWebhookId(wh.id)
+    setManageError('')
+    try {
+      await testChannelWebhook(channelId, wh.id)
+      setSyncNotice(`已通过「${wh.name}」发送一条测试消息到当前频道。`)
+    } catch (err) {
+      setManageError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setBusyWebhookId(null)
+    }
+  }
+
+  const handleDeleteWebhook = async (wh: ChannelWebhookView) => {
+    if (!channelId || busyWebhookId) return
+    setBusyWebhookId(wh.id)
+    setManageError('')
+    try {
+      await deleteChannelWebhook(channelId, wh.id)
+      setWebhooks((prev) => prev.filter((item) => item.id !== wh.id))
+    } catch (err) {
+      setManageError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setBusyWebhookId(null)
+    }
+  }
 
   const handleMouseEnter = useCallback(() => {
     clearCloseTimer()
@@ -1530,6 +1679,239 @@ export const ChannelFloatingSidebar = memo(function ChannelFloatingSidebar({
                   </div>
                 ) : null}
               </div>
+
+              {/* Webhook 消息源管理（仅群聊可用，原地内嵌、零居中弹窗） */}
+              {!isDm ? (
+                <div className="space-y-1.5" data-testid="channel-webhooks-section">
+                  <div className="flex items-center justify-between px-1">
+                    <span className="inline-flex items-center gap-1 text-[11px] font-medium text-(--biu-color-text-subtle)">
+                      <BoltIcon className="size-3 text-amber-400" />
+                      <span>Webhook 消息源 · {webhooks.length}</span>
+                    </span>
+                    <button
+                      type="button"
+                      data-testid="channel-open-add-webhook"
+                      className={`inline-flex h-6 cursor-pointer items-center gap-1 rounded-md border-0 px-2 text-[11px] font-medium transition-colors ${
+                        addWebhookOpen
+                          ? 'bg-(--biu-color-bg-muted) text-(--biu-color-text)'
+                          : 'bg-transparent text-(--biu-color-text-muted) hover:bg-(--biu-color-bg-popover-hover) hover:text-(--biu-color-text)'
+                      }`}
+                      onClick={() => setAddWebhookOpen((v) => !v)}
+                    >
+                      <PlusIcon className="size-3 shrink-0" />
+                      <span>{addWebhookOpen ? '收起' : '新建'}</span>
+                    </button>
+                  </div>
+
+                  {addWebhookOpen ? (
+                    <div
+                      className="space-y-2 rounded-[10px] bg-(--biu-color-bg-muted)/50 p-2.5"
+                      data-testid="channel-add-webhook-panel"
+                    >
+                      <input
+                        type="text"
+                        value={newWebhookName}
+                        onChange={(e) => setNewWebhookName(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' && !e.nativeEvent.isComposing) {
+                            e.preventDefault()
+                            void handleCreateWebhook()
+                          }
+                        }}
+                        placeholder="消息源名称，如 GitHub 通知、监控告警…"
+                        data-testid="channel-webhook-name-input"
+                        className="h-7 w-full rounded-[7px] border-0 bg-(--biu-color-bg-popover) px-2 text-[11.5px] text-(--biu-color-text) outline-none placeholder:text-(--biu-color-text-subtle)"
+                      />
+                      {agentMembers.length > 0 ? (
+                        <label className="flex items-center justify-between gap-2 text-[11px] text-(--biu-color-text-subtle)">
+                          <span className="shrink-0">自动唤醒 Agent</span>
+                          <select
+                            value={newWebhookAgentId}
+                            onChange={(e) => setNewWebhookAgentId(e.target.value)}
+                            data-testid="channel-webhook-agent-select"
+                            className="h-6 min-w-0 flex-1 rounded-[6px] border-0 bg-(--biu-color-bg-popover) px-1.5 text-[11px] text-(--biu-color-text) outline-none"
+                          >
+                            <option value="">不自动唤醒（仅推送）</option>
+                            {agentMembers.map((ag) => (
+                              <option key={ag.memberId} value={ag.memberId}>
+                                @{ag.name}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                      ) : null}
+                      <div className="flex items-center justify-end gap-1.5">
+                        <button
+                          type="button"
+                          className="h-6 cursor-pointer rounded-[6px] border-0 bg-transparent px-2 text-[11px] text-(--biu-color-text-muted) hover:text-(--biu-color-text)"
+                          onClick={() => setAddWebhookOpen(false)}
+                        >
+                          取消
+                        </button>
+                        <button
+                          type="button"
+                          disabled={!newWebhookName.trim() || creatingWebhook}
+                          data-testid="channel-create-webhook-submit"
+                          className="inline-flex h-6 cursor-pointer items-center gap-1 rounded-[6px] border-0 bg-(--biu-color-text) px-2.5 text-[11px] font-medium text-(--biu-color-bg) transition-opacity hover:opacity-90 disabled:opacity-45"
+                          onClick={() => void handleCreateWebhook()}
+                        >
+                          <span>{creatingWebhook ? '生成中…' : '生成 Webhook'}</span>
+                        </button>
+                      </div>
+                    </div>
+                  ) : null}
+
+                  {webhooksLoading ? (
+                    <div className="px-1 text-[11px] text-(--biu-color-text-subtle)">加载消息源中…</div>
+                  ) : webhooks.length === 0 ? (
+                    <div className="px-1 text-[11px] leading-relaxed text-(--biu-color-text-subtle)">
+                      生成专属接收链接，外部系统发送 POST（兼容 Slack / Discord 格式）即可推送消息到此频道。
+                    </div>
+                  ) : (
+                    <div className="space-y-1.5">
+                      {webhooks.map((wh) => {
+                        const fullUrl = resolveWebhookFullUrl(wh.url)
+                        const isBusy = busyWebhookId === wh.id
+                        const urlCopied = copiedWebhookKey === `url:${wh.id}`
+                        const curlCopied = copiedWebhookKey === `curl:${wh.id}`
+                        const curlSnippet = fullUrl
+                          ? `curl -X POST '${fullUrl}' -H 'Content-Type: application/json' -d '{"title":"来自 ${wh.name}","text":"Hello BIU!"}'`
+                          : ''
+                        return (
+                          <div
+                            key={wh.id}
+                            data-testid={`channel-webhook-row-${wh.id}`}
+                            className="space-y-1.5 rounded-[10px] bg-(--biu-color-bg-muted)/40 px-2.5 py-2"
+                          >
+                            <div className="flex items-center gap-1.5">
+                              <span className="inline-flex size-4 shrink-0 items-center justify-center rounded-full bg-amber-500/18 text-amber-400">
+                                <BoltIcon className="size-2.5" />
+                              </span>
+                              <span className="min-w-0 flex-1 truncate text-[12px] font-medium text-(--biu-color-text)">
+                                {wh.name}
+                              </span>
+                              {wh.canManage ? (
+                                <>
+                                  <button
+                                    type="button"
+                                    disabled={isBusy}
+                                    data-testid={`channel-webhook-toggle-${wh.id}`}
+                                    className={`h-5 cursor-pointer rounded-full border-0 px-1.5 text-[10px] font-medium transition-colors disabled:opacity-50 ${
+                                      wh.enabled
+                                        ? 'bg-emerald-500/15 text-emerald-400 hover:bg-emerald-500/25'
+                                        : 'bg-(--biu-color-bg-elevated) text-(--biu-color-text-subtle) hover:text-(--biu-color-text)'
+                                    }`}
+                                    onClick={() => void handleToggleWebhookEnabled(wh)}
+                                  >
+                                    {wh.enabled ? '已启用' : '已停用'}
+                                  </button>
+                                  <button
+                                    type="button"
+                                    disabled={isBusy}
+                                    data-testid={`channel-webhook-delete-${wh.id}`}
+                                    className="cursor-pointer border-0 bg-transparent p-0 text-[10.5px] text-(--biu-color-danger) opacity-80 hover:opacity-100 disabled:opacity-40"
+                                    onClick={() => void handleDeleteWebhook(wh)}
+                                  >
+                                    删除
+                                  </button>
+                                </>
+                              ) : (
+                                <span className="text-[10px] text-(--biu-color-text-subtle)">
+                                  {wh.enabled ? '已启用' : '已停用'}
+                                </span>
+                              )}
+                            </div>
+
+                            {wh.canManage && fullUrl ? (
+                              <>
+                                <div className="flex items-center gap-1 rounded-[7px] bg-(--biu-color-bg-popover)/80 px-2 py-1">
+                                  <code
+                                    className="min-w-0 flex-1 truncate font-mono text-[10.5px] text-(--biu-color-text-muted)"
+                                    title={fullUrl}
+                                    data-testid={`channel-webhook-url-${wh.id}`}
+                                  >
+                                    {fullUrl}
+                                  </code>
+                                  <button
+                                    type="button"
+                                    data-testid={`channel-webhook-copy-${wh.id}`}
+                                    className="inline-flex h-5 shrink-0 cursor-pointer items-center gap-0.5 rounded border-0 bg-(--biu-color-bg-elevated) px-1.5 text-[10px] font-medium text-(--biu-color-text-muted) hover:text-(--biu-color-text)"
+                                    onClick={() => copyWebhookText(`url:${wh.id}`, fullUrl)}
+                                  >
+                                    {urlCopied ? <CheckIcon className="size-2.5 text-emerald-400" /> : <DocumentDuplicateIcon className="size-2.5" />}
+                                    <span>{urlCopied ? '已复制' : '复制'}</span>
+                                  </button>
+                                </div>
+
+                                <div className="flex flex-wrap items-center gap-1.5">
+                                  <button
+                                    type="button"
+                                    disabled={isBusy}
+                                    data-testid={`channel-webhook-curl-${wh.id}`}
+                                    className="inline-flex h-5 cursor-pointer items-center gap-1 rounded-[5px] border-0 bg-(--biu-color-bg-elevated) px-1.5 text-[10.5px] text-(--biu-color-text-muted) hover:text-(--biu-color-text) disabled:opacity-50"
+                                    onClick={() => copyWebhookText(`curl:${wh.id}`, curlSnippet)}
+                                  >
+                                    <span>{curlCopied ? '已复制 curl' : '复制 curl'}</span>
+                                  </button>
+                                  <button
+                                    type="button"
+                                    disabled={isBusy || !wh.enabled}
+                                    data-testid={`channel-webhook-test-${wh.id}`}
+                                    className="inline-flex h-5 cursor-pointer items-center gap-1 rounded-[5px] border-0 bg-(--biu-color-bg-elevated) px-1.5 text-[10.5px] text-(--biu-color-text-muted) hover:text-(--biu-color-text) disabled:opacity-45"
+                                    onClick={() => void handleTestWebhook(wh)}
+                                  >
+                                    <PaperAirplaneIcon className="size-2.5" />
+                                    <span>发测试消息</span>
+                                  </button>
+                                  <button
+                                    type="button"
+                                    disabled={isBusy}
+                                    data-testid={`channel-webhook-rotate-${wh.id}`}
+                                    className="inline-flex h-5 cursor-pointer items-center gap-1 rounded-[5px] border-0 bg-transparent px-1 text-[10.5px] text-(--biu-color-text-subtle) hover:text-(--biu-color-text) disabled:opacity-45"
+                                    onClick={() => void handleRotateWebhook(wh)}
+                                  >
+                                    <ArrowPathIcon className="size-2.5" />
+                                    <span>重置密钥</span>
+                                  </button>
+                                </div>
+
+                                {agentMembers.length > 0 ? (
+                                  <div className="flex items-center justify-between gap-2 pt-0.5 text-[10.5px] text-(--biu-color-text-subtle)">
+                                    <span className="shrink-0">自动唤醒</span>
+                                    <select
+                                      disabled={isBusy}
+                                      value={wh.autoTriggerAgentId ?? ''}
+                                      onChange={(e) => void handleUpdateWebhookAgent(wh, e.target.value)}
+                                      data-testid={`channel-webhook-agent-${wh.id}`}
+                                      className="h-5 min-w-0 flex-1 rounded-[5px] border-0 bg-(--biu-color-bg-popover)/80 px-1.5 text-[10.5px] text-(--biu-color-text) outline-none disabled:opacity-50"
+                                    >
+                                      <option value="">不自动唤醒</option>
+                                      {agentMembers.map((ag) => (
+                                        <option key={ag.memberId} value={ag.memberId}>
+                                          @{ag.name}
+                                        </option>
+                                      ))}
+                                    </select>
+                                  </div>
+                                ) : null}
+                              </>
+                            ) : null}
+
+                            <div className="flex items-center justify-between text-[10px] text-(--biu-color-text-subtle)">
+                              <span>由 {wh.createdByName || '成员'} 创建</span>
+                              <span>
+                                {wh.lastUsedAt > 0
+                                  ? `最近推送 ${new Date(wh.lastUsedAt).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}`
+                                  : '尚未使用'}
+                              </span>
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )}
+                </div>
+              ) : null}
 
               {/* 危险操作区：仅群主/管理员可二次确认解散群聊 */}
               {canDisbandGroup ? (

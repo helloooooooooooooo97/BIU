@@ -593,6 +593,22 @@ CREATE TABLE IF NOT EXISTS channel_agent_runs (
   finished_at INTEGER NOT NULL DEFAULT 0
 );
 CREATE INDEX IF NOT EXISTS channel_agent_runs_channel ON channel_agent_runs(channel_id, created_at DESC);
+
+CREATE TABLE IF NOT EXISTS channel_webhooks (
+  id TEXT PRIMARY KEY,
+  channel_id TEXT NOT NULL,
+  workspace_id TEXT NOT NULL DEFAULT '',
+  name TEXT NOT NULL,
+  token TEXT NOT NULL UNIQUE,
+  enabled INTEGER NOT NULL DEFAULT 1,
+  auto_trigger_agent_id TEXT NOT NULL DEFAULT '',
+  created_by TEXT NOT NULL DEFAULT '',
+  last_used_at INTEGER NOT NULL DEFAULT 0,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS channel_webhooks_channel ON channel_webhooks(channel_id, created_at DESC);
+CREATE UNIQUE INDEX IF NOT EXISTS channel_webhooks_token ON channel_webhooks(token);
 `
 
 export const CREATE_ACCESS_REQUESTS_SQL = `

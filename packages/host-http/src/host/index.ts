@@ -903,9 +903,11 @@ export class HttpService extends Service {
         }
         const hasAccountSystem = Boolean(accountStore?.accountByToken)
         const publicApi =
+          match.scope === 'public' ||
           url.pathname === '/api/runtime' ||
           url.pathname.startsWith('/api/account/') ||
           url.pathname.startsWith('/api/share/') ||
+          url.pathname.startsWith('/api/webhooks/') ||
           url.pathname === '/api/mcp' ||
           url.pathname.startsWith('/api/mcp/') ||
           (method === 'GET' && url.pathname.startsWith('/api/plugin-store/files/'))
@@ -952,7 +954,7 @@ export class HttpService extends Service {
           }
           effectiveWorkspace = ''
         }
-        if (getRuntimePolicy().authzMode === 'rbac' && match.pluginId) {
+        if (getRuntimePolicy().authzMode === 'rbac' && match.pluginId && match.scope !== 'public') {
           const allowed = accountStore?.canAccessPlugin?.(accountId, effectiveWorkspace, match.pluginId)
           if (!allowed) {
             context.send(404, { error: 'not found' })

@@ -3,8 +3,12 @@ function isMcpApiPath(pathname: string) {
   return pathname === '/api/mcp' || pathname.startsWith('/api/mcp/')
 }
 
+function isWebhookApiPath(pathname: string) {
+  return pathname.startsWith('/api/webhooks/')
+}
+
 export function isShareApiPath(pathname: string) {
-  return pathname === '/api/share' || pathname.startsWith('/api/share/') || isMcpApiPath(pathname)
+  return pathname === '/api/share' || pathname.startsWith('/api/share/') || isMcpApiPath(pathname) || isWebhookApiPath(pathname)
 }
 
 export function isSharePublicPath(pathname: string) {
