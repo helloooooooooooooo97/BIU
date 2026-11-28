@@ -847,30 +847,36 @@ test('品牌页：粗细可以调到 0（等于隐藏线条），且不被可见
   cleanup()
 })
 
-test('品牌标记：两块是 B 的两弧、半圆是 U，方位与明度都不能改错', () => {
+test('品牌标记：标准 45° 对角严格 2:1:1 切割、层叠铺底零白缝、默认深海三色', () => {
   renderSite('/brand')
   const svg = screen.getAllByRole('img', { name: 'BIU brand mark' }).at(-1)!
-  const paths = Array.from(svg.querySelectorAll('path[fill]'))
-  assert.equal(paths.length, 3)
+  const rotated = svg.querySelector('g[transform="rotate(45 450 615)"]')
+  assert.ok(rotated, '三块色块应统一按标准 45° 绕圆心 (450, 615) 旋转')
+  assert.ok(svg.querySelector('clipPath circle[cx="450"][cy="615"]'), '外轮廓应由单一圆形 clipPath 裁剪')
 
-  // 每块的「结束边」角度决定它落在画面哪一侧，借此钉住 B/I/U 的方位。
-  // 这是标记的全部意义所在 —— 位置错了就不是 BIU 了。
-  const endAngle = (i: number) => {
-    const m = paths[i]!.getAttribute('d')!.match(/A [\d.]+ [\d.]+ 0 \d 1 ([\d.]+) ([\d.]+)/)
-    assert.ok(m, '扇区应有弧线')
-    return Math.round(Math.atan2(Number(m![2]) - 615, Number(m![1]) - 450) * 180 / Math.PI)
-  }
-  assert.equal(endAngle(0), -39, 'colors[0] 应结束于 -39°（B 的上弧）')
-  assert.equal(endAngle(1), 52, 'colors[1] 应结束于 52°（B 的下弧）')
-  assert.equal(endAngle(2), -127, 'colors[2] 应结束于 -127°（左下半圆 = U）')
+  const bTop = svg.querySelector('[data-brand-part="b-top"]')
+  const bBottom = svg.querySelector('[data-brand-part="b-bottom"]')
+  const uHalf = svg.querySelector('[data-brand-part="u"]')
+  assert.ok(bTop && bBottom && uHalf, '应包含 B 上弧 / B 下弧 / U 三层几何')
 
   // 默认是「深海」三色，与标签页图标同一套
-  const fills = paths.map((n) => n.getAttribute('fill')!)
+  const fills = [bTop, bBottom, uHalf].map((n) => n!.getAttribute('fill')!.toLowerCase())
   assert.deepEqual(
-    fills.map((f) => f.toLowerCase()),
+    fills,
     ['#1e3a8a', '#0ea5e9', '#0f172a'],
     `默认应为深海三色，实际：${fills.join(' / ')}`,
   )
+
+  // 分割线严格 45° 对角（225° ↔ 45° 绝对直线，315° 严格垂直）
+  const linePaths = Array.from(svg.querySelectorAll('path[stroke-width]'))
+  assert.equal(linePaths.length, 2)
+  const diag = linePaths[0]!.getAttribute('d')!.match(/^M ([\d.]+) ([\d.]+) L ([\d.]+) ([\d.]+)$/)
+  const perp = linePaths[1]!.getAttribute('d')!.match(/^M ([\d.]+) ([\d.]+) L 450 615$/)
+  assert.ok(diag && perp, '应有主对角线与垂直短线')
+  const angleOf = (x: number, y: number) => Math.round((Math.atan2(y - 615, x - 450) * 180) / Math.PI)
+  assert.equal(angleOf(Number(diag![1]), Number(diag![2])), -135, '主线起点应为 225° (-135°)')
+  assert.equal(angleOf(Number(diag![3]), Number(diag![4])), 45, '主线终点应为 45°（与起点成严格 180° 直线）')
+  assert.equal(angleOf(Number(perp![1]), Number(perp![2])), -45, '短线终点应为 315° (-45°，与主线严格垂直 90°)')
   cleanup()
 })
 
@@ -919,9 +925,9 @@ test('品牌页：圆的大小可调，且不影响背景方块', () => {
   fireEvent.change(screen.getByTestId('brand-circle-ratio'), { target: { value: '1' } })
   assert.ok(Number(circle().getAttribute('r')) > afterR, '调大时圆应变大')
 
-  // 扇区必须跟圆同步缩放，否则色块会溢出或缩在中间。
-  const wedge = svg.querySelector('path[fill]')!
-  assert.match(wedge.getAttribute('d') ?? '', /A [\d.]+ [\d.]+/, '扇区弧线半径应随圆变化')
+  // 裁剪圆必须跟描边圆同步缩放，否则色块会溢出或缩在中间。
+  const clipCircle = svg.querySelector('clipPath circle')!
+  assert.equal(clipCircle.getAttribute('r'), circle().getAttribute('r'), '裁剪圆半径应随圆同步变化')
   cleanup()
 })
 

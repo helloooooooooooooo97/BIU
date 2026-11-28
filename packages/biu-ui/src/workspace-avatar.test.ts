@@ -22,6 +22,7 @@ describe('workspace-avatar', () => {
     expect(decodedDefault).toContain('#0ea5e9')
     expect(decodedDefault).toContain('#0f172a')
     expect(decodedDefault).toContain('<circle cx="50" cy="50" r="50"/>')
+    expect(decodedDefault).toContain('transform="rotate(45 50 50)"')
     expect(detectWorkspaceAvatarPreset(defaultUrl)).toBe('deep-sea')
 
     const vividUrl = buildWorkspaceAvatarDataUrl('vivid')
