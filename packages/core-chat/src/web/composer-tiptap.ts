@@ -2,6 +2,43 @@ import type { Editor } from '@tiptap/react'
 import { mentionPickFromAttrs } from '@biu/core-editor/mention'
 import { formatPick, pickChipAttrs, pickKey, pickRefFromAttrs, splitPickStream, type PickRef } from '@biu/core-pick/web'
 
+/** 胶囊行：左右 padding 10+10、两段 gap 8、与 CSS `.composer-pill-row` 一致。 */
+const COMPACT_ROW_PAD_X = 20
+const COMPACT_ROW_GAP_X = 16
+export const COMPOSER_LINE_PX = 28
+/** 粘贴超过这个字数时改成 pick 芯片，括号里显示字数。 */
+export const COMPOSER_PASTE_PICK_CHARS = 160
+
+/** 用「按钮还在同一行时」的编辑器宽度测是否折行，避免变方后变宽又缩回导致闪跳。 */
+export function editorWrapsInCompactRow(form: HTMLElement, editorDom: HTMLElement) {
+  const left = (form.querySelector('.composer-pill-left') ?? form.querySelector('.composer-plus')) as HTMLElement | null
+  const right = form.querySelector('.composer-pill-right') as HTMLElement | null
+  const compactW =
+    form.clientWidth -
+    COMPACT_ROW_PAD_X -
+    COMPACT_ROW_GAP_X -
+    (left?.offsetWidth ?? 28) -
+    (right?.offsetWidth ?? 80)
+  if (compactW <= 0) return false
+  const probe = editorDom.cloneNode(true) as HTMLElement
+  probe.removeAttribute('contenteditable')
+  probe.style.cssText = [
+    'position:absolute',
+    'left:-9999px',
+    'top:0',
+    `width:${compactW}px`,
+    'height:auto',
+    'max-height:none',
+    'overflow:visible',
+    `line-height:${COMPOSER_LINE_PX}px`,
+    'word-break:break-word',
+  ].join(';')
+  document.body.append(probe)
+  const wraps = probe.scrollHeight > COMPOSER_LINE_PX + 4
+  probe.remove()
+  return wraps
+}
+
 function attrsToRef(attrs: Record<string, unknown>): PickRef | null {
   return pickRefFromAttrs(attrs)
 }

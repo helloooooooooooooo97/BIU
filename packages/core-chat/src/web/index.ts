@@ -83,7 +83,11 @@ export function apply(ctx: Context) {
   }, 'chat-ui.channels-realtime')
 
   ctx.slots.place('chat-sidebar-channels', ChannelSidebarSections, { key: 'chat-channels-sidebar', order: 1, props })
-  ctx.slots.place('channel-stage', ChannelStage, { key: 'chat-channel-stage', order: 1, props })
+  ctx.slots.place('channel-stage', ChannelStage, {
+    key: 'chat-channel-stage',
+    order: 1,
+    props: () => ({ ...slotProps, pick: ctx.get('pick') as PickService | undefined }),
+  })
   ctx.slots.place('inspector-panels', ChannelRunInspector, {
     key: 'chat-channel-run',
     order: 3,

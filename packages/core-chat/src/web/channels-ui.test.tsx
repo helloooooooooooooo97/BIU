@@ -10,6 +10,17 @@ import { resetChannelStore } from './channel-store.ts'
 
 beforeEach(() => {
   resetChannelStore()
+  const rect = () => ({ top: 0, left: 0, bottom: 0, right: 0, width: 0, height: 0, x: 0, y: 0, toJSON: () => ({}) })
+  if (typeof Range !== 'undefined' && !Range.prototype.getClientRects) {
+    Range.prototype.getClientRects = (() => [rect()]) as unknown as Range['getClientRects']
+    Range.prototype.getBoundingClientRect = rect as unknown as Range['getBoundingClientRect']
+  }
+  if (typeof Element !== 'undefined' && !Element.prototype.getClientRects) {
+    Element.prototype.getClientRects = (() => [rect()]) as unknown as Element['getClientRects']
+  }
+  if (typeof Text !== 'undefined' && !(Text.prototype as unknown as { getClientRects?: unknown }).getClientRects) {
+    ;(Text.prototype as unknown as { getClientRects: unknown }).getClientRects = () => [rect()]
+  }
 })
 
 afterEach(() => {
@@ -229,12 +240,17 @@ test('ChannelStage renders IM messages, ephemeral notice, @mention popup, read-o
   fireEvent.click(view.getByTestId('channel-msg-trace-run-1'))
     assert.deepEqual(openedTabs, ['channel-run'])
 
-    // 输入 @ 弹出自动补全菜单（含 @所有人、@发布助手）
-    const input = view.getByTestId('channel-composer-input')
-    fireEvent.change(input, { target: { value: '@' } })
-    const menu = view.getByTestId('channel-mention-menu')
-    assert.ok(menu.textContent?.includes('@所有人'))
-    assert.ok(menu.textContent?.includes('@发布助手'))
+    // 点击 + 按钮插入 @ 弹出统一自动补全菜单（含 @所有人、@发布助手）
+    await waitFor(() => {
+      assert.equal(Boolean(view.queryByTestId('channel-composer-input')), true)
+    })
+    fireEvent.click(view.getByTestId('channel-mention-btn'))
+    await waitFor(() => {
+      const menu = view.queryByTestId('channel-mention-menu')
+      assert.equal(Boolean(menu), true)
+      assert.equal(Boolean(menu?.textContent?.includes('@所有人')), true)
+      assert.equal(Boolean(menu?.textContent?.includes('@发布助手')), true)
+    })
   } finally {
     window.removeEventListener('biu:inspector-tab', onTab)
   }
