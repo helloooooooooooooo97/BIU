@@ -585,7 +585,7 @@ export const ChatSidebar = memo(function ChatSidebar({
                             <div
                               role="button"
                               tabIndex={0}
-                              className="flex min-h-8 min-w-0 flex-1 cursor-pointer items-center gap-2 rounded-md text-left text-[14px] font-medium tracking-normal text-inherit outline-none hover:text-(--biu-color-text) focus-visible:ring-1 focus-visible:ring-(--biu-color-border)"
+                              className="flex min-h-8 min-w-0 flex-1 cursor-pointer items-center gap-1.5 rounded-md text-left text-[14px] font-medium tracking-normal text-inherit outline-none hover:text-(--biu-color-text) focus-visible:ring-1 focus-visible:ring-(--biu-color-border)"
                               title={group.path ?? group.label}
                               aria-expanded={!collapsed}
                               onClick={() => toggleProjectGroup(group.key)}
@@ -595,7 +595,9 @@ export const ChatSidebar = memo(function ChatSidebar({
                                 toggleProjectGroup(group.key)
                               }}
                             >
-                              <GroupFoldGlyph group={group} collapsed={collapsed} />
+                              <span className="grid size-6 shrink-0 place-items-center" aria-hidden>
+                                <GroupFoldGlyph group={group} collapsed={collapsed} />
+                              </span>
                               <span className="sidebar-label min-w-0 flex-1 truncate">{group.label}</span>
                             </div>
                             <ChatCount count={group.sessions.length} />
