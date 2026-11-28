@@ -2,10 +2,12 @@ import { memo, useCallback, useEffect, useMemo, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import {
+  ArrowRightStartOnRectangleIcon,
   BellSlashIcon,
   BookmarkIcon,
   ChatBubbleLeftRightIcon,
   ChevronRightIcon,
+  EyeSlashIcon,
   HashtagIcon,
   LockClosedIcon,
   MagnifyingGlassIcon,
@@ -26,8 +28,7 @@ import {
   useSidebarCollapseStore,
   type SessionViewService,
 } from '@biu/web-session-view'
-import { SIDEBAR_ROW_MAIN_CLASS, SidebarRow, SidebarRowMain } from '@biu/web-session-view/sidebar-row'
-import { TrashGlyph } from '@biu/web-session-view/trash-glyph'
+import { SIDEBAR_ROW_MAIN_CLASS, SidebarRow, SidebarRowMain, type SidebarRowMenuItem } from '@biu/web-session-view/sidebar-row'
 import {
   buildDefaultChannelName,
   type ChannelAccessMode,
@@ -35,8 +36,10 @@ import {
 } from '../shared/channel-types.ts'
 import {
   createChannel,
-  deleteChannel,
+  leaveChannel,
   loadChannels,
+  setChannelThreadFollow,
+  updateChannelPreferences,
   useChannelStore,
 } from './channel-store.ts'
 
@@ -175,16 +178,42 @@ export const ChannelSidebarSections = memo(function ChannelSidebarSections({
     [members, myAccountId],
   )
 
-  const handleDeleteChannel = useCallback(
+  const handleHideChannel = useCallback(
     async (channelId: string) => {
       try {
-        await deleteChannel(channelId)
+        await updateChannelPreferences(channelId, { hidden: true })
         if (routeChannelId === channelId) navigate('/')
       } catch {
         /* ignore */
       }
     },
     [navigate, routeChannelId],
+  )
+
+  const handleLeaveChannel = useCallback(
+    async (channelId: string) => {
+      try {
+        await leaveChannel(channelId)
+        if (routeChannelId === channelId) navigate('/')
+      } catch {
+        /* ignore */
+      }
+    },
+    [navigate, routeChannelId],
+  )
+
+  const handleUnfollowThread = useCallback(
+    async (channelId: string, rootId: string) => {
+      try {
+        await setChannelThreadFollow(channelId, rootId, false)
+        if (routeChannelId === channelId && activeThreadId === rootId) {
+          navigate(channelAppPath(channelId))
+        }
+      } catch {
+        /* ignore */
+      }
+    },
+    [activeThreadId, navigate, routeChannelId],
   )
 
   if (iconRail) {
@@ -343,6 +372,42 @@ export const ChannelSidebarSections = memo(function ChannelSidebarSections({
                     ) : null}
                   </>
                 )
+                const isOwnerOrManager = Boolean(
+                  ch.canManage ?? (!myAccountId || ch.createdBy === myAccountId),
+                )
+                const channelMenuItems: SidebarRowMenuItem[] = isDm
+                  ? [
+                      {
+                        id: 'hide',
+                        label: '隐藏对话',
+                        icon: <EyeSlashIcon className="size-4 shrink-0" />,
+                        onSelect: () => void handleHideChannel(ch.id),
+                      },
+                    ]
+                  : isOwnerOrManager
+                    ? [
+                        {
+                          id: 'hide',
+                          label: '隐藏聊天',
+                          icon: <EyeSlashIcon className="size-4 shrink-0" />,
+                          onSelect: () => void handleHideChannel(ch.id),
+                        },
+                      ]
+                    : [
+                        {
+                          id: 'hide',
+                          label: '隐藏聊天',
+                          icon: <EyeSlashIcon className="size-4 shrink-0" />,
+                          onSelect: () => void handleHideChannel(ch.id),
+                        },
+                        {
+                          id: 'leave',
+                          label: '退出聊天',
+                          icon: <ArrowRightStartOnRectangleIcon className="size-4 shrink-0" />,
+                          danger: true,
+                          onSelect: () => void handleLeaveChannel(ch.id),
+                        },
+                      ]
                 return (
                   <div key={ch.id} className="min-w-0">
                     <SidebarRow
@@ -432,9 +497,8 @@ export const ChannelSidebarSections = memo(function ChannelSidebarSections({
                           </Link>
                         </SidebarRowMain>
                       }
-                      onDelete={() => void handleDeleteChannel(ch.id)}
-                      deleteLabel={isDm ? `删除聊天 ${ch.name}` : `解散聊天 ${ch.name}`}
-                      deleteIcon={<TrashGlyph className="size-4 shrink-0" />}
+                      menuItems={channelMenuItems}
+                      moreLabel={`${ch.name} 更多操作`}
                     />
                     {hasThreads ? (
                       <SidebarFold open={threadExpanded} className="sidebar-session-list min-w-0">
@@ -466,6 +530,15 @@ export const ChannelSidebarSections = memo(function ChannelSidebarSections({
                                     </span>
                                   </Link>
                                 }
+                                menuItems={[
+                                  {
+                                    id: 'unfollow',
+                                    label: '取消关注',
+                                    icon: <BellSlashIcon className="size-4 shrink-0" />,
+                                    onSelect: () => void handleUnfollowThread(ch.id, t.rootId),
+                                  },
+                                ]}
+                                moreLabel={`${t.title} 更多操作`}
                               />
                             )
                           })}

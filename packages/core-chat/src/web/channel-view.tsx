@@ -59,6 +59,7 @@ import {
   autoNameChannel,
   cancelChannelRun,
   decideChannelApproval,
+  deleteChannel,
   editChannelMessage,
   leaveChannel,
   loadChannelDetail,
@@ -75,6 +76,7 @@ import {
   saveChannelContentAsPage,
   searchChannelMessages,
   setActiveChannelId,
+  setChannelThreadFollow,
   summarizeChannel,
   syncChannelToAgent,
   toggleChannelPinMessage,
@@ -386,6 +388,7 @@ export const ChannelStage = memo(function ChannelStage({
   const [editingTitle, setEditingTitle] = useState(false)
   const [titleDraft, setTitleDraft] = useState('')
   const [syncedMsgIds, setSyncedMsgIds] = useState<Record<string, boolean>>({})
+  const [togglingThreadFollow, setTogglingThreadFollow] = useState(false)
   const [loadingOlder, setLoadingOlder] = useState(false)
   const [unreadDividerSeq, setUnreadDividerSeq] = useState<number | null>(null)
   const [pendingNewCount, setPendingNewCount] = useState(0)
@@ -459,6 +462,14 @@ export const ChannelStage = memo(function ChannelStage({
     return activeThread?.root ?? mainMessages.find((m) => m.id === activeThreadRootId) ?? null
   }, [activeThread?.root, activeThreadRootId, mainMessages])
   const threadReplies = activeThread?.replies ?? EMPTY_MESSAGES
+  const isThreadFollowed = useMemo(() => {
+    if (!activeThreadRootId) return false
+    if (typeof activeThread?.following === 'boolean') return activeThread.following
+    if (typeof threadRootMessage?.threadSummary?.following === 'boolean') {
+      return threadRootMessage.threadSummary.following
+    }
+    return Boolean(detail?.channel.threads?.some((t) => t.rootId === activeThreadRootId))
+  }, [activeThread?.following, activeThreadRootId, detail?.channel.threads, threadRootMessage?.threadSummary?.following])
   const messages = useMemo(() => {
     if (!activeThreadRootId) return mainMessages
     return threadRootMessage ? [threadRootMessage, ...threadReplies] : threadReplies
@@ -883,6 +894,33 @@ export const ChannelStage = memo(function ChannelStage({
                     {threadReplies.length} 条回复
                   </span>
                 </span>
+                <button
+                  type="button"
+                  disabled={togglingThreadFollow}
+                  data-testid="channel-thread-follow-btn"
+                  aria-pressed={isThreadFollowed}
+                  title={
+                    isThreadFollowed
+                      ? '已关注：会显示在左侧边栏该聊天下方（点击取消关注）'
+                      : '关注讨论串后，会固定显示在左侧边栏该聊天下方'
+                  }
+                  className={`ml-1 inline-flex h-6 shrink-0 cursor-pointer items-center gap-1 rounded-md border-0 px-2 text-[11.5px] font-medium transition-colors disabled:opacity-50 ${
+                    isThreadFollowed
+                      ? 'bg-(--biu-color-bg-muted) text-(--biu-color-text) hover:bg-(--biu-color-bg-hover)'
+                      : 'bg-transparent text-(--biu-color-text-muted) hover:bg-(--biu-color-bg-hover) hover:text-(--biu-color-text)'
+                  }`}
+                  onClick={() => {
+                    if (!activeThreadRootId || togglingThreadFollow) return
+                    setTogglingThreadFollow(true)
+                    setError('')
+                    void setChannelThreadFollow(channelId, activeThreadRootId, !isThreadFollowed)
+                      .catch((err) => setError(err instanceof Error ? err.message : String(err)))
+                      .finally(() => setTogglingThreadFollow(false))
+                  }}
+                >
+                  {isThreadFollowed ? <BellIcon className="size-3 shrink-0" /> : <BellSlashIcon className="size-3 shrink-0 opacity-75" />}
+                  <span>{isThreadFollowed ? '已关注' : '关注'}</span>
+                </button>
               </>
             ) : (
               <>
@@ -2309,7 +2347,10 @@ function ChannelMembersModal({
   const [syncNotice, setSyncNotice] = useState('')
   const [busyAgentId, setBusyAgentId] = useState<string | null>(null)
   const [savingPref, setSavingPref] = useState(false)
+  const [confirmDisband, setConfirmDisband] = useState(false)
+  const [disbanding, setDisbanding] = useState(false)
   const canLeaveGroup = channel.kind !== 'dm' && channel.createdBy !== myAccountId && myAccountId !== 'local'
+  const canDisbandGroup = channel.kind !== 'dm' && canManageMembers
 
   useEffect(() => {
     const params = new URLSearchParams({ path: '/workspace-members', limit: '200', columns: 'title,email,avatar' })
@@ -2616,6 +2657,68 @@ function ChannelMembersModal({
                 </div>
               ) : null}
             </div>
+
+            {/* 危险操作区：仅群主/管理员可二次确认解散群聊 */}
+            {canDisbandGroup ? (
+              <div className="scfg-section border-t border-(--biu-color-border) pt-3">
+                {!confirmDisband ? (
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="text-[12.5px] font-medium text-(--biu-color-text)">解散并删除聊天</div>
+                      <div className="text-[11.5px] text-(--biu-color-text-subtle)">
+                        将永久清空全员消息与讨论串，不可恢复
+                      </div>
+                    </div>
+                    <Button
+                      variant="destructive"
+                      className="h-7 shrink-0 px-2.5 text-[12px]"
+                      data-testid="channel-disband-btn"
+                      onClick={() => setConfirmDisband(true)}
+                    >
+                      <TrashIcon className="size-3.5" />
+                      <span>解散聊天</span>
+                    </Button>
+                  </div>
+                ) : (
+                  <div
+                    className="flex flex-col gap-2 rounded-lg bg-(--biu-color-danger)/10 px-3 py-2.5"
+                    data-testid="channel-disband-confirm-box"
+                  >
+                    <div className="text-[12px] leading-relaxed text-(--biu-color-text)">
+                      确认解散「{channel.name}」吗？解散后该聊天的所有消息、附件与讨论串将被永久清空，所有成员均无法再查看。
+                    </div>
+                    <div className="flex items-center justify-end gap-2">
+                      <Button
+                        variant="secondary"
+                        className="h-7 px-2.5 text-[12px]"
+                        disabled={disbanding}
+                        onClick={() => setConfirmDisband(false)}
+                      >
+                        取消
+                      </Button>
+                      <Button
+                        variant="destructive"
+                        className="h-7 px-2.5 text-[12px]"
+                        disabled={disbanding}
+                        data-testid="channel-disband-confirm-btn"
+                        onClick={() => {
+                          setDisbanding(true)
+                          setError('')
+                          void deleteChannel(channelId)
+                            .then(() => onLeft())
+                            .catch((err) => {
+                              setError(err instanceof Error ? err.message : String(err))
+                              setDisbanding(false)
+                            })
+                        }}
+                      >
+                        {disbanding ? '解散中…' : '确认解散'}
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            ) : null}
           </div>
         </div>
       </div>

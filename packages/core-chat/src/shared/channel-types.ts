@@ -79,6 +79,8 @@ export interface ChannelSummary {
   lastReadSeq?: number
   muted?: boolean
   pinned?: boolean
+  hidden?: boolean
+  canManage?: boolean
   threads?: ChannelSidebarThreadItem[]
 }
 
@@ -158,12 +160,14 @@ export interface ChannelThreadSummary {
   replyCount: number
   lastReplyAt: number
   participantNames: string[]
+  following?: boolean
 }
 
 export interface ChannelThreadPayload {
   channelId: string
   root: ChannelMessageView
   replies: ChannelMessageView[]
+  following?: boolean
 }
 
 export interface ChannelMessageView {
