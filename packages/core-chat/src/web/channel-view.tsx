@@ -37,7 +37,7 @@ import { resolveAssetUrl } from '@biu/biu-ui/workspace-transport'
 import { onAppEvents } from '@biu/biu-ui/app-events'
 import { ChatDockStack, ChatStage as BiuChatStage } from '@biu/biu-ui/chat-pane'
 import { useWorkspaceProfile } from '@biu/biu-ui/use-workspace-profile'
-import { PickChip, splitPickStream, type PickService } from '@biu/core-pick/web'
+import { PickChip, pickPreview, splitPickStream, type PickService } from '@biu/core-pick/web'
 import { SidebarMascot, resolveSessionMascot } from '@biu/public-mascot'
 import { bindSessionView, channelAppPath, sessionAppPath, type SessionViewService } from '@biu/web-session-view'
 import type {
@@ -1225,9 +1225,21 @@ export const ChannelStage = memo(function ChannelStage({
                     // 所有群聊消息统一使用 .chat-user-card + 底部 .user-turn-bar
                     const isHighlighted = highlightedMsgId === msg.id
                     const reactions = msg.reactions ?? []
+                    const msgPickBody = isRecalled
+                      ? '此消息已撤回'
+                      : msg.text?.trim() ||
+                        (msgAttachments.length ? msgAttachments.map((att) => att.name).join('、') : '[附件消息]')
+                    const msgPickLabel =
+                      pickPreview(msg.senderName ? `${msg.senderName}：${msgPickBody}` : msgPickBody, 60) || msg.id
+                    const msgPickText = pickPreview(msgPickBody, 200)
                     const cardNode = (
                       <div
                         data-msg-id={msg.id}
+                        data-biu-kind={isAgent || isSystemAgent ? 'reply' : 'message'}
+                        data-biu-id={msg.id}
+                        data-biu-label={msgPickLabel}
+                        data-biu-path={`/channels/${channelId}`}
+                        data-biu-text={msgPickText || undefined}
                         className={`chat-user-card group !w-3/4 min-w-0 transition-shadow${isEphemeral ? ' opacity-95' : ''}${isHighlighted ? ' ring-2 ring-amber-400/80' : ''}`}
                       >
                         <div className="chat-user-card-body text-(--biu-color-text)">

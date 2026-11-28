@@ -9,6 +9,7 @@ import {
   ClipboardDocumentCheckIcon,
   CheckCircleIcon,
   ChatBubbleLeftIcon,
+  ChatBubbleLeftRightIcon,
   CursorArrowRaysIcon,
   PuzzlePieceIcon,
   TagIcon,
@@ -41,6 +42,8 @@ const PICK_KIND_ALIAS: Record<string, string> = {
   'views-db': 'view',
   tags: 'tag',
   'tags-db': 'tag',
+  channels: 'channel',
+  threads: 'thread',
 }
 
 export function canonicalPickKind(kind: string) {
@@ -63,6 +66,8 @@ const KIND_ICONS: Record<string, Glyph> = {
   collection: TagIcon,
   view: Square3Stack3DIcon,
   plugin: PuzzlePieceIcon,
+  channel: HashtagIcon,
+  thread: ChatBubbleLeftRightIcon,
   message: ChatBubbleLeftIcon,
   reply: ChatBubbleLeftIcon,
   tool: WrenchScrewdriverIcon,
@@ -99,6 +104,7 @@ const COLLECTION_KIND: Record<string, string> = {
   notices: 'notice',
   notifications: 'notice',
   'page-blocks': 'widgets',
+  channels: 'channel',
   usage: 'usage',
 }
 
