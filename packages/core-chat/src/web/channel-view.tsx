@@ -1,22 +1,30 @@
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { memo, useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 import { createPortal } from 'react-dom'
 import { useNavigate } from 'react-router-dom'
 import {
+  ArrowUpIcon,
   ArrowUturnLeftIcon,
+  CheckIcon,
   ChevronDoubleLeftIcon,
   ChevronDoubleRightIcon,
+  ChevronRightIcon,
+  ClockIcon,
   EyeIcon,
   HashtagIcon,
   LockClosedIcon,
-  PaperAirplaneIcon,
+  PlusIcon,
   ShieldCheckIcon,
-  StopCircleIcon,
+  Square2StackIcon,
   UserGroupIcon,
   UserPlusIcon,
   XMarkIcon,
 } from '@heroicons/react/16/solid'
+import { Button } from '@biu/biu-ui'
 import { AiAvatar } from '@biu/biu-ui/ai-avatar'
 import { apiFetch } from '@biu/biu-ui/api-client'
+import { onAppEvents } from '@biu/biu-ui/app-events'
+import { ChatDockStack, ChatStage as BiuChatStage } from '@biu/biu-ui/chat-pane'
+import { useWorkspaceProfile } from '@biu/biu-ui/use-workspace-profile'
 import { SidebarMascot, resolveSessionMascot } from '@biu/public-mascot'
 import { bindSessionView, sessionAppPath, type SessionViewService } from '@biu/web-session-view'
 import type {
@@ -45,13 +53,122 @@ type MentionOption = {
   mascot?: ChannelMemberView['mascot']
 }
 
-function formatClock(ts: number) {
+function formatSentAt(ts: number) {
   if (!ts) return ''
-  try {
-    return new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-  } catch {
-    return ''
+  const date = new Date(ts)
+  if (Number.isNaN(date.getTime())) return ''
+  const now = new Date()
+  const sameDay =
+    date.getFullYear() === now.getFullYear() &&
+    date.getMonth() === now.getMonth() &&
+    date.getDate() === now.getDate()
+  const time = date.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', hour12: false })
+  if (sameDay) return time
+  const day = date.toLocaleDateString('zh-CN', { month: 'numeric', day: 'numeric' })
+  return `${day} ${time}`
+}
+
+/** 与侧边栏账户及成员表完全一致的头像渲染（优先工作区头像，回退同 seed AiAvatar）。 */
+export function MemberAvatar({
+  avatar,
+  seed,
+  size = 18,
+}: {
+  avatar?: string
+  seed?: string
+  size?: number
+}) {
+  const clean = avatar?.trim()
+  if (clean) {
+    return (
+      <img
+        src={clean}
+        alt=""
+        className="shrink-0 rounded-full object-cover"
+        style={{ width: size, height: size }}
+      />
+    )
   }
+  return <AiAvatar seed={seed || 'biu-ai'} size={size} className="shrink-0 rounded-full" />
+}
+
+/** 实时同步当前工作区成员的头像与昵称，确保与空间头像和成员表始终 100% 一致。 */
+function useLiveWorkspaceAvatars() {
+  const workspaceProfile = useWorkspaceProfile()
+  const [byId, setById] = useState<Map<string, { name?: string; avatar?: string }>>(() => new Map())
+
+  useEffect(() => {
+    let cancelled = false
+    const load = () => {
+      const params = new URLSearchParams({
+        path: '/workspace-members',
+        limit: '500',
+        columns: 'title,avatar',
+      })
+      void apiFetch(`/api/db/list?${params.toString()}`)
+        .then((r) => (r.ok ? r.json() : null))
+        .then((body) => {
+          if (cancelled) return
+          const rows = Array.isArray((body as { items?: unknown[] } | null)?.items)
+            ? ((body as { items: Array<Record<string, unknown>> }).items)
+            : []
+          const next = new Map<string, { name?: string; avatar?: string }>()
+          for (const row of rows) {
+            const id = String(row?.id ?? '').trim()
+            if (!id) continue
+            const avatar = typeof row.avatar === 'string' ? row.avatar.trim() : ''
+            const name = typeof row.title === 'string' ? row.title.trim() : ''
+            next.set(id, { ...(name ? { name } : {}), ...(avatar ? { avatar } : {}) })
+          }
+          setById(next)
+        })
+        .catch(() => undefined)
+    }
+    load()
+    const off = onAppEvents(['biu:account-token', 'biu:workspace-profile'], load)
+    return () => {
+      cancelled = true
+      off()
+    }
+  }, [])
+
+  return useCallback(
+    (accountId?: string, serverAvatar?: string): string | undefined => {
+      const id = String(accountId ?? '').trim()
+      if (id && workspaceProfile.accountId && id === workspaceProfile.accountId && workspaceProfile.hydrated) {
+        return workspaceProfile.avatar?.trim() || undefined
+      }
+      const live = id ? byId.get(id)?.avatar : undefined
+      if (live) return live
+      return serverAvatar?.trim() || undefined
+    },
+    [byId, workspaceProfile.accountId, workspaceProfile.avatar, workspaceProfile.hydrated],
+  )
+}
+
+function MessageCopyAction({ text }: { text: string }) {
+  const [copied, setCopied] = useState(false)
+  const copy = async () => {
+    if (!text.trim()) return
+    try {
+      await navigator.clipboard.writeText(text)
+      setCopied(true)
+      window.setTimeout(() => setCopied(false), 1400)
+    } catch {
+      /* clipboard may be denied */
+    }
+  }
+  return (
+    <button
+      type="button"
+      className={`chat-assistant-action${copied ? ' is-done' : ''}`}
+      title={copied ? '已复制' : '复制'}
+      aria-label={copied ? '已复制' : '复制消息'}
+      onClick={() => void copy()}
+    >
+      {copied ? <CheckIcon className="size-3.5" /> : <Square2StackIcon className="size-3.5" />}
+    </button>
+  )
 }
 
 export const ChannelStage = memo(function ChannelStage({
@@ -73,6 +190,7 @@ export const ChannelStage = memo(function ChannelStage({
 }) {
   const navigate = useNavigate()
   const detail = useChannelStore((s) => s.details[channelId])
+  const resolveAvatar = useLiveWorkspaceAvatars()
   const [loading, setLoading] = useState(false)
   const [text, setText] = useState('')
   const [mentions, setMentions] = useState<ChannelMention[]>([])
@@ -84,6 +202,7 @@ export const ChannelStage = memo(function ChannelStage({
   const [mentionQuery, setMentionQuery] = useState<string | null>(null)
   const [mentionIdx, setMentionIdx] = useState(0)
   const [decidingApproval, setDecidingApproval] = useState<string | null>(null)
+  const [composerExpanded, setComposerExpanded] = useState(false)
 
   const scrollRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
@@ -105,6 +224,19 @@ export const ChannelStage = memo(function ChannelStage({
     el.scrollTop = el.scrollHeight
   }, [messages.length, activities.length])
 
+  // 自动伸缩 textarea 高度，并与 .composer-pill.is-expanded 保持一致
+  const syncTextareaHeight = useCallback((el: HTMLTextAreaElement | null) => {
+    if (!el) return
+    el.style.height = 'auto'
+    const nextH = Math.min(el.scrollHeight, 8 * 28)
+    el.style.height = `${Math.max(28, nextH)}px`
+    setComposerExpanded(el.value.includes('\n') || el.scrollHeight > 36)
+  }, [])
+
+  useEffect(() => {
+    syncTextareaHeight(inputRef.current)
+  }, [text, syncTextareaHeight])
+
   const memberById = useMemo(() => {
     const map = new Map<string, ChannelMemberView>()
     for (const m of members) map.set(`${m.memberType}:${m.memberId}`, m)
@@ -116,7 +248,7 @@ export const ChannelStage = memo(function ChannelStage({
     const humans = members.filter((m) => m.memberType === 'account')
     const base: MentionOption[] = []
     if (agents.length > 0) {
-      base.push({ kind: 'everyone', id: 'everyone', label: '所有人', sub: `触发群内全部 ${agents.length} 个 Agent` })
+      base.push({ kind: 'everyone', id: 'everyone', label: '所有人', sub: `唤醒群内全部 ${agents.length} 个 Agent` })
     }
     for (const a of agents) {
       base.push({
@@ -133,13 +265,13 @@ export const ChannelStage = memo(function ChannelStage({
         id: h.memberId,
         label: h.name,
         sub: '成员',
-        avatar: h.avatar,
+        avatar: resolveAvatar(h.memberId, h.avatar),
       })
     }
     if (!mentionQuery) return base
     const q = mentionQuery.toLowerCase()
     return base.filter((opt) => opt.label.toLowerCase().includes(q) || (opt.sub?.toLowerCase().includes(q) ?? false))
-  }, [members, mentionQuery])
+  }, [members, mentionQuery, resolveAvatar])
 
   const handleTextChange = (next: string) => {
     setText(next)
@@ -152,6 +284,25 @@ export const ChannelStage = memo(function ChannelStage({
     } else {
       setMentionQuery(null)
     }
+  }
+
+  const openMentionPicker = () => {
+    const el = inputRef.current
+    if (!el) return
+    const caret = el.selectionStart ?? text.length
+    const before = text.slice(0, caret)
+    const after = text.slice(caret)
+    const needsSpace = before.length > 0 && !/\s$/.test(before) && !before.endsWith('@')
+    const insert = before.endsWith('@') ? '' : needsSpace ? ' @' : '@'
+    const next = `${before}${insert}${after}`
+    setText(next)
+    setMentionQuery('')
+    setMentionIdx(0)
+    requestAnimationFrame(() => {
+      el.focus()
+      const pos = before.length + insert.length
+      el.setSelectionRange(pos, pos)
+    })
   }
 
   const pickMention = (opt: MentionOption) => {
@@ -188,12 +339,23 @@ export const ChannelStage = memo(function ChannelStage({
       setMentions([])
       setReplyTo(null)
       setMentionQuery(null)
+      setComposerExpanded(false)
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
     } finally {
       setSending(false)
     }
   }, [channelId, mentions, replyTo, sending, text])
+
+  const onFormSubmit = (event: FormEvent) => {
+    event.preventDefault()
+    if (mentionQuery !== null && mentionOptions.length > 0) {
+      const hit = mentionOptions[mentionIdx] ?? mentionOptions[0]
+      if (hit) pickMention(hit)
+      return
+    }
+    void handleSend()
+  }
 
   const handleAgentClick = (agentId: string) => {
     const member = memberById.get(`agent:${agentId}`)
@@ -220,12 +382,14 @@ export const ChannelStage = memo(function ChannelStage({
   const isDm = channel?.kind === 'dm'
   const agentMembers = members.filter((m) => m.memberType === 'agent')
   const humanMembers = members.filter((m) => m.memberType === 'account')
+  const peerAvatar = resolveAvatar(channel?.peerAccountId, channel?.peerAvatar)
+  const hasChips = Boolean(replyTo)
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-(--biu-color-bg)" data-testid="channel-stage">
-      {/* 顶部栏 */}
-      <header className="chat-view-header flex shrink-0 items-center justify-between gap-2 border-b border-(--biu-color-border-subtle) px-3" data-biu-ignore>
-        <div className="flex min-w-0 items-center gap-2">
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden" data-testid="channel-stage">
+      {/* 顶部栏：与 1v1 Agent 聊天完全统一的 .chat-view-header */}
+      <header className="chat-view-header" data-biu-ignore>
+        <div className="chat-view-header-left">
           {leftHidden ? (
             <button
               type="button"
@@ -237,36 +401,43 @@ export const ChannelStage = memo(function ChannelStage({
               <ChevronDoubleRightIcon className="size-4" />
             </button>
           ) : null}
-          {isDm ? (
-            channel?.peerAvatar ? (
-              <img src={channel.peerAvatar} alt="" className="size-5 rounded-full object-cover" />
-            ) : (
-              <AiAvatar seed={channel?.peerAccountId || channelId} size={20} />
-            )
-          ) : channel?.accessMode === 'private' ? (
-            <LockClosedIcon className="size-4 shrink-0 opacity-75" />
-          ) : (
-            <HashtagIcon className="size-4 shrink-0 opacity-75" />
-          )}
-          <div className="min-w-0">
-            <div className="truncate text-[14px] font-semibold" data-testid="channel-title">
-              {channel?.name ?? (loading ? '加载中…' : '群聊')}
+          {channel?.topic ? (
+            <div className="chat-view-project" title={channel.topic}>
+              <span className="chat-view-project-name text-[12px] font-normal text-(--biu-color-text-subtle)">
+                {channel.topic}
+              </span>
             </div>
-            {channel?.topic ? (
-              <div className="truncate text-[11px] text-(--biu-color-text-subtle)">{channel.topic}</div>
-            ) : null}
-          </div>
+          ) : null}
         </div>
 
-        <div className="flex shrink-0 items-center gap-1.5">
+        <div className="chat-view-session-title-wrap gap-1.5">
+          {isDm ? (
+            <MemberAvatar avatar={peerAvatar} seed={channel?.peerAccountId || channelId} size={18} />
+          ) : channel?.accessMode === 'private' ? (
+            <LockClosedIcon className="size-3.5 shrink-0 text-(--biu-color-icon)" aria-hidden />
+          ) : (
+            <HashtagIcon className="size-3.5 shrink-0 text-(--biu-color-icon)" aria-hidden />
+          )}
+          <span
+            className="truncate text-[14px] font-semibold text-(--biu-color-text)"
+            data-testid="channel-title"
+          >
+            {channel?.name ?? (loading ? '加载中…' : '群聊')}
+          </span>
+        </div>
+
+        <div className="chat-view-header-right">
           <button
             type="button"
-            className="flex items-center gap-1.5 rounded-md border border-(--biu-color-border) px-2 py-1 text-[12px] text-(--biu-color-text-muted) hover:bg-(--biu-color-bg-hover) hover:text-(--biu-color-text)"
+            className="inline-flex h-[var(--biu-size-control-md)] cursor-pointer items-center gap-1.5 rounded-[6px] border-0 bg-transparent px-2 text-[12px] font-medium text-(--biu-color-text-muted) transition-colors hover:bg-(--biu-color-bg-hover) hover:text-(--biu-color-text)"
+            title="管理群成员与 Agent"
             data-testid="channel-manage-members"
             onClick={() => setMembersModalOpen(true)}
           >
-            <UserGroupIcon className="size-3.5" />
-            <span>{humanMembers.length} 人 · {agentMembers.length} Agent</span>
+            <UserGroupIcon className="size-3.5 shrink-0 text-(--biu-color-icon-active)" />
+            <span className="tabular-nums">
+              {humanMembers.length} 人{agentMembers.length > 0 ? ` · ${agentMembers.length} Agent` : ''}
+            </span>
           </button>
           {toggleInspector ? (
             <button
@@ -286,325 +457,444 @@ export const ChannelStage = memo(function ChannelStage({
         </div>
       </header>
 
-      {/* IM 消息流（Slack 模式：完成后完整气泡上屏 + Ephemeral 仅自己可见） */}
-      <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto px-4 py-4" data-testid="channel-messages">
-        <div className="mx-auto max-w-3xl space-y-3">
-          {messages.length === 0 && !loading ? (
-            <div className="rounded-xl border border-dashed border-(--biu-color-border) p-6 text-center text-[13px] text-(--biu-color-text-subtle)">
-              <div className="mb-1 text-[15px] font-semibold text-(--biu-color-text)">
-                {isDm ? `你与 ${channel?.name ?? '成员'} 的私聊` : `欢迎来到 # ${channel?.name ?? ''}`}
-              </div>
-              <div>
-                {agentMembers.length > 0
-                  ? '平常聊天时 Agent 会保持静默，输入 @Agent名称 或 @所有人 即可召唤对应的 Agent 协作。'
-                  : '点击右上角可邀请成员或拉入你创建的 Agent 一起协作。'}
-              </div>
-            </div>
-          ) : null}
-
-          {messages.map((msg) => {
-            const isEphemeral = Boolean(msg.ephemeralTo)
-            const isAgent = msg.senderType === 'agent'
-            const approvalMeta = msg.meta?.kind === 'approval' ? msg.meta : null
-
-            return (
-              <div
-                key={msg.id}
-                data-testid={isEphemeral ? 'channel-ephemeral-msg' : 'channel-message'}
-                data-sender-type={msg.senderType}
-                className={`group rounded-lg px-3 py-2 transition-colors ${
-                  isEphemeral
-                    ? 'border border-dashed border-amber-500/40 bg-amber-500/5'
-                    : 'hover:bg-(--biu-color-bg-subtle)'
-                }`}
-              >
-                {msg.replyPreview ? (
-                  <div className="mb-1.5 flex items-center gap-1.5 border-l-2 border-(--biu-color-border) pl-2 text-[11px] text-(--biu-color-text-subtle)">
-                    <ArrowUturnLeftIcon className="size-3 shrink-0" />
-                    <span className="font-medium">{msg.replyPreview.senderName}：</span>
-                    <span className="truncate">{msg.replyPreview.text}</span>
+      {/* 主对话舞台：与 AgentMainPanels 完全相同的居中舞台 + 底部悬浮胶囊输入栏 */}
+      <div className="relative flex min-h-0 w-full flex-1 flex-col overflow-hidden" data-testid="agent-center">
+        <div className="absolute inset-0 z-1 flex min-h-0 overflow-hidden">
+          <div className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+            <BiuChatStage variant="center" stageRef={scrollRef}>
+              <div className="chat-node-list pt-2" data-testid="channel-messages">
+                {messages.length === 0 && !loading ? (
+                  <div className="flex flex-col items-center justify-center py-16 text-center">
+                    <div className="mb-2 flex items-center gap-2 text-[16px] font-semibold text-(--biu-color-text)">
+                      {isDm ? (
+                        <MemberAvatar avatar={peerAvatar} seed={channel?.peerAccountId || channelId} size={24} />
+                      ) : null}
+                      <span>{isDm ? `与 ${channel?.name ?? '成员'} 的私聊` : `# ${channel?.name ?? ''}`}</span>
+                    </div>
+                    <p className="max-w-md text-[13px] text-(--biu-color-text-subtle)">
+                      {agentMembers.length > 0
+                        ? '平常对话时群内 Agent 保持静默，输入 @Agent名称 或 @所有人 即可召唤对应 Agent 协作。'
+                        : '直接发送消息开始对话，或点击右上角成员按钮拉入空间成员与你的 Agent。'}
+                    </p>
                   </div>
                 ) : null}
 
-                <div className="flex items-start gap-2.5">
-                  <button
-                    type="button"
-                    className="mt-0.5 shrink-0 border-0 bg-transparent p-0"
-                    title={isAgent ? '查看 Agent 个人 / 名片' : msg.senderName}
-                    onClick={() => {
-                      if (isAgent) handleAgentClick(msg.senderId)
-                    }}
-                  >
-                    {isAgent ? (
-                      <SidebarMascot
-                        size={28}
-                        sessionId={msg.senderId}
-                        identity={resolveSessionMascot(msg.senderId, msg.senderMascot)}
-                        animate={false}
-                        title={msg.senderName}
-                      />
-                    ) : msg.senderAvatar ? (
-                      <img src={msg.senderAvatar} alt="" className="size-7 rounded-full object-cover" />
-                    ) : (
-                      <AiAvatar seed={msg.senderId} size={28} />
-                    )}
-                  </button>
+                {messages.map((msg) => {
+                  const isEphemeral = Boolean(msg.ephemeralTo)
+                  const isAgent = msg.senderType === 'agent'
+                  const isSystemAgent = msg.senderType === 'system' && Boolean(msg.senderId)
+                  const approvalMeta = msg.meta?.kind === 'approval' ? msg.meta : null
+                  const sentLabel = formatSentAt(msg.createdAt)
+                  const accountAvatar =
+                    msg.senderType === 'account' ? resolveAvatar(msg.senderId, msg.senderAvatar) : undefined
 
-                  <div className="min-w-0 flex-1">
-                    <div className="mb-0.5 flex flex-wrap items-center gap-2">
+                  // 1. Agent 正常公开回复：复用 .chat-reply-block / .chat-reply-body / .chat-assistant-body / .chat-reply-actions-row
+                  if (isAgent && !isEphemeral) {
+                    return (
+                      <div
+                        key={msg.id}
+                        className="chat-reply-block group"
+                        data-testid="channel-message"
+                        data-sender-type="agent"
+                      >
+                        <div className="chat-reply-body">
+                          <div className="flex flex-wrap items-center gap-2 text-(length:--biu-chat-ui-font-size) leading-none text-(--biu-color-text-muted)">
+                            <button
+                              type="button"
+                              className="inline-flex cursor-pointer items-center gap-1.5 border-0 bg-transparent p-0 text-(--biu-color-text) hover:underline"
+                              title="查看 Agent 个人 / 名片"
+                              onClick={() => handleAgentClick(msg.senderId)}
+                            >
+                              <SidebarMascot
+                                size={18}
+                                sessionId={msg.senderId}
+                                identity={resolveSessionMascot(msg.senderId, msg.senderMascot)}
+                                animate={false}
+                                title=""
+                              />
+                              <span className="font-medium">{msg.senderName}</span>
+                            </button>
+                            {msg.replyPreview ? (
+                              <span className="inline-flex max-w-[260px] items-center gap-1 truncate text-(--biu-color-text-subtle)">
+                                <ArrowUturnLeftIcon className="size-3 shrink-0" />
+                                <span className="truncate">
+                                  {msg.replyPreview.senderName}：{msg.replyPreview.text}
+                                </span>
+                              </span>
+                            ) : null}
+                            {sentLabel ? (
+                              <span className="ml-auto inline-flex items-center gap-1 text-(--biu-color-text-subtle) tabular-nums">
+                                <ClockIcon className="size-3" aria-hidden />
+                                <span>{sentLabel}</span>
+                              </span>
+                            ) : null}
+                          </div>
+
+                          <div className="chat-assistant-body">
+                            <MarkdownBody text={msg.text} />
+                          </div>
+                        </div>
+
+                        <div className="chat-reply-actions-row">
+                          <div className="chat-reply-actions" role="group" aria-label="回复操作">
+                            <MessageCopyAction text={msg.text} />
+                            <button
+                              type="button"
+                              className="chat-assistant-action"
+                              title="回复"
+                              aria-label="回复该消息"
+                              onClick={() => {
+                                setReplyTo(msg)
+                                inputRef.current?.focus()
+                              }}
+                            >
+                              <ArrowUturnLeftIcon className="size-3.5" />
+                            </button>
+                            {msg.traceId ? (
+                              <button
+                                type="button"
+                                className="inline-flex h-[24px] cursor-pointer items-center gap-0.5 rounded-md border border-transparent bg-transparent px-1.5 text-(length:--biu-chat-ui-font-size) leading-none text-(--biu-color-text-muted) hover:bg-(--biu-color-bg-hover) hover:text-(--biu-color-text)"
+                                data-testid={`channel-msg-trace-${msg.traceId}`}
+                                title="在右侧检查器查看本次回复的执行详情"
+                                onClick={() => openChannelRunTrace(channelId, msg.traceId)}
+                              >
+                                <ChevronRightIcon className="size-3.5" />
+                                <span>Details</span>
+                              </button>
+                            ) : null}
+                          </div>
+                        </div>
+                      </div>
+                    )
+                  }
+
+                  // 2. 人类消息 & Ephemeral/系统消息：复用 .chat-user-card + .chat-user-card-body + .user-turn-bar
+                  return (
+                    <div
+                      key={msg.id}
+                      data-testid={isEphemeral ? 'channel-ephemeral-msg' : 'channel-message'}
+                      data-sender-type={msg.senderType}
+                      className={`chat-user-card group${isEphemeral ? ' opacity-95' : ''}`}
+                    >
+                      <div className="chat-user-card-body text-(--biu-color-text)">
+                        {msg.replyPreview ? (
+                          <div className="mb-1.5 flex items-center gap-1.5 border-l-2 border-(--biu-color-border) pl-2 text-(length:--biu-chat-ui-font-size) text-(--biu-color-text-subtle)">
+                            <ArrowUturnLeftIcon className="size-3 shrink-0" />
+                            <span className="shrink-0 font-medium">{msg.replyPreview.senderName}：</span>
+                            <span className="truncate">{msg.replyPreview.text}</span>
+                          </div>
+                        ) : null}
+
+                        <div className="whitespace-pre-wrap break-words text-(--biu-color-text)">
+                          {msg.text}
+                        </div>
+
+                        {approvalMeta?.approvalId ? (
+                          <div className="mt-2.5 flex flex-wrap items-center gap-2 border-t border-(--biu-color-bg-muted) pt-2 text-(length:--biu-chat-ui-font-size)">
+                            <ShieldCheckIcon className="size-4 text-(--biu-color-icon-active)" />
+                            <span className="font-mono text-[12px] text-(--biu-color-text-muted)">
+                              {approvalMeta.toolName}
+                            </span>
+                            {approvalMeta.status === 'pending' ? (
+                              <div className="ml-auto flex items-center gap-1.5">
+                                <Button
+                                  className="h-7 px-2.5 text-[12px]"
+                                  disabled={decidingApproval === approvalMeta.approvalId}
+                                  onClick={() => void handleApproval(approvalMeta.approvalId!, true)}
+                                >
+                                  批准一次
+                                </Button>
+                                <Button
+                                  variant="secondary"
+                                  className="h-7 px-2.5 text-[12px]"
+                                  disabled={decidingApproval === approvalMeta.approvalId}
+                                  onClick={() => void handleApproval(approvalMeta.approvalId!, false)}
+                                >
+                                  拒绝
+                                </Button>
+                              </div>
+                            ) : (
+                              <span className="ml-auto text-(--biu-color-text-subtle)">
+                                {approvalMeta.status === 'allowed' ? '已批准' : '已拒绝'}
+                              </span>
+                            )}
+                          </div>
+                        ) : null}
+                      </div>
+
+                      <div
+                        className="user-turn-bar box-border flex min-h-[30px] w-full items-center justify-between gap-3 overflow-hidden border-0 border-t border-(--biu-color-bg-muted) bg-(--biu-color-bg-subtle) px-(--biu-chat-pad-x) text-(length:--biu-chat-ui-font-size) leading-none text-(--biu-color-text-muted)"
+                        aria-label="消息摘要"
+                      >
+                        <div className="flex min-h-full min-w-0 flex-1 items-center gap-2">
+                          {isAgent || isSystemAgent ? (
+                            <button
+                              type="button"
+                              className="inline-flex min-w-0 cursor-pointer items-center gap-1.5 border-0 bg-transparent p-0 text-(--biu-color-text-muted) hover:text-(--biu-color-text)"
+                              onClick={() => handleAgentClick(msg.senderId)}
+                            >
+                              <SidebarMascot
+                                size={16}
+                                sessionId={msg.senderId}
+                                identity={resolveSessionMascot(msg.senderId, msg.senderMascot)}
+                                animate={false}
+                                title=""
+                              />
+                              <span className="truncate font-medium">{msg.senderName}</span>
+                            </button>
+                          ) : (
+                            <span className="inline-flex min-w-0 items-center gap-1.5">
+                              <MemberAvatar avatar={accountAvatar} seed={msg.senderId} size={16} />
+                              <span className="truncate font-medium">{msg.senderName}</span>
+                            </span>
+                          )}
+
+                          {isEphemeral ? (
+                            <span className="inline-flex shrink-0 items-center gap-1 rounded bg-(--biu-color-bg-muted) px-1.5 py-0.5 text-[11px] text-(--biu-color-text-subtle)">
+                              <EyeIcon className="size-3" />
+                              仅你可见
+                            </span>
+                          ) : (
+                            <button
+                              type="button"
+                              className="inline-flex shrink-0 cursor-pointer items-center gap-1 rounded-md border border-transparent bg-transparent px-1.5 py-0.5 text-(length:--biu-chat-ui-font-size) leading-none text-(--biu-color-text-subtle) opacity-0 transition-opacity hover:bg-(--biu-color-bg-hover) hover:text-(--biu-color-text) group-hover:opacity-100"
+                              onClick={() => {
+                                setReplyTo(msg)
+                                inputRef.current?.focus()
+                              }}
+                            >
+                              <ArrowUturnLeftIcon className="size-3" />
+                              <span>回复</span>
+                            </button>
+                          )}
+
+                          {msg.traceId && (isAgent || isSystemAgent) ? (
+                            <button
+                              type="button"
+                              className="inline-flex shrink-0 cursor-pointer items-center gap-0.5 rounded-md border border-transparent bg-transparent px-1.5 py-0.5 text-(length:--biu-chat-ui-font-size) leading-none text-(--biu-color-text-muted) hover:bg-(--biu-color-bg-hover) hover:text-(--biu-color-text)"
+                              data-testid={isAgent ? `channel-msg-trace-${msg.traceId}` : `channel-sys-trace-${msg.traceId}`}
+                              onClick={() => openChannelRunTrace(channelId, msg.traceId)}
+                            >
+                              <ChevronRightIcon className="size-3.5" />
+                              <span>Details</span>
+                            </button>
+                          ) : null}
+                        </div>
+
+                        <div className="inline-flex shrink-0 items-center gap-1.5">
+                          {sentLabel ? (
+                            <span
+                              className="inline-flex shrink-0 items-center gap-1 text-(length:--biu-chat-ui-font-size) leading-none text-(--biu-color-text-muted) tabular-nums"
+                              title="发送时间"
+                            >
+                              <ClockIcon className="size-3" aria-hidden />
+                              <span>{sentLabel}</span>
+                            </span>
+                          ) : null}
+                        </div>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </BiuChatStage>
+
+            {/* 底部悬浮胶囊发送栏：完全复用 .chat-composer-dock + .composer-stack + .composer-pill */}
+            <div className="chat-composer-dock pointer-events-none absolute inset-x-0 bottom-0 bg-transparent px-[var(--biu-pad-page)] pb-[calc(1rem+5px)]">
+              <ChatDockStack>
+                <div className="composer-stack" data-biu-ignore>
+                  {/* 忙碌/排队状态条（Slack 模式：主聊天流不吐字，点击在右侧检查器看实时吐字） */}
+                  {activities.length > 0 ? (
+                    <div className="space-y-1.5" data-testid="channel-busy-bar">
+                      {activities.map((act) => (
+                        <div key={act.runId} className="composer-goal is-pursuing">
+                          <span className="composer-goal-mark" aria-hidden>
+                            <SidebarMascot
+                              size={18}
+                              sessionId={act.agentId}
+                              identity={resolveSessionMascot(act.agentId, act.agentMascot)}
+                              busy
+                              animate={false}
+                              title=""
+                            />
+                          </span>
+                          <button
+                            type="button"
+                            className="composer-goal-text cursor-pointer border-0 bg-transparent p-0 text-left hover:underline"
+                            title="点击在右侧检查器查看实时执行过程"
+                            onClick={() => openChannelRunTrace(channelId, act.runId)}
+                          >
+                            <span>{act.agentName}</span>
+                            <span className="ml-2 font-normal text-(--biu-color-text-muted)">
+                              {act.stepLabel}
+                              {act.queueCount > 0 ? ` · 排队 ${act.queueCount}` : ''}
+                            </span>
+                          </button>
+                          {act.canCancel ? (
+                            <div className="composer-goal-actions">
+                              <button
+                                type="button"
+                                className="composer-stop"
+                                title="中止本次回复"
+                                aria-label={`中止 ${act.agentName}`}
+                                onClick={() => void cancelChannelRun(channelId, act.runId)}
+                              >
+                                <span className="composer-stop-square" aria-hidden />
+                              </button>
+                            </div>
+                          ) : null}
+                        </div>
+                      ))}
+                    </div>
+                  ) : null}
+
+                  {error ? (
+                    <div className="scfg-error !mb-0" role="alert">
+                      {error}
+                    </div>
+                  ) : null}
+
+                  <form
+                    className={`composer-pill${composerExpanded ? ' is-expanded' : ''}${hasChips ? ' has-chips' : ''}`}
+                    onSubmit={onFormSubmit}
+                  >
+                    {/* @ 自动补全弹层：复用 .composer-slash 样式 */}
+                    {mentionQuery !== null && mentionOptions.length > 0 ? (
+                      <div
+                        className="composer-slash"
+                        role="listbox"
+                        aria-label="提及成员与 Agent"
+                        data-testid="channel-mention-menu"
+                      >
+                        <div className="composer-slash-head">提及成员或 Agent · 输入过滤 · Enter 选用</div>
+                        {mentionOptions.map((opt, idx) => (
+                          <button
+                            key={`${opt.kind}:${opt.id}`}
+                            type="button"
+                            role="option"
+                            aria-selected={idx === mentionIdx}
+                            className={`composer-slash-item !flex items-center gap-2${idx === mentionIdx ? ' is-active' : ''}`}
+                            onMouseEnter={() => setMentionIdx(idx)}
+                            onMouseDown={(e) => {
+                              e.preventDefault()
+                              pickMention(opt)
+                            }}
+                          >
+                            {opt.kind === 'agent' ? (
+                              <SidebarMascot
+                                size={18}
+                                sessionId={opt.id}
+                                identity={resolveSessionMascot(opt.id, opt.mascot)}
+                                animate={false}
+                                title=""
+                              />
+                            ) : opt.kind === 'account' ? (
+                              <MemberAvatar avatar={opt.avatar} seed={opt.id} size={18} />
+                            ) : (
+                              <UserGroupIcon className="size-4 shrink-0 text-(--biu-color-icon)" />
+                            )}
+                            <span className="composer-slash-name !font-sans font-medium">@{opt.label}</span>
+                            {opt.sub ? <span className="composer-slash-desc ml-auto">{opt.sub}</span> : null}
+                          </button>
+                        ))}
+                      </div>
+                    ) : null}
+
+                    {/* 引用回复 chip */}
+                    {replyTo ? (
+                      <div className="composer-tool-chips" aria-label="正在回复">
+                        <button
+                          type="button"
+                          className="composer-tool-chip max-w-full"
+                          title="取消引用回复"
+                          onClick={() => setReplyTo(null)}
+                        >
+                          <ArrowUturnLeftIcon className="size-3 shrink-0" />
+                          <span className="truncate">
+                            回复 {replyTo.senderName}：{replyTo.text.slice(0, 60)}
+                          </span>
+                          <span aria-hidden>×</span>
+                        </button>
+                      </div>
+                    ) : null}
+
+                    <div className="composer-pill-row">
                       <button
                         type="button"
-                        className="border-0 bg-transparent p-0 text-[13px] font-semibold text-(--biu-color-text) hover:underline"
-                        onClick={() => {
-                          if (isAgent) handleAgentClick(msg.senderId)
-                        }}
+                        className="composer-plus"
+                        title="提及成员或 Agent (@)"
+                        aria-label="提及成员或 Agent"
+                        onClick={openMentionPicker}
                       >
-                        {msg.senderName}
+                        <PlusIcon className="size-4" />
                       </button>
-                      {isAgent ? (
-                        <span className="rounded bg-(--biu-color-bg-muted) px-1.5 py-0.5 text-[10px] font-medium text-(--biu-color-text-muted)">
-                          Agent
-                        </span>
-                      ) : null}
-                      {isEphemeral ? (
-                        <span className="inline-flex items-center gap-1 rounded bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-medium text-amber-400">
-                          <EyeIcon className="size-3" />
-                          仅你可见
-                        </span>
-                      ) : null}
-                      <span className="text-[11px] text-(--biu-color-text-subtle)">{formatClock(msg.createdAt)}</span>
 
-                      {!isEphemeral ? (
-                        <button
-                          type="button"
-                          className="ml-auto hidden rounded px-1.5 py-0.5 text-[11px] text-(--biu-color-text-muted) hover:bg-(--biu-color-bg-hover) hover:text-(--biu-color-text) group-hover:inline-flex"
-                          onClick={() => {
-                            setReplyTo(msg)
-                            inputRef.current?.focus()
+                      <div className="composer-editor">
+                        <textarea
+                          ref={inputRef}
+                          rows={1}
+                          value={text}
+                          onChange={(e) => handleTextChange(e.target.value)}
+                          placeholder={
+                            isDm
+                              ? `给 ${channel?.name ?? '对方'} 发消息…`
+                              : `在 # ${channel?.name ?? ''} 发消息… 输入 @ 召唤群内 Agent`
+                          }
+                          data-testid="channel-composer-input"
+                          className="composer-tiptap block w-full resize-none border-0 bg-transparent p-0 outline-none placeholder:text-(--biu-color-text-placeholder)"
+                          onKeyDown={(e) => {
+                            if (mentionQuery !== null && mentionOptions.length > 0) {
+                              if (e.key === 'ArrowDown') {
+                                e.preventDefault()
+                                setMentionIdx((i) => (i + 1) % mentionOptions.length)
+                                return
+                              }
+                              if (e.key === 'ArrowUp') {
+                                e.preventDefault()
+                                setMentionIdx((i) => (i - 1 + mentionOptions.length) % mentionOptions.length)
+                                return
+                              }
+                              if (e.key === 'Enter' || e.key === 'Tab') {
+                                e.preventDefault()
+                                pickMention(mentionOptions[mentionIdx]!)
+                                return
+                              }
+                              if (e.key === 'Escape') {
+                                e.preventDefault()
+                                setMentionQuery(null)
+                                return
+                              }
+                            }
+                            if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
+                              e.preventDefault()
+                              void handleSend()
+                            }
                           }}
-                        >
-                          回复
-                        </button>
-                      ) : null}
-                    </div>
-
-                    <div className="prose-sm text-[13.5px] leading-relaxed text-(--biu-color-text)">
-                      <MarkdownBody text={msg.text} />
-                    </div>
-
-                    {/* Ephemeral 审批卡片（仅 Agent Owner 可见与点击） */}
-                    {approvalMeta?.approvalId ? (
-                      <div className="mt-2 flex flex-wrap items-center gap-2 rounded-md border border-(--biu-color-border) bg-(--biu-color-bg-subtle) px-2.5 py-2 text-[12px]">
-                        <ShieldCheckIcon className="size-4 text-amber-400" />
-                        <span className="font-mono text-[11px]">{approvalMeta.toolName}</span>
-                        {approvalMeta.status === 'pending' ? (
-                          <div className="ml-auto flex gap-1.5">
-                            <button
-                              type="button"
-                              disabled={decidingApproval === approvalMeta.approvalId}
-                              className="rounded bg-emerald-600 px-2.5 py-1 text-[11px] font-medium text-white hover:bg-emerald-500 disabled:opacity-50"
-                              onClick={() => void handleApproval(approvalMeta.approvalId!, true)}
-                            >
-                              批准一次
-                            </button>
-                            <button
-                              type="button"
-                              disabled={decidingApproval === approvalMeta.approvalId}
-                              className="rounded border border-(--biu-color-border) px-2.5 py-1 text-[11px] hover:bg-(--biu-color-bg-hover) disabled:opacity-50"
-                              onClick={() => void handleApproval(approvalMeta.approvalId!, false)}
-                            >
-                              拒绝
-                            </button>
-                          </div>
-                        ) : (
-                          <span className="ml-auto text-[11px] text-(--biu-color-text-muted)">
-                            {approvalMeta.status === 'allowed' ? '已批准' : '已拒绝'}
-                          </span>
-                        )}
+                        />
                       </div>
-                    ) : null}
 
-                    {/* Agent 消息底部：按需点开右侧 Inspector 查看本条消息的执行轨迹 */}
-                    {msg.traceId && isAgent ? (
-                      <div className="mt-1.5">
+                      <div className="composer-pill-right">
                         <button
-                          type="button"
-                          className="inline-flex items-center gap-1 rounded-md border border-(--biu-color-border-subtle) px-2 py-0.5 text-[11px] text-(--biu-color-text-muted) hover:border-(--biu-color-border) hover:bg-(--biu-color-bg-hover) hover:text-(--biu-color-text)"
-                          data-testid={`channel-msg-trace-${msg.traceId}`}
-                          onClick={() => openChannelRunTrace(channelId, msg.traceId)}
+                          type="submit"
+                          disabled={!text.trim() || sending}
+                          data-testid="channel-composer-send"
+                          className="composer-send"
+                          aria-label="发送消息"
+                          title="发送"
                         >
-                          查看执行详情 →
+                          <ArrowUpIcon className="size-3.5" aria-hidden />
                         </button>
                       </div>
-                    ) : null}
-                  </div>
+                    </div>
+                  </form>
                 </div>
-              </div>
-            )
-          })}
-        </div>
-      </div>
-
-      {/* 底部输入区 + Slack 风格忙碌状态条 */}
-      <div className="shrink-0 border-t border-(--biu-color-border-subtle) px-4 py-3">
-        <div className="relative mx-auto max-w-3xl">
-          {/* 忙碌/排队胶囊：不在主聊天流吐字，点胶囊在右侧 Inspector 看实时吐字与过程 */}
-          {activities.length > 0 ? (
-            <div className="mb-2 flex flex-wrap gap-1.5" data-testid="channel-busy-bar">
-              {activities.map((act) => (
-                <div
-                  key={act.runId}
-                  className="inline-flex items-center gap-1.5 rounded-full border border-(--biu-color-border) bg-(--biu-color-bg-subtle) px-2.5 py-1 text-[11.5px]"
-                >
-                  <button
-                    type="button"
-                    className="inline-flex items-center gap-1.5 border-0 bg-transparent p-0 text-inherit hover:underline"
-                    title="在右侧查看实时执行过程"
-                    onClick={() => openChannelRunTrace(channelId, act.runId)}
-                  >
-                    <SidebarMascot
-                      size={16}
-                      sessionId={act.agentId}
-                      identity={resolveSessionMascot(act.agentId, act.agentMascot)}
-                      busy
-                      animate={false}
-                      title=""
-                    />
-                    <span className="font-medium">{act.agentName}</span>
-                    <span className="text-(--biu-color-text-muted)">
-                      {act.stepLabel}
-                      {act.queueCount > 0 ? ` · 排队 ${act.queueCount}` : ''}
-                    </span>
-                  </button>
-                  {act.canCancel ? (
-                    <button
-                      type="button"
-                      className="ml-1 inline-flex items-center text-red-400 hover:text-red-300"
-                      title="中止本次回复"
-                      aria-label={`中止 ${act.agentName}`}
-                      onClick={() => void cancelChannelRun(channelId, act.runId)}
-                    >
-                      <StopCircleIcon className="size-3.5" />
-                    </button>
-                  ) : null}
-                </div>
-              ))}
+              </ChatDockStack>
             </div>
-          ) : null}
-
-          {/* 引用回复条 */}
-          {replyTo ? (
-            <div className="mb-1.5 flex items-center justify-between gap-2 rounded-md bg-(--biu-color-bg-subtle) px-2.5 py-1 text-[12px] text-(--biu-color-text-muted)">
-              <span className="truncate">
-                正在回复 <strong>{replyTo.senderName}</strong>：{replyTo.text.slice(0, 80)}
-              </span>
-              <button type="button" className="shrink-0 hover:text-(--biu-color-text)" onClick={() => setReplyTo(null)}>
-                <XMarkIcon className="size-3.5" />
-              </button>
-            </div>
-          ) : null}
-
-          {/* @ 自动补全弹层 */}
-          {mentionQuery !== null && mentionOptions.length > 0 ? (
-            <div
-              className="absolute right-0 bottom-full left-0 z-20 mb-1.5 max-h-56 overflow-y-auto rounded-lg border border-(--biu-color-border) bg-(--biu-color-bg-popover) p-1 shadow-xl"
-              data-testid="channel-mention-menu"
-            >
-              {mentionOptions.map((opt, idx) => (
-                <button
-                  key={`${opt.kind}:${opt.id}`}
-                  type="button"
-                  className={`flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-left text-[13px] ${
-                    idx === mentionIdx ? 'bg-(--biu-color-bg-hover)' : ''
-                  }`}
-                  onMouseDown={(e) => {
-                    e.preventDefault()
-                    pickMention(opt)
-                  }}
-                >
-                  {opt.kind === 'agent' ? (
-                    <SidebarMascot
-                      size={18}
-                      sessionId={opt.id}
-                      identity={resolveSessionMascot(opt.id, opt.mascot)}
-                      animate={false}
-                      title=""
-                    />
-                  ) : opt.kind === 'account' ? (
-                    opt.avatar ? (
-                      <img src={opt.avatar} alt="" className="size-4.5 rounded-full object-cover" />
-                    ) : (
-                      <AiAvatar seed={opt.id} size={18} />
-                    )
-                  ) : (
-                    <UserGroupIcon className="size-4 opacity-80" />
-                  )}
-                  <span className="font-medium">@{opt.label}</span>
-                  {opt.sub ? <span className="ml-auto text-[11px] text-(--biu-color-text-subtle)">{opt.sub}</span> : null}
-                </button>
-              ))}
-            </div>
-          ) : null}
-
-          {error ? <div className="mb-1.5 text-[12px] text-red-400">{error}</div> : null}
-
-          <div className="flex items-end gap-2 rounded-xl border border-(--biu-color-border) bg-(--biu-color-bg-subtle) px-3 py-2 focus-within:border-(--biu-color-emphasis)">
-            <textarea
-              ref={inputRef}
-              rows={1}
-              value={text}
-              onChange={(e) => handleTextChange(e.target.value)}
-              placeholder={
-                isDm
-                  ? `给 ${channel?.name ?? '对方'} 发消息…（可 @群内 Agent）`
-                  : `在 # ${channel?.name ?? ''} 发消息… 输入 @ 召唤群内 Agent`
-              }
-              data-testid="channel-composer-input"
-              className="max-h-36 min-h-[24px] flex-1 resize-none border-0 bg-transparent text-[13.5px] leading-6 text-(--biu-color-text) outline-none"
-              onKeyDown={(e) => {
-                if (mentionQuery !== null && mentionOptions.length > 0) {
-                  if (e.key === 'ArrowDown') {
-                    e.preventDefault()
-                    setMentionIdx((i) => (i + 1) % mentionOptions.length)
-                    return
-                  }
-                  if (e.key === 'ArrowUp') {
-                    e.preventDefault()
-                    setMentionIdx((i) => (i - 1 + mentionOptions.length) % mentionOptions.length)
-                    return
-                  }
-                  if (e.key === 'Enter' || e.key === 'Tab') {
-                    e.preventDefault()
-                    pickMention(mentionOptions[mentionIdx]!)
-                    return
-                  }
-                  if (e.key === 'Escape') {
-                    e.preventDefault()
-                    setMentionQuery(null)
-                    return
-                  }
-                }
-                if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
-                  e.preventDefault()
-                  void handleSend()
-                }
-              }}
-            />
-            <button
-              type="button"
-              disabled={!text.trim() || sending}
-              data-testid="channel-composer-send"
-              className="grid size-8 shrink-0 place-items-center rounded-lg bg-(--biu-color-emphasis) text-(--biu-color-on-emphasis) disabled:opacity-40"
-              aria-label="发送消息"
-              onClick={() => void handleSend()}
-            >
-              <PaperAirplaneIcon className="size-4" />
-            </button>
           </div>
         </div>
       </div>
 
-      {/* 群成员与 Agent 管理弹窗 */}
+      {/* 群成员与 Agent 管理弹窗：统一使用 .biu-float-overlay + .biu-float.scfg-float */}
       {membersModalOpen && detail ? (
         <ChannelMembersModal
           channelId={channelId}
@@ -612,56 +902,71 @@ export const ChannelStage = memo(function ChannelStage({
           myAccountId={detail.myAccountId}
           canManageMembers={detail.canManageMembers}
           useSessionView={useSessionView}
+          resolveAvatar={resolveAvatar}
           onClose={() => setMembersModalOpen(false)}
         />
       ) : null}
 
-      {/* 他人 Agent 只读名片弹窗（Slack 模式：无法进入他人的 1v1 私聊） */}
-      {agentCard ? (
-        createPortal(
-          <div
-            className="fixed inset-0 z-[1200] flex items-center justify-center bg-black/50 p-4"
-            onClick={() => setAgentCard(null)}
-            data-testid="channel-agent-card"
-          >
+      {/* 他人 Agent 只读名片弹窗：统一使用 .biu-float-overlay + .biu-float.scfg-float */}
+      {agentCard
+        ? createPortal(
             <div
-              className="w-full max-w-sm rounded-xl border border-(--biu-color-border) bg-(--biu-color-bg-popover) p-4 text-(--biu-color-text) shadow-2xl"
-              role="dialog"
-              aria-label="Agent 名片"
-              onClick={(e) => e.stopPropagation()}
+              className="biu-float-overlay"
+              onClick={() => setAgentCard(null)}
+              data-testid="channel-agent-card"
             >
-              <div className="mb-3 flex items-center gap-3">
-                <SidebarMascot
-                  size={36}
-                  sessionId={agentCard.memberId}
-                  identity={resolveSessionMascot(agentCard.memberId, agentCard.mascot)}
-                  animate={false}
-                  title=""
-                />
-                <div className="min-w-0 flex-1">
-                  <div className="truncate text-[15px] font-semibold">{agentCard.name}</div>
-                  <div className="text-[12px] text-(--biu-color-text-muted)">
-                    归属人：{agentCard.ownerName || '其他成员'}
-                    {agentCard.model ? ` · ${agentCard.model}` : ''}
+              <div
+                className="biu-float scfg-float !w-[min(420px,calc(100vw-32px))]"
+                role="dialog"
+                aria-modal="true"
+                aria-label="Agent 名片"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="biu-float-head scfg-head">
+                  <div className="flex min-w-0 items-center gap-2.5">
+                    <SidebarMascot
+                      size={24}
+                      sessionId={agentCard.memberId}
+                      identity={resolveSessionMascot(agentCard.memberId, agentCard.mascot)}
+                      animate={false}
+                      title=""
+                    />
+                    <h2 className="biu-float-title scfg-title truncate">{agentCard.name}</h2>
+                  </div>
+                  <button
+                    type="button"
+                    className="biu-float-close"
+                    title="关闭"
+                    aria-label="关闭"
+                    onClick={() => setAgentCard(null)}
+                  >
+                    <XMarkIcon className="size-4 shrink-0" />
+                  </button>
+                </div>
+
+                <div className="scfg-body">
+                  <div className="scfg-sections">
+                    <div className="scfg-section">
+                      <div className="scfg-hint">
+                        归属人：{agentCard.ownerName || '其他成员'}
+                        {agentCard.model ? ` · ${agentCard.model}` : ''}
+                      </div>
+                      {agentCard.systemPrompt ? (
+                        <div className="rounded-[var(--biu-radius-md)] border border-(--biu-color-border-subtle) bg-(--biu-color-bg-subtle) p-3 text-[12.5px] leading-relaxed text-(--biu-color-text-muted)">
+                          {agentCard.systemPrompt}
+                        </div>
+                      ) : null}
+                      <p className="scfg-hint m-0">
+                        这是他人归属的 Agent：你可以在当前群聊中 @{agentCard.name} 协同工作（数据权限自动取双人交集并屏蔽私人数据），但无法进入或查看它与归属人的 1v1 私聊记录。
+                      </p>
+                    </div>
                   </div>
                 </div>
-                <button type="button" onClick={() => setAgentCard(null)}>
-                  <XMarkIcon className="size-4" />
-                </button>
               </div>
-              {agentCard.systemPrompt ? (
-                <div className="mb-3 rounded-md bg-(--biu-color-bg-subtle) p-2.5 text-[12px] text-(--biu-color-text-muted)">
-                  {agentCard.systemPrompt}
-                </div>
-              ) : null}
-              <div className="rounded-md border border-(--biu-color-border-subtle) px-2.5 py-2 text-[11.5px] text-(--biu-color-text-subtle)">
-                这是他人归属的 Agent：你可以在当前群聊中 @{agentCard.name} 协同工作（数据权限自动取双人交集并屏蔽私人数据），但无法进入或查看它与归属人的 1v1 私聊记录。
-              </div>
-            </div>
-          </div>,
-          document.body,
-        )
-      ) : null}
+            </div>,
+            document.body,
+          )
+        : null}
     </div>
   )
 })
@@ -672,6 +977,7 @@ function ChannelMembersModal({
   myAccountId,
   canManageMembers,
   useSessionView,
+  resolveAvatar,
   onClose,
 }: {
   channelId: string
@@ -679,6 +985,7 @@ function ChannelMembersModal({
   myAccountId: string
   canManageMembers: boolean
   useSessionView?: ReturnType<typeof bindSessionView>
+  resolveAvatar: (accountId?: string, serverAvatar?: string) => string | undefined
   onClose: () => void
 }) {
   const allSessions = useSessionView ? useSessionView((s) => s.sessions) : []
@@ -698,7 +1005,7 @@ function ChannelMembersModal({
             .map((r) => ({
               id: String(r.id ?? '').trim(),
               name: String(r.title ?? r.email ?? r.id ?? '').trim(),
-              avatar: typeof r.avatar === 'string' ? r.avatar : undefined,
+              avatar: typeof r.avatar === 'string' ? r.avatar.trim() : undefined,
             }))
             .filter((r) => r.id),
         )
@@ -732,120 +1039,136 @@ function ChannelMembersModal({
   }
 
   return createPortal(
-    <div className="fixed inset-0 z-[1200] flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
-      <div
-        className="w-full max-w-lg rounded-xl border border-(--biu-color-border) bg-(--biu-color-bg-popover) p-4 text-(--biu-color-text) shadow-2xl"
-        role="dialog"
-        aria-label="管理群成员与 Agent"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="mb-3 flex items-center justify-between">
-          <div className="text-[15px] font-semibold">群成员与 Agent</div>
-          <button type="button" onClick={onClose}>
-            <XMarkIcon className="size-4" />
+    <div
+      className="biu-float-overlay"
+      role="dialog"
+      aria-modal="true"
+      aria-label="管理群成员与 Agent"
+      onClick={onClose}
+    >
+      <div className="biu-float scfg-float" onClick={(e) => e.stopPropagation()}>
+        <div className="biu-float-head scfg-head">
+          <h2 className="biu-float-title scfg-title">群成员与 Agent</h2>
+          <button type="button" className="biu-float-close" title="关闭" aria-label="关闭" onClick={onClose}>
+            <XMarkIcon className="size-4 shrink-0" />
           </button>
         </div>
 
-        {error ? <div className="mb-2 text-[12px] text-red-400">{error}</div> : null}
+        <div className="scfg-body">
+          {error ? (
+            <div className="scfg-error" role="alert">
+              {error}
+            </div>
+          ) : null}
 
-        <div className="max-h-[65vh] space-y-4 overflow-y-auto text-[13px]">
-          {/* 当前在群 Agent */}
-          <div>
-            <div className="mb-1.5 text-[12px] font-semibold text-(--biu-color-text-muted)">群内 Agent</div>
-            <div className="space-y-1">
-              {members.filter((m) => m.memberType === 'agent').map((a) => (
-                <div key={a.memberId} className="flex items-center justify-between rounded-md bg-(--biu-color-bg-subtle) px-2.5 py-1.5">
-                  <div className="flex min-w-0 items-center gap-2">
-                    <SidebarMascot
-                      size={20}
-                      sessionId={a.memberId}
-                      identity={resolveSessionMascot(a.memberId, a.mascot)}
-                      animate={false}
-                      title=""
-                    />
-                    <span className="truncate font-medium">{a.name}</span>
-                    <span className="text-[11px] text-(--biu-color-text-subtle)">归属 {a.ownerName}</span>
-                  </div>
-                  {a.isOwn || canManageMembers ? (
-                    <button
-                      type="button"
-                      className="text-[11px] text-red-400 hover:underline"
-                      onClick={() => void handleRemove('agent', a.memberId)}
-                    >
-                      移出
-                    </button>
-                  ) : null}
-                </div>
-              ))}
+          <div className="scfg-sections">
+            {/* 当前在群 Agent */}
+            <div className="scfg-section">
+              <div className="scfg-tools-head">
+                <span className="scfg-label">群内 Agent</span>
+                <span className="scfg-hint">{members.filter((m) => m.memberType === 'agent').length} 个</span>
+              </div>
               {members.filter((m) => m.memberType === 'agent').length === 0 ? (
-                <div className="text-[12px] text-(--biu-color-text-subtle)">暂无 Agent 入群</div>
+                <div className="scfg-hint">暂无 Agent 入群</div>
+              ) : (
+                <ul className="scfg-tools-list">
+                  {members
+                    .filter((m) => m.memberType === 'agent')
+                    .map((a) => (
+                      <li key={a.memberId} className="scfg-tool-row is-active">
+                        <SidebarMascot
+                          size={18}
+                          sessionId={a.memberId}
+                          identity={resolveSessionMascot(a.memberId, a.mascot)}
+                          animate={false}
+                          title=""
+                        />
+                        <span className="scfg-tool-name !font-sans font-medium">{a.name}</span>
+                        <span className="scfg-hint shrink-0">归属 {a.ownerName}</span>
+                        {a.isOwn || canManageMembers ? (
+                          <button
+                            type="button"
+                            className="ml-2 cursor-pointer border-0 bg-transparent p-0 text-[12px] text-(--biu-color-danger) hover:underline"
+                            onClick={() => void handleRemove('agent', a.memberId)}
+                          >
+                            移出
+                          </button>
+                        ) : null}
+                      </li>
+                    ))}
+                </ul>
+              )}
+
+              {myAddableAgents.length > 0 ? (
+                <div className="scfg-field">
+                  <span className="scfg-hint">拉入我创建的 Agent</span>
+                  <div className="flex flex-wrap gap-1.5">
+                    {myAddableAgents.slice(0, 15).map((a) => (
+                      <Button
+                        key={a.id}
+                        variant="secondary"
+                        className="h-7 px-2.5 text-[12px]"
+                        onClick={() => void handleAdd('agent', a.id)}
+                      >
+                        <UserPlusIcon className="size-3.5 opacity-75" />
+                        <span>{a.title}</span>
+                      </Button>
+                    ))}
+                  </div>
+                </div>
               ) : null}
             </div>
-            {myAddableAgents.length > 0 ? (
-              <div className="mt-2">
-                <div className="mb-1 text-[11px] text-(--biu-color-text-subtle)">拉入我创建的 Agent：</div>
-                <div className="flex flex-wrap gap-1.5">
-                  {myAddableAgents.slice(0, 15).map((a) => (
-                    <button
-                      key={a.id}
-                      type="button"
-                      className="inline-flex items-center gap-1 rounded-md border border-(--biu-color-border) px-2 py-1 text-[12px] hover:bg-(--biu-color-bg-hover)"
-                      onClick={() => void handleAdd('agent', a.id)}
-                    >
-                      <UserPlusIcon className="size-3.5 opacity-75" />
-                      <span>{a.title}</span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            ) : null}
-          </div>
 
-          {/* 当前在群成员 */}
-          <div>
-            <div className="mb-1.5 text-[12px] font-semibold text-(--biu-color-text-muted)">人类成员</div>
-            <div className="space-y-1">
-              {members.filter((m) => m.memberType === 'account').map((h) => (
-                <div key={h.memberId} className="flex items-center justify-between rounded-md bg-(--biu-color-bg-subtle) px-2.5 py-1.5">
-                  <div className="flex min-w-0 items-center gap-2">
-                    {h.avatar ? (
-                      <img src={h.avatar} alt="" className="size-5 rounded-full object-cover" />
-                    ) : (
-                      <AiAvatar seed={h.memberId} size={20} />
-                    )}
-                    <span className="truncate font-medium">{h.name}</span>
-                    {h.role === 'owner' ? <span className="text-[11px] text-(--biu-color-text-subtle)">群主</span> : null}
-                  </div>
-                  {canManageMembers && h.role !== 'owner' ? (
-                    <button
-                      type="button"
-                      className="text-[11px] text-red-400 hover:underline"
-                      onClick={() => void handleRemove('account', h.memberId)}
-                    >
-                      移除
-                    </button>
-                  ) : null}
-                </div>
-              ))}
-            </div>
-            {canManageMembers && addableHumans.length > 0 ? (
-              <div className="mt-2">
-                <div className="mb-1 text-[11px] text-(--biu-color-text-subtle)">邀请空间成员入群：</div>
-                <div className="flex flex-wrap gap-1.5">
-                  {addableHumans.map((h) => (
-                    <button
-                      key={h.id}
-                      type="button"
-                      className="inline-flex items-center gap-1 rounded-md border border-(--biu-color-border) px-2 py-1 text-[12px] hover:bg-(--biu-color-bg-hover)"
-                      onClick={() => void handleAdd('account', h.id)}
-                    >
-                      <UserPlusIcon className="size-3.5 opacity-75" />
-                      <span>{h.name}</span>
-                    </button>
-                  ))}
-                </div>
+            {/* 当前在群人类成员 */}
+            <div className="scfg-section">
+              <div className="scfg-tools-head">
+                <span className="scfg-label">成员</span>
+                <span className="scfg-hint">{members.filter((m) => m.memberType === 'account').length} 人</span>
               </div>
-            ) : null}
+              <ul className="scfg-tools-list">
+                {members
+                  .filter((m) => m.memberType === 'account')
+                  .map((h) => (
+                    <li key={h.memberId} className="scfg-tool-row is-active">
+                      <MemberAvatar
+                        avatar={resolveAvatar(h.memberId, h.avatar)}
+                        seed={h.memberId}
+                        size={18}
+                      />
+                      <span className="scfg-tool-name !font-sans font-medium">{h.name}</span>
+                      {h.role === 'owner' ? <span className="scfg-hint shrink-0">群主</span> : null}
+                      {canManageMembers && h.role !== 'owner' ? (
+                        <button
+                          type="button"
+                          className="ml-2 cursor-pointer border-0 bg-transparent p-0 text-[12px] text-(--biu-color-danger) hover:underline"
+                          onClick={() => void handleRemove('account', h.memberId)}
+                        >
+                          移除
+                        </button>
+                      ) : null}
+                    </li>
+                  ))}
+              </ul>
+
+              {canManageMembers && addableHumans.length > 0 ? (
+                <div className="scfg-field">
+                  <span className="scfg-hint">邀请空间成员入群</span>
+                  <div className="flex flex-wrap gap-1.5">
+                    {addableHumans.map((h) => (
+                      <Button
+                        key={h.id}
+                        variant="secondary"
+                        className="h-7 px-2.5 text-[12px]"
+                        onClick={() => void handleAdd('account', h.id)}
+                      >
+                        <MemberAvatar avatar={resolveAvatar(h.id, h.avatar)} seed={h.id} size={15} />
+                        <span>{h.name}</span>
+                      </Button>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+            </div>
           </div>
         </div>
       </div>

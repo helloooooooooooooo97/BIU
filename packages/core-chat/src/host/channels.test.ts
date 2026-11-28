@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, it } from 'vitest'
-import type { Context } from 'cordis'
+import { Context } from 'cordis'
 import {
   openAndMigrateBiu,
   runWithAccount,
@@ -15,9 +15,11 @@ import {
   ChannelService,
   MAX_CHANNEL_HANDOFF_HOPS,
   redactChannelRunEvents,
+  registerChannelRoutes,
   resolveMentionedAgents,
   type ChannelLlmResolver,
 } from './channels.ts'
+import { inject as coreChatInject } from './index.ts'
 
 function waitFor(check: () => boolean, timeoutMs = 2500): Promise<void> {
   const start = Date.now()
@@ -442,5 +444,154 @@ describe('Slack-style Group Channels: RBAC, Mention Dispatch, Per-Invoker Queue,
     assert.equal(invokerRedacted.find((e) => e.kind === 'tool_call')?.args, undefined)
     const memberRedacted = redactChannelRunEvents(sample, 'member')
     assert.equal(memberRedacted.every((e) => e.kind === 'status' || e.kind === 'done'), true)
+  })
+
+  it('declares llm in core-chat inject and invokes ctx.get("llm").forConfig without Cordis inject error', async () => {
+    assert.equal(Array.isArray(coreChatInject) && coreChatInject.includes('llm'), true, 'core-chat host inject must declare llm')
+
+    const dir = mkdtempSync(join(tmpdir(), 'biu-channels-cordis-'))
+    const prevDataHome = process.env.BIU_DATA_HOME
+    process.env.BIU_DATA_HOME = dir
+    const ctx = new Context()
+    const llmCalls: Array<{ apiKey?: string; model?: string }> = []
+    const routes = new Map<string, (route: any) => any>()
+
+    ctx.provide('llm', {
+      forConfig: (cfg: { apiKey?: string; model?: string }) => {
+        llmCalls.push({ apiKey: cfg.apiKey, model: cfg.model })
+        return {
+          chat: async () => ({ content: '来自真实 llm.forConfig 的回复', toolCalls: [] }),
+        }
+      },
+    })
+    ctx.provide('http', {
+      route: (method: string, path: string, handler: (route: any) => any) => {
+        routes.set(`${method} ${path}`, handler)
+      },
+      broadcast: () => undefined,
+      broadcastAccount: () => undefined,
+    })
+    ctx.provide('sessions', {
+      peekSummary: (id: string) =>
+        id === 'ag-real'
+          ? { id, title: '青拱星', mascot: { shape: 'drop', color: '#2dd4bf' }, config: {} }
+          : null,
+    })
+    ctx.provide('tools', {
+      schemas: () => [],
+      invoke: async () => ({ ok: true }),
+    })
+
+    // 使用一个未在 Cordis 上声明 inject=['llm'] 的子上下文，验证 registerChannelRoutes 通过 ctx.get('llm') 绝不抛 cannot get property "llm" without inject
+    const holder: { service: ChannelService | null } = { service: null }
+    const fork = ctx.plugin({
+      name: 'test-channel-host',
+      inject: ['http', 'sessions', 'tools'],
+      apply(subCtx) {
+        holder.service = registerChannelRoutes(subCtx, () => ({
+          provider: 'deepseek',
+          apiKey: 'sk-test-123456',
+          model: 'deepseek-chat',
+        }))
+      },
+    })
+
+    try {
+      await waitFor(() => holder.service !== null)
+      const created = holder.service!.createChannel({ name: '研发', agentIds: ['ag-real'] })
+      const sent = holder.service!.sendMessage(created.channel.id, { text: '@青拱星 你好' })
+      assert.equal(sent.triggeredRunIds.length, 1)
+
+      await waitFor(() => {
+        const msgs = holder.service!.listMessages(created.channel.id)
+        return msgs.some((m) => m.senderType === 'agent' && m.text.includes('来自真实 llm.forConfig 的回复'))
+      })
+      assert.equal(llmCalls.length, 1)
+      assert.equal(llmCalls[0]?.apiKey, 'sk-test-123456')
+    } finally {
+      holder.service?.dispose()
+      await fork.dispose()
+      if (prevDataHome === undefined) delete process.env.BIU_DATA_HOME
+      else process.env.BIU_DATA_HOME = prevDataHome
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('propagates workspace member avatars consistently across DM, members, messages, and agent mascot on system errors', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'biu-channels-avatar-'))
+    const db = openAndMigrateBiu(join(dir, 'biu.sqlite'))
+    const store = new CollabStore(db)
+    const alice = store.register('Alice', Date.now(), 'pass123456', 'alice@example.com')
+    const bob = store.register('Bob', Date.now(), 'pass123456', 'bob@example.com')
+    const ws = store.createWorkspace(alice.id, 'Avatar WS')
+    store.addMemberByEmail(alice.id, ws.id, 'bob@example.com')
+
+    const aliceAvatar = 'data:image/svg+xml;utf8,alice-volcanic-avatar'
+    const bobAvatar = 'data:image/svg+xml;utf8,bob-silver-avatar'
+    runWithAccount(alice.id, () =>
+      runWithRequestWorkspace(ws.id, () => {
+        store.saveWorkspaceProfile(alice.id, { name: 'lulu@qq.com', avatar: aliceAvatar })
+        store.attach(ws.id, '/agents', 'ag-fail', Date.now(), { accessMode: 'private' })
+      }),
+    )
+    runWithAccount(bob.id, () =>
+      runWithRequestWorkspace(ws.id, () => {
+        store.saveWorkspaceProfile(bob.id, { name: '97', avatar: bobAvatar })
+      }),
+    )
+
+    const fakeCtx = {
+      get: (key: string) => (key === 'account' ? { store } : undefined),
+      account: { store },
+      sessions: {
+        peekSummary: (id: string) =>
+          id === 'ag-fail'
+            ? { id, title: '青拱星', mascot: { shape: 'capsule', color: '#14b8a6' }, config: {} }
+            : null,
+      },
+      tools: { schemas: () => [], invoke: async () => ({ ok: true }) },
+      http: { broadcast: () => undefined, broadcastAccount: () => undefined },
+      effect: () => undefined,
+    } as unknown as Context
+
+    const svc = new ChannelService(
+      fakeCtx,
+      () => ({
+        chat: async () => {
+          throw new Error('upstream boom')
+        },
+      }),
+      { db },
+    )
+    const asUser = <T>(acc: string, fn: () => T) => runWithAccount(acc, () => runWithRequestWorkspace(ws.id, fn))
+
+    try {
+      // workspacePerson 本身必须返回空间头像
+      assert.equal(asUser(alice.id, () => store.workspacePerson(alice.id)?.avatar), aliceAvatar)
+      assert.equal(asUser(bob.id, () => store.workspacePerson(bob.id)?.avatar), bobAvatar)
+
+      // 1v1 DM 的 peerAvatar、成员列表头像、消息发送者头像必须全部与空间头像一致
+      const dm = asUser(alice.id, () => svc.openOrCreateDm(bob.id))
+      assert.equal(dm.channel.peerAvatar, bobAvatar)
+      assert.equal(dm.members.find((m) => m.memberId === alice.id)?.avatar, aliceAvatar)
+      assert.equal(dm.members.find((m) => m.memberId === bob.id)?.avatar, bobAvatar)
+
+      const sentDm = asUser(alice.id, () => svc.sendMessage(dm.channel.id, { text: '你好 97' }))
+      assert.equal(sentDm.message.senderAvatar, aliceAvatar)
+
+      // Agent 执行报错的 system ephemeral 消息必须带上 Agent 的 mascot，不能掉成人类默认头像
+      const ch = asUser(alice.id, () => svc.createChannel({ name: '研发', agentIds: ['ag-fail'] }))
+      asUser(alice.id, () => svc.sendMessage(ch.channel.id, { text: '@青拱星 测试报错' }))
+      await waitFor(() => {
+        const msgs = asUser(alice.id, () => svc.listMessages(ch.channel.id))
+        return msgs.some((m) => m.senderType === 'system' && m.text.includes('upstream boom'))
+      })
+      const sysErr = asUser(alice.id, () => svc.listMessages(ch.channel.id)).find((m) => m.senderType === 'system')
+      assert.deepEqual(sysErr?.senderMascot, { shape: 'capsule', color: '#14b8a6' })
+    } finally {
+      svc.dispose()
+      db.close()
+      rmSync(dir, { recursive: true, force: true })
+    }
   })
 })

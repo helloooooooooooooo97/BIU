@@ -385,6 +385,7 @@ export class ChannelService {
           activeWorkspaceId?: () => string | null
           tenantForRecord?: (collection: string, id: string) => { accountId: string; workspaceId: string } | null
           workspacePerson?: (accountId: string) => { accountId: string; workspaceId: string; name: string; avatar?: string } | null
+          publicMemberProfile?: (workspaceId: string, accountId: string) => { accountId: string; name: string; avatar: string } | null
           members?: (accountId: string, workspaceId: string) => Array<{ id: string; name?: string; email?: string; avatar?: string; role?: string; member_kind?: string }>
           isMember?: (accountId: string, workspaceId: string) => boolean
           authorization?: {
@@ -395,9 +396,15 @@ export class ChannelService {
       | undefined
   }
 
-  private accountLabel(accountId: string): string {
+  private accountLabel(accountId: string, workspaceId?: string): string {
     if (!accountId || accountId === 'local') return '本地用户'
-    const person = this.accountStore()?.workspacePerson?.(accountId)
+    const store = this.accountStore()
+    const ws = workspaceId || this.currentActorIds().workspaceId
+    if (ws && store?.publicMemberProfile) {
+      const pub = store.publicMemberProfile(ws, accountId)
+      if (pub?.name?.trim()) return pub.name.trim()
+    }
+    const person = store?.workspacePerson?.(accountId)
     if (person?.name) return person.name
     try {
       const row = this.db()
@@ -411,8 +418,16 @@ export class ChannelService {
     return accountId.slice(0, 8)
   }
 
-  private accountAvatar(accountId: string): string | undefined {
+  private accountAvatar(accountId: string, workspaceId?: string): string | undefined {
     if (!accountId || accountId === 'local') return undefined
+    const store = this.accountStore()
+    const ws = workspaceId || this.currentActorIds().workspaceId
+    if (ws && store?.publicMemberProfile) {
+      const pub = store.publicMemberProfile(ws, accountId)
+      if (pub?.avatar?.trim()) return pub.avatar.trim()
+    }
+    const person = store?.workspacePerson?.(accountId)
+    if (person?.avatar?.trim()) return person.avatar.trim()
     try {
       const row = this.db()
         .prepare('SELECT avatar FROM accounts WHERE id = ?')
@@ -508,8 +523,8 @@ export class ChannelService {
       ).map((item) => item.member_id)
       peerAccountId = dmHumans.find((id) => id !== viewerAccountId) ?? dmHumans[0]
       if (peerAccountId) {
-        peerName = this.accountLabel(peerAccountId)
-        peerAvatar = this.accountAvatar(peerAccountId)
+        peerName = this.accountLabel(peerAccountId, row.workspace_id)
+        peerAvatar = this.accountAvatar(peerAccountId, row.workspace_id)
         displayName = peerName
       }
     }
@@ -748,7 +763,11 @@ export class ChannelService {
     return members
   }
 
-  listMembers(channelId: string, viewerAccountId = this.currentActorIds().accountId): ChannelMemberView[] {
+  listMembers(channelId: string, viewerAccountId = this.currentActorIds().accountId, workspaceId?: string): ChannelMemberView[] {
+    const channelWorkspaceId =
+      workspaceId ??
+      ((this.db().prepare(`SELECT workspace_id FROM channels WHERE id = ?`).get(channelId) as { workspace_id?: string } | undefined)
+        ?.workspace_id || undefined)
     const rows = this.db()
       .prepare(`SELECT * FROM channel_members WHERE channel_id = ? ORDER BY added_at ASC`)
       .all(channelId) as MemberRow[]
@@ -765,12 +784,13 @@ export class ChannelService {
           name: meta.name,
           ...(meta.mascot ? { mascot: meta.mascot } : {}),
           ownerAccountId: meta.ownerAccountId,
-          ownerName: this.accountLabel(meta.ownerAccountId),
+          ownerName: this.accountLabel(meta.ownerAccountId, channelWorkspaceId),
           systemPrompt: meta.systemPrompt.slice(0, 300),
           model: meta.model,
           isOwn: viewerAccountId === 'local' || meta.ownerAccountId === viewerAccountId || meta.ownerAccountId === 'local',
         }
       }
+      const memberAvatar = this.accountAvatar(row.member_id, channelWorkspaceId)
       return {
         channelId: row.channel_id,
         memberType: 'account',
@@ -778,8 +798,8 @@ export class ChannelService {
         role: (row.role as ChannelMemberRole) || 'member',
         addedBy: row.added_by,
         addedAt: row.added_at,
-        name: this.accountLabel(row.member_id),
-        ...(this.accountAvatar(row.member_id) ? { avatar: this.accountAvatar(row.member_id) } : {}),
+        name: this.accountLabel(row.member_id, channelWorkspaceId),
+        ...(memberAvatar ? { avatar: memberAvatar } : {}),
         isOwn: row.member_id === viewerAccountId,
       }
     })
@@ -796,7 +816,7 @@ export class ChannelService {
   getChannelDetail(channelId: string, limit = 100): ChannelDetailPayload {
     const { accountId } = this.currentActorIds()
     const row = this.requireChannelRow(channelId, accountId)
-    const members = this.listMembers(channelId, accountId)
+    const members = this.listMembers(channelId, accountId, row.workspace_id)
     const messages = this.listMessages(channelId, accountId, limit)
     const activities = this.listActivities(channelId, accountId)
     return {
@@ -810,7 +830,7 @@ export class ChannelService {
   }
 
   listMessages(channelId: string, viewerAccountId = this.currentActorIds().accountId, limit = 100): ChannelMessageView[] {
-    this.requireChannelRow(channelId, viewerAccountId)
+    const ch = this.requireChannelRow(channelId, viewerAccountId)
     const safeLimit = Math.min(200, Math.max(1, limit))
     const rows = this.db()
       .prepare(
@@ -824,10 +844,14 @@ export class ChannelService {
       .all(channelId, viewerAccountId, safeLimit) as MessageRow[]
     const byId = new Map<string, MessageRow>()
     for (const r of rows) byId.set(r.id, r)
-    return rows.map((row) => this.hydrateMessage(row, byId))
+    return rows.map((row) => this.hydrateMessage(row, byId, ch.workspace_id))
   }
 
-  private hydrateMessage(row: MessageRow, lookup?: Map<string, MessageRow>): ChannelMessageView {
+  private hydrateMessage(row: MessageRow, lookup?: Map<string, MessageRow>, workspaceId?: string): ChannelMessageView {
+    const channelWorkspaceId =
+      workspaceId ??
+      ((this.db().prepare(`SELECT workspace_id FROM channels WHERE id = ?`).get(row.channel_id) as { workspace_id?: string } | undefined)
+        ?.workspace_id || undefined)
     let senderName = ''
     let senderAvatar: string | undefined
     let senderMascot: SessionMascot | undefined
@@ -836,10 +860,14 @@ export class ChannelService {
       senderName = meta.name
       senderMascot = meta.mascot
     } else if (row.sender_type === 'account') {
-      senderName = this.accountLabel(row.sender_id)
-      senderAvatar = this.accountAvatar(row.sender_id)
+      senderName = this.accountLabel(row.sender_id, channelWorkspaceId)
+      senderAvatar = this.accountAvatar(row.sender_id, channelWorkspaceId)
+    } else if (row.sender_id) {
+      const meta = this.agentMeta(row.sender_id)
+      senderName = meta.name
+      senderMascot = meta.mascot
     } else {
-      senderName = row.sender_id ? this.agentMeta(row.sender_id).name : '系统'
+      senderName = '系统'
     }
 
     let replyPreview: ChannelMessageView['replyPreview'] = null
@@ -852,7 +880,7 @@ export class ChannelService {
           target.sender_type === 'agent'
             ? this.agentMeta(target.sender_id).name
             : target.sender_type === 'account'
-              ? this.accountLabel(target.sender_id)
+              ? this.accountLabel(target.sender_id, channelWorkspaceId)
               : '系统'
         replyPreview = {
           id: target.id,
@@ -1613,8 +1641,9 @@ export function registerChannelRoutes(ctx: Context, resolveLlm: (sessionId?: str
       const invCfg = readCfg(invokerAccountId)
       if (invCfg.apiKey) cfg = invCfg
     }
-    if (cfg.apiKey && ctx.llm?.forConfig) {
-      return ctx.llm.forConfig(cfg)
+    const llmService = ctx.get('llm') as { forConfig?: (config: LlmConfig) => LlmClient } | undefined
+    if (cfg.apiKey && llmService?.forConfig) {
+      return llmService.forConfig(cfg)
     }
     return {
       chat: async (messages: LlmMessage[], _tools?: unknown[], _signal?: AbortSignal, options?: { onDelta?: (t: string) => unknown }) => {
