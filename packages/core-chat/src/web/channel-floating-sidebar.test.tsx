@@ -126,9 +126,14 @@ test('ChannelFloatingSidebar collapses to avatar rail, expands on hover, persist
     { kind: 'account', id: 'acc-lulu', label: 'lulu@qq.com' },
   ])
 
-  // 快捷入口：置顶消息、总结、私聊
+  // 快捷入口：在右侧悬浮面板内原地切换置顶、总结、搜索
   fireEvent.click(view.getByTestId('channel-quick-pins'))
+  assert.equal(Boolean(view.queryByTestId('channel-pins-modal')), true)
   fireEvent.click(view.getByTestId('channel-quick-summarize'))
+  assert.equal(Boolean(view.queryByTestId('channel-summary-modal')), true)
+  fireEvent.click(view.getByTestId('channel-quick-search'))
+  assert.equal(Boolean(view.queryByTestId('channel-search-input')), true)
+  fireEvent.click(view.getByTestId('channel-quick-roster'))
   fireEvent.click(view.getByTestId('channel-roster-dm-acc-lulu'))
   assert.equal(pinsOpened, 1)
   assert.equal(summarizeOpened, 1)
