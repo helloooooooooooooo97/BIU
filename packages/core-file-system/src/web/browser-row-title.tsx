@@ -5,7 +5,6 @@ import {
   ChevronRightIcon,
   ViewColumnsIcon,
 } from '@heroicons/react/16/solid'
-import { ChatCount } from '@biu/biu-ui/chat-count'
 import { computeFloatingPosition } from '@biu/biu-ui/floating-position'
 import { TOOLTIP_OVERLAY_Z, overlayPortalRoot, overlayZ } from '@biu/biu-ui/overlay-portal'
 import type { DbRecord } from '@biu/type-file-system'
@@ -211,7 +210,6 @@ export function RecordOpenControls({
         </button>
       ) : null}
       <span className="tasks-title-zoom">
-        {kidCount > 0 ? <ChatCount count={kidCount} className="tasks-tree-count" title={`${kidCount} 项`} /> : null}
         {toolsLive ? (
           <button
             type="button"
@@ -356,7 +354,7 @@ export function RecordTitle({
   return (
     <>
       <span
-        className={`fsdb-title-host${tree && kidCount > 0 ? ' has-tree-count' : ''}`}
+        className="fsdb-title-host"
         data-record-active={active ? '' : undefined}
         style={tree ? { paddingLeft: depth * 16 } : undefined}
         onMouseEnter={armTools}
@@ -390,11 +388,10 @@ export function RecordTitle({
         <span className="fsdb-title-text">{toolsLive && Title ? <Title record={row} label={label} /> : label}</span>
         <TitleMetaIcons row={row} />
       </span>
-      {toolsLive || (tree && kidCount > 0) ? (
+      {toolsLive ? (
         <span className="tasks-row-tools-slot">
           <RecordOpenControls
             row={row}
-            kidCount={tree ? kidCount : 0}
             toolsLive={toolsLive}
             pick={pick}
             onOpenSplit={onOpenSplit}

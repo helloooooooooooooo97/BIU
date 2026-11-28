@@ -60,7 +60,8 @@ test('RecordTitle renders permission icon in armed mode and omits it when row ha
 
   const badge = screen.getByTestId('fsdb-title-role-icon')
   assert.equal(badge.getAttribute('data-role'), 'manage')
-  assert.ok(badge.closest('.fsdb-title-host')?.classList.contains('has-tree-count'))
+  assert.equal(badge.closest('.fsdb-title-host')?.classList.contains('has-tree-count'), false)
+  assert.equal(document.querySelector('.tasks-tree-count'), null)
 
   rerender(
     <RecordTitle
