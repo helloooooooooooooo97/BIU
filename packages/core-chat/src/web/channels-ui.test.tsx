@@ -18,7 +18,8 @@ afterEach(() => {
   vi.unstubAllGlobals()
 })
 
-test('sidebar shows 群聊 and 成员 sections and opens a 1v1 DM on member click', async () => {
+test('sidebar shows 聊天 section without 成员 section or empty dashed prompt, and lists active group/DM chats', async () => {
+  const bobAvatar = 'data:image/svg+xml;utf8,bob-silver'
   const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = new URL(String(input), 'http://test.local')
     if (url.pathname === '/api/channels' && (!init?.method || init.method === 'GET')) {
@@ -30,7 +31,7 @@ test('sidebar shows 群聊 and 成员 sections and opens a 1v1 DM on member clic
               workspaceId: 'ws-1',
               kind: 'channel',
               dmKey: '',
-              name: '研发协作群',
+              name: '研发协作',
               topic: '',
               accessMode: 'private',
               createdBy: 'acc-alice',
@@ -39,6 +40,25 @@ test('sidebar shows 群聊 and 成员 sections and opens a 1v1 DM on member clic
               memberCount: 2,
               agentCount: 1,
               lastMessageAt: 2,
+              lastMessageText: '',
+            },
+            {
+              id: 'dm-alice-bob',
+              workspaceId: 'ws-1',
+              kind: 'dm',
+              dmKey: 'acc-alice\0acc-bob',
+              peerAccountId: 'acc-bob',
+              peerName: 'Bob',
+              peerAvatar: bobAvatar,
+              name: 'Bob',
+              topic: '',
+              accessMode: 'private',
+              createdBy: 'acc-alice',
+              createdAt: 3,
+              updatedAt: 4,
+              memberCount: 2,
+              agentCount: 0,
+              lastMessageAt: 4,
               lastMessageText: '',
             },
           ],
@@ -57,38 +77,9 @@ test('sidebar shows 群聊 and 成员 sections and opens a 1v1 DM on member clic
         JSON.stringify({
           items: [
             { id: 'acc-alice', title: 'Alice', status: 'online' },
-            { id: 'acc-bob', title: 'Bob', status: 'online' },
+            { id: 'acc-bob', title: 'Bob', avatar: bobAvatar, status: 'online' },
+            { id: 'acc-carol', title: 'Carol', status: 'online' },
           ],
-        }),
-        { status: 200 },
-      )
-    }
-    if (url.pathname === '/api/channels/dm' && init?.method === 'POST') {
-      return new Response(
-        JSON.stringify({
-          channel: {
-            id: 'dm-alice-bob',
-            workspaceId: 'ws-1',
-            kind: 'dm',
-            dmKey: 'acc-alice\0acc-bob',
-            peerAccountId: 'acc-bob',
-            peerName: 'Bob',
-            name: 'Bob',
-            topic: '',
-            accessMode: 'private',
-            createdBy: 'acc-alice',
-            createdAt: 3,
-            updatedAt: 3,
-            memberCount: 2,
-            agentCount: 0,
-            lastMessageAt: 3,
-            lastMessageText: '',
-          },
-          members: [],
-          messages: [],
-          activities: [],
-          myAccountId: 'acc-alice',
-          canManageMembers: true,
         }),
         { status: 200 },
       )
@@ -104,22 +95,37 @@ test('sidebar shows 群聊 and 成员 sections and opens a 1v1 DM on member clic
   )
 
   await waitFor(() => {
-    assert.ok(view.getByText('研发协作群'))
-    assert.ok(view.getByTestId('sidebar-member-dm-acc-bob'))
+    assert.ok(view.getByText('聊天'))
+    assert.ok(view.getByText('研发协作'))
+    assert.ok(view.getByText('Bob'))
   })
 
-  // 群聊分区位于成员分区上方
-  const html = view.container.innerHTML
-  assert.ok(html.indexOf('sidebar-channels-section') < html.indexOf('sidebar-members-section'))
+  // 不再渲染「成员」分区与未聊天的成员（Carol），也没有「群聊」标题或虚线新建提示
+  assert.equal(view.queryByTestId('sidebar-members-section'), null)
+  assert.equal(view.queryByTestId('sidebar-create-first-channel'), null)
+  assert.equal(view.queryByText('群聊'), null)
+  assert.equal(view.queryByText('Carol'), null)
+  assert.ok(view.getByTestId('sidebar-create-channel'))
+  const imgs = [...view.container.querySelectorAll('img')].map((el) => el.getAttribute('src'))
+  assert.ok(imgs.includes(bobAvatar))
 
-  fireEvent.click(view.getByTestId('sidebar-member-dm-acc-bob'))
+  // 空列表时也不应出现下方虚线「新建群聊」提示，只保留右上角 + 按钮
+  view.unmount()
+  resetChannelStore()
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async () => new Response(JSON.stringify({ channels: [], items: [] }), { status: 200 })),
+  )
+  const emptyView = render(
+    <MemoryRouter initialEntries={['/']}>
+      <ChannelSidebarSections routeChannelId={null} />
+    </MemoryRouter>,
+  )
   await waitFor(() => {
-    assert.ok(
-      fetchMock.mock.calls.some(
-        ([u, init]) => String(u).includes('/api/channels/dm') && init?.method === 'POST',
-      ),
-    )
+    assert.ok(emptyView.getByTestId('sidebar-create-channel'))
   })
+  assert.equal(emptyView.queryByTestId('sidebar-create-first-channel'), null)
+  assert.equal(emptyView.queryByTestId('sidebar-members-section'), null)
 })
 
 test('ChannelStage renders IM messages, ephemeral notice, @mention popup, read-only card for others agent, and trace button', async () => {

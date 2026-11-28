@@ -16,17 +16,20 @@ import {
   Squares2X2Icon,
   StopIcon,
   TableCellsIcon,
+  UsersIcon,
 } from '@heroicons/react/16/solid'
 import { ConfirmDialog, TagChip, TagChips } from '@biu/biu-ui'
+import { AiAvatar } from '@biu/biu-ui/ai-avatar'
 import { actionTone } from '@biu/biu-ui/tag-chip'
 import { SidebarMascot, resolveSessionMascot } from '@biu/public-mascot'
+import { channelAppPath } from '@biu/web-session-view'
 import { TrashGlyph } from '@biu/web-session-view/trash-glyph'
 import { actionVisibleToUser } from '@biu/type-file-system'
 import type { CollectionActionInfo, DbRecord } from '@biu/type-file-system'
 import { getDatabaseUi, loadTags } from './data-bridge.ts'
 import { setChatOverlay, requestComposerFocus } from './chat-overlay.ts'
 
-export type SearchKind = 'view' | 'session' | 'page' | 'plugin' | 'tag'
+export type SearchKind = 'view' | 'session' | 'member' | 'page' | 'plugin' | 'tag'
 
 export const SEARCH_SCOPES: Array<{
   id: SearchKind
@@ -35,6 +38,7 @@ export const SEARCH_SCOPES: Array<{
 }> = [
   { id: 'view', label: '视图', path: '/views' },
   { id: 'session', label: '代理', path: null },
+  { id: 'member', label: '成员', path: '/workspace-members' },
   { id: 'page', label: '页面', path: '/pages' },
   { id: 'plugin', label: '插件', path: '/plugins' },
   { id: 'tag', label: '标签', path: '/tags' },
@@ -406,6 +410,7 @@ function KindGlyph({ kind, compact }: { kind: SearchKind | 'all'; compact?: bool
   if (kind === 'all') return <Squares2X2Icon className={className} />
   if (kind === 'view') return <TableCellsIcon className={className} />
   if (kind === 'session') return <CursorArrowRaysIcon className={className} />
+  if (kind === 'member') return <UsersIcon className={className} />
   if (kind === 'page') return <DocumentIcon className={className} />
   if (kind === 'plugin') return <PuzzlePieceIcon className={className} />
   return <TagIcon className={className} />
@@ -417,6 +422,11 @@ function HitMark({ hit }: { hit: SearchHit }) {
   if (hit.kind === 'session') {
     const identity = resolveSessionMascot(hit.id, hit.mascot ?? recordMascot(hit.record ?? {}))
     return <SidebarMascot size={20} sessionId={hit.id} identity={identity} animate={false} title="" />
+  }
+  if (hit.kind === 'member') {
+    const avatar = typeof hit.record?.avatar === 'string' ? hit.record.avatar.trim() : ''
+    if (avatar) return <img src={avatar} alt="" className="size-5 rounded-full object-cover" />
+    return <AiAvatar seed={hit.id} size={20} className="rounded-full" />
   }
   return <KindGlyph kind={hit.kind} />
 }
@@ -533,7 +543,7 @@ export function ShellSearchPanel({
 
   const grouped = useMemo(() => {
     const remote = hits.filter((item) => scope === 'all' || item.kind === scope)
-    const order: SearchKind[] = ['view', 'session', 'page', 'plugin', 'tag']
+    const order: SearchKind[] = ['view', 'session', 'member', 'page', 'plugin', 'tag']
     return order
       .map((kind) => {
         const fromRemote = remote.filter((item) => item.kind === kind)
@@ -556,10 +566,27 @@ export function ShellSearchPanel({
     const root = bodyRef.current
     if (!root) return
     const node = root.querySelector<HTMLElement>(`[data-search-hit="${active}"]`)
-    node?.scrollIntoView({ block: 'nearest' })
+    if (typeof node?.scrollIntoView === 'function') node.scrollIntoView({ block: 'nearest' })
   }, [active, flat.length])
 
   const openHit = (hit: SearchHit, side: 'right' | 'left') => {
+    if (hit.kind === 'member') {
+      onClose()
+      void apiFetch('/api/channels/dm', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ targetAccountId: hit.id }),
+      })
+        .then((res) => (res.ok ? res.json() : null))
+        .then((body: { channel?: { id?: string } } | null) => {
+          const channelId = String(body?.channel?.id ?? '').trim()
+          if (!channelId) return
+          setChatOverlay(false)
+          navigate(channelAppPath(channelId))
+        })
+        .catch(() => undefined)
+      return
+    }
     if (side === 'left') {
       const href = searchHref(hit)
       if (hit.kind === 'session') setChatOverlay(false)
@@ -603,7 +630,7 @@ export function ShellSearchPanel({
             autoFocus
             placeholder={
               scope === 'all'
-                ? '搜索视图、代理、页面、插件、标签'
+                ? '搜索视图、代理、成员、页面、插件、标签'
                 : `搜索${SEARCH_SCOPES.find((item) => item.id === scope)?.label ?? ''}`
             }
             value={query}
@@ -659,7 +686,7 @@ export function ShellSearchPanel({
         <div ref={bodyRef} className="shell-search-body" aria-busy={busy}>
           {!needle && scope === 'all' && !flat.length && !busy ? (
             <p className="shell-search-hint">
-              空着时视图、代理、页面、插件、标签各按更新时间列最近 {PER_KIND} 条。
+              空着时视图、代理、成员、页面、插件、标签各按更新时间列最近 {PER_KIND} 条。
             </p>
           ) : null}
           {grouped.map((group) => (
