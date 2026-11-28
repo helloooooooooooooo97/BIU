@@ -242,7 +242,7 @@ export function pluginsCollection(store: PluginStoreService): CollectionSpec {
         label: '安装',
         when: { sandbox: true, installed: false, canManagePackage: true },
         description: PLUGIN_PACK_DESCRIPTION,
-        requiredAction: 'resource:read',
+        requiredAction: 'resource:update',
         parameters: { type: 'object', description: PLUGIN_PACK_DESCRIPTION, properties: {} },
         run: async (id) => store.pack(id),
       },
@@ -250,10 +250,10 @@ export function pluginsCollection(store: PluginStoreService): CollectionSpec {
         id: 'uninstall',
         label: '卸载',
         tone: 'danger',
-        confirm: '确定卸载？会停止运行，并删掉已安装的代码。沙箱源码还在的话可以再安装。',
+        confirm: '确定卸载？会停止所有成员的运行，并删掉已安装的代码。沙箱源码还在的话可以再安装。',
         when: { installed: true, canManagePackage: true },
-        description: '停止运行并删除 .plugin/<id>/。已安装才显示，和安装互斥。沙箱 .plugin-dev/<id>/ 还在的话行不会消失，installed 变 false，动作列改显示安装。内置插件只有超级管理员能卸，有人在用也可以卸。',
-        requiredAction: 'resource:read',
+        description: '停止运行并删除 .plugin/<id>/。已安装才显示，和安装互斥。沙箱 .plugin-dev/<id>/ 还在的话行不会消失，installed 变 false，动作列改显示安装。内置插件只有超级管理员能卸，非内置插件需要管理/删除权限，会停止所有成员的运行。',
+        requiredAction: 'resource:delete',
         run: async (id) => {
           await store.uninstall(id)
         },

@@ -343,3 +343,20 @@ test('commenter role maps consistently, ShareButton checks inheritedShare & memb
   assert.doesNotMatch(accountHost, /'restricted'/)
   assert.match(accountHost, /无效的权限角色/)
 })
+
+test('share panel shows explicit collaboration role hints for plugins, mcp, and skills, and keeps non-builtin viewer detail readOnly', () => {
+  const src = readShareUiSource()
+  const stage = readFileSync(resolve(import.meta.dirname, './browser-record-stage.tsx'), 'utf8')
+  assert.match(src, /data-testid="fsdb-share-plugin-roles-hint"/)
+  assert.match(src, /插件权限：<strong>可查看<\/strong>可在自己账号下独立运行或停止（不影响他人）/)
+  assert.match(src, /重装会影响所有运行中的成员/)
+  assert.match(src, /卸载或删除插件（会停止所有成员的运行）/)
+  assert.match(src, /data-testid="fsdb-share-mcp-roles-hint"/)
+  assert.match(src, /MCP 权限：<strong>可查看<\/strong>可在自己账号下独立启用或停用（不影响他人）/)
+  assert.match(src, /data-testid="fsdb-share-skill-roles-hint"/)
+  assert.match(src, /技能权限：<strong>可查看<\/strong>可在自己账号下独立启用或停用（不影响他人）/)
+  assert.match(
+    stage,
+    /!\(collectionPath === PLUGINS_COLLECTION_PATH && selected\.builtin === true && selected\.canManagePackage === true\)/,
+  )
+})

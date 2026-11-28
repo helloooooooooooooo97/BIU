@@ -350,7 +350,9 @@ export const BrowserRecordStage = memo(function BrowserRecordStage(props: Browse
         tableIcon={currentTable?.view?.icon}
         readOnly={
           (collectionPath === PLUGINS_COLLECTION_PATH && selected.builtin === true && selected.canManagePackage !== true) ||
-          (normalizeAuthzRole(selected.shareRole) === 'viewer' && !localData && selected.canManagePackage !== true)
+          (normalizeAuthzRole(selected.shareRole) === 'viewer' &&
+            !localData &&
+            !(collectionPath === PLUGINS_COLLECTION_PATH && selected.builtin === true && selected.canManagePackage === true))
         }
         actionProperty={rowActionColumn ? renderRecordActions(selected) : null}
         share={
