@@ -1,6 +1,7 @@
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type ComponentType, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import {
+  ChatBubbleLeftRightIcon,
   CheckCircleIcon,
   CircleStackIcon,
   ListBulletIcon,
@@ -71,7 +72,8 @@ function captionTableIcon(icon?: string) {
   if (name === 'tag' || name === 'rectangle-stack' || name === 'collection') return TagIcon
   if (name === 'rectangle-group' || name === 'squares-2x2' || name === 'widgets') return RectangleGroupIcon
   if (name === 'check-circle' || name === 'check' || name === 'clipboard-document-list' || name === 'clipboard') return CheckCircleIcon
-  if (name === 'cursor' || name === 'cursor-arrow-rays' || name === 'chat-bubble' || name === 'chat-bubble-left-right') return CursorArrowRaysIcon
+  if (name === 'chat-bubble' || name === 'chat-bubble-left-right') return ChatBubbleLeftRightIcon
+  if (name === 'cursor' || name === 'cursor-arrow-rays') return CursorArrowRaysIcon
   if (name === 'document' || name === 'document-text' || name === 'page') return DocumentIcon
   if (name === 'bolt') return BoltIcon
   if (name === 'eye') return EyeIcon

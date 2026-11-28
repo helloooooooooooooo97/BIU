@@ -1,6 +1,7 @@
 import {
   AcademicCapIcon,
   ChatBubbleBottomCenterTextIcon,
+  ChatBubbleLeftRightIcon,
   CheckCircleIcon,
   CircleStackIcon,
   CursorArrowRaysIcon,
@@ -21,8 +22,9 @@ export function idleTableIconKind(icon?: string) {
   const name = (icon ?? '').trim().toLowerCase()
   if (name === 'puzzle-piece' || name === 'puzzle') return 'puzzle'
   if (name === 'chat' || name === 'comment' || name === 'comments') return 'comment'
+  if (name === 'chat-bubble' || name === 'chat-bubble-left-right') return 'chat'
   if (name === 'check-circle' || name === 'check' || name === 'clipboard-document-list' || name === 'clipboard') return 'check'
-  if (name === 'cursor' || name === 'cursor-arrow-rays' || name === 'chat-bubble' || name === 'chat-bubble-left-right') return 'cursor'
+  if (name === 'cursor' || name === 'cursor-arrow-rays') return 'cursor'
   if (name === 'academic-cap' || name === 'skill' || name === 'skills') return 'skill'
   if (name === 'document' || name === 'document-text' || name === 'page') return 'page'
   if (name === 'tag' || name === 'rectangle-stack' || name === 'collection') return 'tag'
@@ -37,10 +39,13 @@ export function TableGlyph({ icon, className = 'size-4' }: { icon?: string; clas
   if (name === 'chat' || name === 'comment' || name === 'comments') {
     return <ChatBubbleBottomCenterTextIcon aria-hidden className={className} />
   }
+  if (name === 'chat-bubble' || name === 'chat-bubble-left-right') {
+    return <ChatBubbleLeftRightIcon aria-hidden className={className} />
+  }
   if (name === 'check-circle' || name === 'check' || name === 'clipboard-document-list' || name === 'clipboard') {
     return <CheckCircleIcon aria-hidden className={className} />
   }
-  if (name === 'cursor' || name === 'cursor-arrow-rays' || name === 'chat-bubble' || name === 'chat-bubble-left-right') {
+  if (name === 'cursor' || name === 'cursor-arrow-rays') {
     return <CursorArrowRaysIcon aria-hidden className={className} />
   }
   if (name === 'academic-cap' || name === 'skill' || name === 'skills') return <AcademicCapIcon aria-hidden className={className} />
