@@ -3315,11 +3315,11 @@ body {
   --biu-tag: var(--biu-color-ink-gray);
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: 3px;
   border: 0;
-  height: 22px;
+  height: var(--biu-space-5);
   border-radius: var(--biu-radius-full);
-  padding: 0 var(--biu-pad-chip-x);
+  padding: 0 9px 0 7px;
   background: color-mix(in srgb, var(--biu-tag) 22%, transparent);
   color: var(--biu-tag);
   cursor: pointer;
@@ -3328,9 +3328,12 @@ body {
   font-weight: var(--biu-font-weight-medium);
   line-height: 1;
   white-space: nowrap;
+  transition: background 120ms ease;
 }
 
 .shell-search-hit-action svg {
+  width: 12px;
+  height: 12px;
   color: var(--biu-tag);
 }
 
