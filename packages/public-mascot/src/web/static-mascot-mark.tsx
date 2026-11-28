@@ -1,6 +1,7 @@
-import { memo, useEffect, useState } from 'react'
+import { memo, useEffect, useId, useMemo, useState } from 'react'
 import { loadGrokGeo } from './grok-bot-loader.ts'
 import type { GrokColor, GrokShape, SessionMascotIdentity } from './grok-bot-types.ts'
+import { buildMascotMesh, mascotSwatch } from './mascot-palette.ts'
 
 export type StaticMascotMarkProps = {
   identity: SessionMascotIdentity
@@ -13,7 +14,6 @@ export type StaticMascotMarkProps = {
 type FaceTune = { x: number; y: number; sx: number; sy: number; eye: number }
 type GeoSnapshot = {
   path: string
-  fill: string
   eyePaths: [string, string] | null
   face: FaceTune
   Re: number
@@ -35,6 +35,9 @@ export const StaticMascotMark = memo(function StaticMascotMark({
   title = 'Session mascot',
 }: StaticMascotMarkProps) {
   const [geo, setGeo] = useState<GeoSnapshot | null>(() => readGeo(identity))
+  const rawId = useId()
+  const uid = rawId.replace(/[^a-zA-Z0-9_-]/g, '')
+  const mesh = useMemo(() => buildMascotMesh(identity.color, identity.shape), [identity.color, identity.shape])
 
   useEffect(() => {
     // LAN share listener intentionally does not expose workstation assets.
@@ -55,6 +58,10 @@ export const StaticMascotMark = memo(function StaticMascotMark({
   }, [identity.shape, identity.color, identity.eye])
 
   const vb = geo?.viewBox ?? DEFAULT_VB
+  const bodyPath = geo?.path || mascotShapePath(identity.shape)
+  const clipId = `sm-clip-${uid}`
+  const baseGradId = `sm-base-${uid}`
+  const glowGradId = `sm-glow-${uid}`
 
   return (
     <span
@@ -69,6 +76,7 @@ export const StaticMascotMark = memo(function StaticMascotMark({
         width={size}
         height={size}
         viewBox={`${vb.minX} ${vb.minY} ${vb.width} ${vb.height}`}
+        data-mascot-theme={mesh.themeId}
         style={{
           width: size,
           height: size,
@@ -76,43 +84,92 @@ export const StaticMascotMark = memo(function StaticMascotMark({
           opacity: 1,
         }}
       >
-        {geo?.path ? (
-          <path d={geo.path} fill={geo.fill} />
-        ) : (
-          <>
-            <path d={mascotShapePath(identity.shape)} fill={mascotFill(identity.color)} />
-            <ellipse cx="91" cy="119" rx="13" ry="18" fill="#fff" />
-            <ellipse cx="151" cy="119" rx="13" ry="18" fill="#fff" />
-          </>
-        )}
+        <defs>
+          <clipPath id={clipId}>
+            <path d={bodyPath} />
+          </clipPath>
+          <linearGradient id={baseGradId} x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stopColor={mesh.baseA} />
+            <stop offset="100%" stopColor={mesh.baseB} />
+          </linearGradient>
+          {mesh.orbs.map((orb, index) => (
+            <radialGradient key={index} id={`sm-orb-${index}-${uid}`} cx={`${orb.cx}%`} cy={`${orb.cy}%`} r={`${orb.r}%`}>
+              <stop offset="0%" stopColor={orb.color} stopOpacity={orb.opacity} />
+              <stop offset="46%" stopColor={orb.color} stopOpacity={Number((orb.opacity * 0.45).toFixed(2))} />
+              <stop offset="100%" stopColor={orb.color} stopOpacity="0" />
+            </radialGradient>
+          ))}
+          <radialGradient id={glowGradId} cx="34%" cy="28%" r="66%">
+            <stop offset="0%" stopColor="#ffffff" stopOpacity="0.46" />
+            <stop offset="42%" stopColor="#ffffff" stopOpacity="0.09" />
+            <stop offset="78%" stopColor="#000000" stopOpacity="0.06" />
+            <stop offset="100%" stopColor="#000000" stopOpacity="0.22" />
+          </radialGradient>
+        </defs>
+        <g clipPath={`url(#${clipId})`}>
+          <rect x={vb.minX} y={vb.minY} width={vb.width} height={vb.height} fill={`url(#${baseGradId})`} />
+          {mesh.orbs.map((_, index) => (
+            <rect
+              key={index}
+              x={vb.minX}
+              y={vb.minY}
+              width={vb.width}
+              height={vb.height}
+              fill={`url(#sm-orb-${index}-${uid})`}
+            />
+          ))}
+          <rect x={vb.minX} y={vb.minY} width={vb.width} height={vb.height} fill={`url(#${glowGradId})`} />
+          <path d={bodyPath} fill="none" stroke="#ffffff" strokeOpacity="0.16" strokeWidth="4" />
+        </g>
         {geo?.eyePaths ? (
           <g transform={faceTransform(geo.Re, geo.face)}>
-            <path d={geo.eyePaths[0]} fill="#fff" />
-            <path d={geo.eyePaths[1]} fill="#fff" />
+            <path
+              d={geo.eyePaths[0]}
+              fill="#ffffff"
+              stroke="rgba(15, 23, 42, 0.22)"
+              strokeWidth="2.4"
+              paintOrder="stroke fill"
+            />
+            <path
+              d={geo.eyePaths[1]}
+              fill="#ffffff"
+              stroke="rgba(15, 23, 42, 0.22)"
+              strokeWidth="2.4"
+              paintOrder="stroke fill"
+            />
           </g>
-        ) : null}
+        ) : (
+          <>
+            <ellipse
+              cx="91"
+              cy="119"
+              rx="13"
+              ry="18"
+              fill="#ffffff"
+              stroke="rgba(15, 23, 42, 0.22)"
+              strokeWidth="2.4"
+              paintOrder="stroke fill"
+            />
+            <ellipse
+              cx="151"
+              cy="119"
+              rx="13"
+              ry="18"
+              fill="#ffffff"
+              stroke="rgba(15, 23, 42, 0.22)"
+              strokeWidth="2.4"
+              paintOrder="stroke fill"
+            />
+          </>
+        )}
       </svg>
       {busy ? <span className="sidebar-mascot-status" aria-hidden /> : null}
     </span>
   )
 })
 
-const MASCOT_FILL: Record<GrokColor, string> = {
-  black: '#444',
-  brown: '#a86f45',
-  red: '#e25555',
-  orange: '#ed8b3a',
-  yellow: '#d8b72b',
-  green: '#48a868',
-  cyan: '#1cc3b0',
-  blue: '#4f8fe8',
-  violet: '#8f6de0',
-  magenta: '#d65fc1',
-  gray: '#8b8b8b',
-}
-
 export function mascotFill(color: GrokColor) {
-  return MASCOT_FILL[color] ?? MASCOT_FILL.cyan
+  return mascotSwatch(color)
 }
 
 export function mascotShapePath(shape: GrokShape) {
@@ -145,7 +202,6 @@ function readGeo(identity: SessionMascotIdentity): GeoSnapshot | null {
       : null
   return {
     path,
-    fill: root.palette?.[identity.color]?.light ?? '#1CC3B0',
     eyePaths,
     face,
     Re: root.Re ?? 114.27,

@@ -51,9 +51,25 @@ export type SessionMascotIdentity = {
   eye: number
 }
 
+export type GrokMeshOrb = {
+  cx: number
+  cy: number
+  r: number
+  color: string
+  opacity: number
+}
+
+export type GrokMeshGradient = {
+  themeId?: string
+  baseA: string
+  baseB: string
+  orbs: readonly GrokMeshOrb[]
+}
+
 export type GrokCharacterLike = {
   setShape: (name: string) => void
   setColor: (id: string, scheme?: string) => void
+  setMeshGradient?: (mesh: GrokMeshGradient | null) => void
   setState: (name: string, opts?: { resetEyes?: boolean }) => void
   setMode: (mode: string) => void
   setPaused: (v: boolean) => void
@@ -76,6 +92,7 @@ export type GrokCharacterCtor = new (
     followPointer?: boolean
     paused?: boolean
     eyeColor?: string | null
+    meshGradient?: GrokMeshGradient | null
   },
 ) => GrokCharacterLike
 

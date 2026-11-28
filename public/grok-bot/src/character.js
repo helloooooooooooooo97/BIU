@@ -42,6 +42,7 @@
       this.sizePx = opts.sizePx || null;
       this.eyeColor = opts.eyeColor || null;
       this.inkFlat = opts.inkFlat || null;
+      this.meshGradient = opts.meshGradient || null;
 
       this.spin = spring(0);
       this.tx = spring(0);
@@ -226,6 +227,11 @@
       this.svg.style.setProperty("--bg", this.eyeColor || EYE_BG);
     }
 
+    setMeshGradient(mesh) {
+      this.meshGradient = mesh || null;
+      this._syncMeshGradient();
+    }
+
     setState(name, { resetEyes = false } = {}) {
       if (!EYE_PLAYLIST[name]) return;
       this.state = name;
@@ -337,17 +343,29 @@
       this.svg.innerHTML = "";
       const ns = "http://www.w3.org/2000/svg";
       const defs = document.createElementNS(ns, "defs");
+      const uid = Math.random().toString(36).slice(2, 8);
       const clip = document.createElementNS(ns, "clipPath");
-      const clipId = `grok-clip-${Math.random().toString(36).slice(2, 8)}`;
+      const clipId = `grok-clip-${uid}`;
       clip.setAttribute("id", clipId);
       this.clipPath = document.createElementNS(ns, "path");
       clip.appendChild(this.clipPath);
       defs.appendChild(clip);
+      this.meshDefs = document.createElementNS(ns, "g");
+      defs.appendChild(this.meshDefs);
       this.svg.appendChild(defs);
+      this._uid = uid;
+      this._clipId = clipId;
 
       this.group = document.createElementNS(ns, "g");
       this.body = document.createElementNS(ns, "path");
       this.body.setAttribute("fill", "var(--fg, #000)");
+      this.meshLayer = document.createElementNS(ns, "g");
+      this.meshLayer.setAttribute("clip-path", `url(#${clipId})`);
+      this.meshRim = document.createElementNS(ns, "path");
+      this.meshRim.setAttribute("fill", "none");
+      this.meshRim.setAttribute("stroke", "#ffffff");
+      this.meshRim.setAttribute("stroke-opacity", "0.16");
+      this.meshRim.setAttribute("stroke-width", "4");
       const eyesG = document.createElementNS(ns, "g");
       eyesG.setAttribute("clip-path", `url(#${clipId})`);
       this.eyeEls = [0, 1].map(() => {
@@ -359,6 +377,7 @@
       this.badge = document.createElementNS(ns, "circle");
       this.badge.setAttribute("style", "display:none");
       this.group.appendChild(this.body);
+      this.group.appendChild(this.meshLayer);
       this.group.appendChild(eyesG);
       this.group.appendChild(this.badge);
 
@@ -385,6 +404,95 @@
       });
       this.body.setAttribute("d", geo.shapes[this.shapeName].path);
       this.clipPath.setAttribute("d", geo.shapes[this.shapeName].path);
+      this.meshRim.setAttribute("d", geo.shapes[this.shapeName].path);
+      this._syncMeshGradient();
+    }
+
+    _syncMeshGradient() {
+      if (!this.meshDefs || !this.meshLayer) return;
+      const ns = "http://www.w3.org/2000/svg";
+      this.meshDefs.innerHTML = "";
+      this.meshLayer.innerHTML = "";
+      const mesh = this.meshGradient;
+      if (!mesh || !mesh.baseA || !mesh.baseB) {
+        this.body.setAttribute("fill", "var(--fg, #000)");
+        this.svg.removeAttribute("data-mascot-theme");
+        for (const p of this.eyeEls || []) {
+          p.removeAttribute("stroke");
+          p.removeAttribute("stroke-width");
+          p.removeAttribute("paint-order");
+        }
+        return;
+      }
+      const vb = g.GROK_GEO.viewBox;
+      const uid = this._uid;
+      const baseId = `grok-base-${uid}`;
+      const glowId = `grok-glow-${uid}`;
+
+      const addStop = (parent, offset, color, opacity) => {
+        const s = document.createElementNS(ns, "stop");
+        s.setAttribute("offset", offset);
+        s.setAttribute("stop-color", color);
+        if (opacity != null) s.setAttribute("stop-opacity", String(opacity));
+        parent.appendChild(s);
+      };
+      const addRect = (fillUrl) => {
+        const r = document.createElementNS(ns, "rect");
+        r.setAttribute("x", String(vb.minX));
+        r.setAttribute("y", String(vb.minY));
+        r.setAttribute("width", String(vb.width));
+        r.setAttribute("height", String(vb.height));
+        r.setAttribute("fill", `url(#${fillUrl})`);
+        this.meshLayer.appendChild(r);
+      };
+
+      const baseGrad = document.createElementNS(ns, "linearGradient");
+      baseGrad.setAttribute("id", baseId);
+      baseGrad.setAttribute("x1", "0%");
+      baseGrad.setAttribute("y1", "0%");
+      baseGrad.setAttribute("x2", "100%");
+      baseGrad.setAttribute("y2", "100%");
+      addStop(baseGrad, "0%", mesh.baseA);
+      addStop(baseGrad, "100%", mesh.baseB);
+      this.meshDefs.appendChild(baseGrad);
+      addRect(baseId);
+
+      const orbs = Array.isArray(mesh.orbs) ? mesh.orbs : [];
+      orbs.forEach((orb, idx) => {
+        const orbId = `grok-orb-${idx}-${uid}`;
+        const rg = document.createElementNS(ns, "radialGradient");
+        rg.setAttribute("id", orbId);
+        rg.setAttribute("cx", `${orb.cx}%`);
+        rg.setAttribute("cy", `${orb.cy}%`);
+        rg.setAttribute("r", `${orb.r}%`);
+        const op = typeof orb.opacity === "number" ? orb.opacity : 0.85;
+        addStop(rg, "0%", orb.color, op);
+        addStop(rg, "46%", orb.color, Number((op * 0.45).toFixed(2)));
+        addStop(rg, "100%", orb.color, 0);
+        this.meshDefs.appendChild(rg);
+        addRect(orbId);
+      });
+
+      const glowGrad = document.createElementNS(ns, "radialGradient");
+      glowGrad.setAttribute("id", glowId);
+      glowGrad.setAttribute("cx", "34%");
+      glowGrad.setAttribute("cy", "28%");
+      glowGrad.setAttribute("r", "66%");
+      addStop(glowGrad, "0%", "#ffffff", 0.46);
+      addStop(glowGrad, "42%", "#ffffff", 0.09);
+      addStop(glowGrad, "78%", "#000000", 0.06);
+      addStop(glowGrad, "100%", "#000000", 0.22);
+      this.meshDefs.appendChild(glowGrad);
+      addRect(glowId);
+
+      this.meshLayer.appendChild(this.meshRim);
+      this.body.setAttribute("fill", `url(#${baseId})`);
+      if (mesh.themeId) this.svg.setAttribute("data-mascot-theme", mesh.themeId);
+      for (const p of this.eyeEls || []) {
+        p.setAttribute("stroke", "rgba(15, 23, 42, 0.22)");
+        p.setAttribute("stroke-width", "2.4");
+        p.setAttribute("paint-order", "stroke fill");
+      }
     }
 
     _morphEyes(index, stiffness = 7) {
@@ -770,6 +878,7 @@
       }
       this.body.setAttribute("d", bodyD);
       this.clipPath.setAttribute("d", bodyD);
+      if (this.meshRim) this.meshRim.setAttribute("d", bodyD);
 
       this.fx.paint(now, this.stateAt, this.ovKind, this.ovPrev, yl, mix, R, this.reduceMotion);
 

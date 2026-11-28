@@ -7,6 +7,7 @@ import {
   suppressSidebarTricks,
 } from './grok-bot-scheduler.ts'
 import type { GrokCharacterLike, GrokColor, GrokShape } from './grok-bot-types.ts'
+import { buildMascotMesh } from './mascot-palette.ts'
 
 export type GrokBotAvatarProps = {
   shape: GrokShape
@@ -138,7 +139,8 @@ export const GrokBotAvatar = memo(function GrokBotAvatar({
         state: mood === 'busy' ? 'thinking' : 'idle',
         followPointer,
         paused: true,
-        eyeColor: '#f3efe6',
+        eyeColor: '#ffffff',
+        meshGradient: buildMascotMesh(colorRef.current, shapeRef.current),
       }) as BotInternal
       applySidebarMood(bot, mood)
       attachSharedTicker(bot)
@@ -164,6 +166,7 @@ export const GrokBotAvatar = memo(function GrokBotAvatar({
     if (!bot || !ready) return
     bot.setShape(shape)
     bot.setColor(color, 'light')
+    bot.setMeshGradient?.(buildMascotMesh(color, shape))
     suppressSidebarTricks(bot)
     applySidebarMood(bot, moodFor(busy, introActive, dancing))
   }, [shape, color, ready, busy, introActive, dancing])
