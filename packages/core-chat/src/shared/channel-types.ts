@@ -29,9 +29,28 @@ export function buildDefaultChannelName(
 export type ChannelAccessMode = 'private' | 'workspace'
 export type ChannelMemberType = 'account' | 'agent'
 export type ChannelMemberRole = 'owner' | 'admin' | 'member'
-export type ChannelSenderType = 'account' | 'agent' | 'system'
+export type ChannelSenderType = 'account' | 'agent' | 'system' | 'webhook'
 /** 群内 Agent 上下文模式：summary=单向只读投影主工作台项目与近期摘要；isolated=仅看当前群聊 */
 export type ChannelAgentContextMode = 'summary' | 'isolated'
+
+export interface ChannelWebhookView {
+  id: string
+  channelId: string
+  name: string
+  /** 仅群管理员或创建者可见完整密钥；其他成员为空字符串 */
+  token: string
+  /** 相对接收路径（如 /api/webhooks/channels/<token>），无权查看密钥时为空字符串 */
+  url: string
+  enabled: boolean
+  autoTriggerAgentId?: string
+  autoTriggerAgentName?: string
+  createdBy: string
+  createdByName?: string
+  canManage: boolean
+  lastUsedAt: number
+  createdAt: number
+  updatedAt: number
+}
 
 export interface ChannelMention {
   kind: 'account' | 'agent' | 'everyone'
@@ -116,6 +135,9 @@ export interface ChannelMessageMeta {
   /** Agent 经文件系统替当前用户代发消息时记录该 Agent 身份（消息同时展示用户与该 Agent）。 */
   viaAgentId?: string
   viaAgentName?: string
+  /** Incoming Webhook 推送消息时记录消息源信息，便于历史展示且不依赖后续删改。 */
+  webhookId?: string
+  webhookName?: string
 }
 
 export interface ChannelMessageReplyPreview {

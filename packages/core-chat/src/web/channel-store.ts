@@ -19,6 +19,7 @@ import type {
   ChannelSidebarThreadItem,
   ChannelSummary,
   ChannelThreadPayload,
+  ChannelWebhookView,
 } from '../shared/channel-types.ts'
 
 export type ChannelTypingUser = {
@@ -154,6 +155,81 @@ export async function loadChannels(): Promise<ChannelSummary[]> {
   } catch {
     return state.channels
   }
+}
+
+export async function loadChannelWebhooks(channelId: string): Promise<ChannelWebhookView[]> {
+  if (!channelId) return []
+  const res = await apiFetch(`/api/channels/${encodeURIComponent(channelId)}/webhooks`)
+  const body = (await res.json()) as { webhooks?: ChannelWebhookView[]; error?: string }
+  if (!res.ok) throw new Error(body.error || '加载 Webhook 失败')
+  return Array.isArray(body.webhooks) ? body.webhooks : []
+}
+
+export async function createChannelWebhook(
+  channelId: string,
+  input: { name: string; autoTriggerAgentId?: string },
+): Promise<ChannelWebhookView> {
+  const res = await apiFetch(`/api/channels/${encodeURIComponent(channelId)}/webhooks`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(input),
+  })
+  const body = (await res.json()) as { webhook?: ChannelWebhookView; error?: string }
+  if (!res.ok || !body.webhook) throw new Error(body.error || '创建 Webhook 失败')
+  return body.webhook
+}
+
+export async function updateChannelWebhook(
+  channelId: string,
+  webhookId: string,
+  patch: { name?: string; enabled?: boolean; autoTriggerAgentId?: string },
+): Promise<ChannelWebhookView> {
+  const res = await apiFetch(
+    `/api/channels/${encodeURIComponent(channelId)}/webhooks/${encodeURIComponent(webhookId)}`,
+    {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(patch),
+    },
+  )
+  const body = (await res.json()) as { webhook?: ChannelWebhookView; error?: string }
+  if (!res.ok || !body.webhook) throw new Error(body.error || '更新 Webhook 失败')
+  return body.webhook
+}
+
+export async function rotateChannelWebhook(
+  channelId: string,
+  webhookId: string,
+): Promise<ChannelWebhookView> {
+  const res = await apiFetch(
+    `/api/channels/${encodeURIComponent(channelId)}/webhooks/${encodeURIComponent(webhookId)}/rotate`,
+    { method: 'POST' },
+  )
+  const body = (await res.json()) as { webhook?: ChannelWebhookView; error?: string }
+  if (!res.ok || !body.webhook) throw new Error(body.error || '重置密钥失败')
+  return body.webhook
+}
+
+export async function testChannelWebhook(
+  channelId: string,
+  webhookId: string,
+): Promise<{ message: ChannelMessageView; triggeredRunIds: string[] }> {
+  const res = await apiFetch(
+    `/api/channels/${encodeURIComponent(channelId)}/webhooks/${encodeURIComponent(webhookId)}/test`,
+    { method: 'POST' },
+  )
+  const body = (await res.json()) as { message?: ChannelMessageView; triggeredRunIds?: string[]; error?: string }
+  if (!res.ok || !body.message) throw new Error(body.error || '发送测试消息失败')
+  return { message: body.message, triggeredRunIds: body.triggeredRunIds ?? [] }
+}
+
+export async function deleteChannelWebhook(channelId: string, webhookId: string): Promise<void> {
+  const res = await apiFetch(
+    `/api/channels/${encodeURIComponent(channelId)}/webhooks/${encodeURIComponent(webhookId)}`,
+    { method: 'DELETE' },
+  )
+  const body = (await res.json().catch(() => ({}))) as { error?: string }
+  if (!res.ok) throw new Error(body.error || '删除 Webhook 失败')
 }
 
 export async function loadChannelDetail(channelId: string): Promise<ChannelDetailPayload | null> {
