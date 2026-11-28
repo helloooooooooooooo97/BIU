@@ -112,11 +112,6 @@ html.dark ::selection {
   --biu-shadow-md: 0 8px 24px rgba(0, 0, 0, 0.06);
   --biu-shadow-lg: 0 16px 40px rgba(0, 0, 0, 0.10);
   --biu-shadow-popover: 0 8px 24px rgba(0, 0, 0, 0.06);
-  --biu-action-bg-mix: 26%;
-  --biu-action-bg-hover-mix: 36%;
-  --biu-action-bg-active-mix: 44%;
-  --biu-action-ink-mix: 92%;
-  --biu-action-ink-target: #000000;
   --biu-radius-popover: 12px;
 
   --biu-radius-sm: 4px;
@@ -273,11 +268,6 @@ html.dark {
   --biu-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.24);
   --biu-shadow-md: 0 8px 24px rgba(0, 0, 0, 0.35);
   --biu-shadow-lg: 0 16px 40px rgba(0, 0, 0, 0.45);
-  --biu-action-bg-mix: 34%;
-  --biu-action-bg-hover-mix: 46%;
-  --biu-action-bg-active-mix: 54%;
-  --biu-action-ink-mix: 62%;
-  --biu-action-ink-target: #ffffff;
   --biu-shadow-popover: 0 8px 24px rgba(0, 0, 0, 0.35);
   --biu-color-emphasis: var(--biu-color-ink-blue);
   --biu-color-on-emphasis: #ffffff;
@@ -3330,8 +3320,8 @@ body {
   height: var(--biu-space-5);
   border-radius: var(--biu-radius-full);
   padding: 0 9px 0 7px;
-  background: color-mix(in srgb, var(--biu-tag) var(--biu-action-bg-mix, 26%), transparent);
-  color: color-mix(in srgb, var(--biu-tag) var(--biu-action-ink-mix, 92%), var(--biu-action-ink-target, #000000));
+  background: color-mix(in srgb, var(--biu-tag) 22%, transparent);
+  color: var(--biu-tag);
   cursor: pointer;
   font: inherit;
   font-size: var(--biu-font-size-2);
@@ -3352,11 +3342,11 @@ body {
 }
 
 .shell-search-hit-action:hover {
-  background: color-mix(in srgb, var(--biu-tag) var(--biu-action-bg-hover-mix, 36%), transparent);
+  background: color-mix(in srgb, var(--biu-tag) 34%, transparent);
 }
 
 .shell-search-hit-action:active {
-  background: color-mix(in srgb, var(--biu-tag) var(--biu-action-bg-active-mix, 44%), transparent);
+  background: color-mix(in srgb, var(--biu-tag) 42%, transparent);
 }
 
 .shell-search-hit-action.is-danger {
