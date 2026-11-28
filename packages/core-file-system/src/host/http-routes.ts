@@ -212,20 +212,30 @@ export function registerDatabaseHttpRoutes(
   })
   ctx.http.route('GET', '/api/db/list', async (route) => {
     await send(route, () => {
-      let filter: Record<string, unknown> | undefined
+      const path = route.query.get('path') || '/'
+      const rawViewId = (route.query.get('view_id') ?? route.query.get('viewId') ?? '').trim()
+      const viewResolved = rawViewId ? db.resolveViewFilter(path, rawViewId) : null
+      let explicitFilter: Record<string, unknown> | undefined
       const raw = route.query.get('filter')
       if (raw) {
         try {
           const parsed = JSON.parse(raw) as unknown
-          if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) filter = parsed as Record<string, unknown>
+          if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) explicitFilter = parsed as Record<string, unknown>
         } catch {
-          filter = undefined
+          explicitFilter = undefined
         }
       }
-      return db.list(route.query.get('path') || '/', filter, {
-        q: route.query.get('q') || '',
-        sortField: route.query.get('sort') || '',
-        sortDir: route.query.get('dir') === 'desc' ? 'desc' : 'asc',
+      const mergedFilter =
+        viewResolved || explicitFilter
+          ? { ...(viewResolved?.filter ?? {}), ...(explicitFilter ?? {}) }
+          : undefined
+      const rawQ = route.query.get('q')
+      const rawSort = route.query.get('sort')
+      const rawDir = route.query.get('dir')
+      return db.list(path, mergedFilter && Object.keys(mergedFilter).length ? mergedFilter : undefined, {
+        q: rawQ !== null ? rawQ : (viewResolved?.q ?? ''),
+        sortField: rawSort || viewResolved?.sortField || '',
+        sortDir: rawDir ? (rawDir === 'desc' ? 'desc' : 'asc') : (viewResolved?.sortDir ?? 'asc'),
         sorts: parseSortsParam(route.query.get('sorts')),
         limit: route.query.get('limit') ? Number(route.query.get('limit')) : undefined,
         offset: route.query.get('offset') ? Number(route.query.get('offset')) : undefined,

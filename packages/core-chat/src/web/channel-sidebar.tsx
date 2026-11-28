@@ -50,6 +50,11 @@ import {
   updateChannelPreferences,
   useChannelStore,
 } from './channel-store.ts'
+import {
+  fetchCollectionViews,
+  resolveCollectionViewIds,
+  type SavedCollectionViewOption,
+} from './channel-view-import.ts'
 
 type WorkspaceMemberRow = {
   id: string
@@ -726,8 +731,91 @@ function CreateChannelDialog({
   const [agentContextMode, setAgentContextMode] = useState<ChannelAgentContextMode>('summary')
   const [pickedMembers, setPickedMembers] = useState<string[]>([])
   const [pickedAgents, setPickedAgents] = useState<string[]>([])
+  const [memberViews, setMemberViews] = useState<SavedCollectionViewOption[]>([])
+  const [agentViews, setAgentViews] = useState<SavedCollectionViewOption[]>([])
+  const [importingViewKey, setImportingViewKey] = useState<string | null>(null)
+  const [viewImportNotice, setViewImportNotice] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
+
+  useEffect(() => {
+    let cancelled = false
+    if (members.length > 0) {
+      void fetchCollectionViews('/workspace-members').then((list) => {
+        if (!cancelled) setMemberViews(list)
+      })
+    }
+    if (myAgents.length > 0) {
+      void fetchCollectionViews('/agents').then((list) => {
+        if (!cancelled) setAgentViews(list)
+      })
+    }
+    return () => {
+      cancelled = true
+    }
+  }, [members.length, myAgents.length])
+
+  const handleImportFromView = async (type: 'account' | 'agent', view: SavedCollectionViewOption) => {
+    if (importingViewKey) return
+    const key = `${type}:${view.id}`
+    setImportingViewKey(key)
+    setError('')
+    setViewImportNotice('')
+    try {
+      const path = type === 'account' ? '/workspace-members' : '/agents'
+      const snapshot = await resolveCollectionViewIds(path, view.id)
+      if (type === 'account') {
+        const selectable = new Set(members.map((m) => m.id))
+        const matched = snapshot.ids.filter((id) => id !== myAccountId && selectable.has(id))
+        const already = new Set(pickedMembers)
+        const newlyPicked = matched.filter((id) => !already.has(id))
+        if (newlyPicked.length > 0) {
+          setPickedMembers((prev) => [...prev, ...newlyPicked])
+          const existingCount = matched.length - newlyPicked.length
+          setViewImportNotice(
+            `已按成员视图「${view.name}」静态勾选 ${newlyPicked.length} 位成员${
+              existingCount > 0 ? `（${existingCount} 位已勾选）` : ''
+            }`,
+          )
+        } else if (matched.length > 0) {
+          setViewImportNotice(`成员视图「${view.name}」中的 ${matched.length} 位成员已全部勾选`)
+        } else {
+          setViewImportNotice(`成员视图「${view.name}」当前暂无可勾选的其他空间成员`)
+        }
+      } else {
+        const ownAgentIds = new Set(myAgents.map((a) => a.id))
+        const matched = snapshot.ids.filter((id) => ownAgentIds.has(id))
+        const foreignCount = snapshot.ids.length - matched.length
+        const already = new Set(pickedAgents)
+        const newlyPicked = matched.filter((id) => !already.has(id))
+        if (newlyPicked.length > 0) {
+          setPickedAgents((prev) => [...prev, ...newlyPicked])
+          const notes: string[] = []
+          if (matched.length - newlyPicked.length > 0) notes.push(`${matched.length - newlyPicked.length} 个已勾选`)
+          if (foreignCount > 0) notes.push(`${foreignCount} 个他人归属已忽略`)
+          setViewImportNotice(
+            `已按 Agent 视图「${view.name}」静态勾选 ${newlyPicked.length} 个 Agent${
+              notes.length > 0 ? `（${notes.join('，')}）` : ''
+            }`,
+          )
+        } else if (matched.length > 0) {
+          setViewImportNotice(
+            `Agent 视图「${view.name}」中归属你的 ${matched.length} 个 Agent 已全部勾选${
+              foreignCount > 0 ? `（${foreignCount} 个他人归属已忽略）` : ''
+            }`,
+          )
+        } else if (foreignCount > 0) {
+          setViewImportNotice(`Agent 视图「${view.name}」中命中的 ${foreignCount} 个 Agent 均非本人归属，无法拉入`)
+        } else {
+          setViewImportNotice(`Agent 视图「${view.name}」当前暂无匹配的 Agent`)
+        }
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setImportingViewKey(null)
+    }
+  }
 
   const toggleItem = (list: string[], setList: (next: string[]) => void, id: string) => {
     setList(list.includes(id) ? list.filter((x) => x !== id) : [...list, id])
@@ -818,6 +906,14 @@ function CreateChannelDialog({
           {error ? (
             <div className="scfg-error" role="alert">
               {error}
+            </div>
+          ) : null}
+          {viewImportNotice ? (
+            <div
+              className="mb-2 rounded-[9px] bg-emerald-500/12 px-2.5 py-1.5 text-[12px] text-emerald-400"
+              data-testid="create-channel-view-import-notice"
+            >
+              {viewImportNotice}
             </div>
           ) : null}
 
@@ -930,6 +1026,27 @@ function CreateChannelDialog({
                   <span className="scfg-label">邀请空间成员</span>
                   <span className="scfg-hint">已选 {pickedMembers.length} 人</span>
                 </div>
+                {memberViews.length > 0 ? (
+                  <div className="mb-1.5 flex flex-wrap items-center gap-1" data-testid="create-import-member-views">
+                    <span className="text-[11px] text-(--biu-color-text-subtle)">从成员视图导入（静态）：</span>
+                    {memberViews.map((v) => {
+                      const busyThis = importingViewKey === `account:${v.id}`
+                      return (
+                        <button
+                          key={v.id}
+                          type="button"
+                          disabled={importingViewKey !== null}
+                          data-testid={`create-import-member-view-${v.id}`}
+                          title={`仅静态勾选视图「${v.name}」当前成员，不动态绑定视图`}
+                          className="inline-flex h-6 cursor-pointer items-center rounded-[6px] border border-(--biu-color-border) bg-(--biu-color-bg-subtle) px-2 text-[11px] text-(--biu-color-text-muted) transition-colors hover:bg-(--biu-color-bg-hover) hover:text-(--biu-color-text) disabled:opacity-50"
+                          onClick={() => void handleImportFromView('account', v)}
+                        >
+                          <span className="max-w-[140px] truncate">{busyThis ? '导入中…' : v.name}</span>
+                        </button>
+                      )
+                    })}
+                  </div>
+                ) : null}
                 {filteredMembers.length === 0 ? (
                   <div className="scfg-hint">没有匹配的空间成员</div>
                 ) : (
@@ -963,6 +1080,27 @@ function CreateChannelDialog({
                   <span className="scfg-label">拉入我的 Agent</span>
                   <span className="scfg-hint">仅归属人可拉入 · 已选 {pickedAgents.length}</span>
                 </div>
+                {agentViews.length > 0 ? (
+                  <div className="mb-1.5 flex flex-wrap items-center gap-1" data-testid="create-import-agent-views">
+                    <span className="text-[11px] text-(--biu-color-text-subtle)">从 Agent 视图导入（静态）：</span>
+                    {agentViews.map((v) => {
+                      const busyThis = importingViewKey === `agent:${v.id}`
+                      return (
+                        <button
+                          key={v.id}
+                          type="button"
+                          disabled={importingViewKey !== null}
+                          data-testid={`create-import-agent-view-${v.id}`}
+                          title={`仅静态勾选视图「${v.name}」内归属你的 Agent，不动态绑定视图`}
+                          className="inline-flex h-6 cursor-pointer items-center rounded-[6px] border border-(--biu-color-border) bg-(--biu-color-bg-subtle) px-2 text-[11px] text-(--biu-color-text-muted) transition-colors hover:bg-(--biu-color-bg-hover) hover:text-(--biu-color-text) disabled:opacity-50"
+                          onClick={() => void handleImportFromView('agent', v)}
+                        >
+                          <span className="max-w-[140px] truncate">{busyThis ? '导入中…' : v.name}</span>
+                        </button>
+                      )
+                    })}
+                  </div>
+                ) : null}
                 {filteredAgents.length === 0 ? (
                   <div className="scfg-hint">没有匹配的 Agent</div>
                 ) : (

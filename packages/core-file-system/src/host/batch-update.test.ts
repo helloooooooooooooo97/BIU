@@ -18,10 +18,13 @@ afterEach(() => {
 })
 
 class StubHttp extends Service {
+  routes = new Map<string, (route: unknown) => Promise<void> | void>()
   constructor(ctx: Context) {
     super(ctx, 'http')
   }
-  route() {}
+  route(method: string, path: string, handler: (route: unknown) => Promise<void> | void) {
+    this.routes.set(`${method.toUpperCase()} ${path}`, handler)
+  }
   broadcast() {}
 }
 
@@ -271,6 +274,30 @@ describe('db_list view_id and db_update batch mode', () => {
         include_content: true,
       })) as { content?: { text?: string } }
       assert.match(readAfterUpdate.content?.text ?? '', /覆写后的正文/)
+    } finally {
+      await ctx.registry.delete(fsPlugin)
+    }
+  })
+
+  it('HTTP GET /api/db/list supports view_id to fetch static snapshots of saved views', async () => {
+    const { ctx, viewId } = await setupCtx()
+    try {
+      const http = ctx.get('http') as unknown as StubHttp
+      const handler = http.routes.get('GET /api/db/list')
+      assert.ok(handler, 'GET /api/db/list route should be registered')
+
+      let status = 0
+      let payload: { items?: Array<{ id: string }>; total?: number } = {}
+      await handler({
+        query: new URLSearchParams({ path: '/pages', view_id: viewId, columns: 'id', limit: '200' }),
+        send: (code: number, body: unknown) => {
+          status = code
+          payload = body as { items?: Array<{ id: string }>; total?: number }
+        },
+      })
+      assert.equal(status, 200)
+      assert.deepEqual((payload.items ?? []).map((i) => i.id).sort(), ['p1', 'p2'])
+      assert.equal(payload.total, 2)
     } finally {
       await ctx.registry.delete(fsPlugin)
     }

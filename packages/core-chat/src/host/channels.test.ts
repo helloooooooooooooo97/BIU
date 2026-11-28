@@ -1645,4 +1645,97 @@ describe('Slack-style Group Channels: RBAC, Mention Dispatch, Per-Invoker Queue,
       env.cleanup()
     }
   })
+
+  it('batch-imports members and own agents statically via addMembers, skipping existing and forbidden entries with a single broadcast', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'biu-channels-batch-add-'))
+    const db = openAndMigrateBiu(join(dir, 'biu.sqlite'))
+    const store = new CollabStore(db)
+    const alice = store.register('Alice', Date.now(), 'pass123456', 'alice@example.com')
+    const bob = store.register('Bob', Date.now(), 'pass123456', 'bob@example.com')
+    const carol = store.register('Carol', Date.now(), 'pass123456', 'carol@example.com')
+    const outsider = store.register('Outsider', Date.now(), 'pass123456', 'outsider@example.com')
+    const ws = store.createWorkspace(alice.id, 'Batch WS')
+    store.addMemberByEmail(alice.id, ws.id, 'bob@example.com')
+    store.addMemberByEmail(alice.id, ws.id, 'carol@example.com')
+
+    const agents = new Map([
+      ['ag-a1', { id: 'ag-a1', title: 'Alice研究', ownerAccountId: alice.id }],
+      ['ag-a2', { id: 'ag-a2', title: 'Alice写作', ownerAccountId: alice.id }],
+      ['ag-bob', { id: 'ag-bob', title: 'Bob私人助手', ownerAccountId: bob.id }],
+    ])
+    for (const a of agents.values()) {
+      runWithAccount(a.ownerAccountId, () =>
+        runWithRequestWorkspace(ws.id, () => store.attach(ws.id, '/agents', a.id, Date.now(), { accessMode: 'private' })),
+      )
+    }
+
+    const broadcasts: Array<{ accountId: string; type: string; payload: unknown }> = []
+    const sessionsStub = {
+      peekSummary: (id: string) => {
+        const hit = agents.get(id)
+        return hit ? { id: hit.id, title: hit.title, config: {} } : null
+      },
+    }
+    const httpStub = {
+      broadcast: (type: string, payload: unknown) => broadcasts.push({ accountId: '*', type, payload }),
+      broadcastAccount: (accountId: string, type: string, payload: unknown) =>
+        broadcasts.push({ accountId, type, payload }),
+    }
+    const fakeCtx = {
+      get: (key: string) => {
+        if (key === 'account') return { store }
+        if (key === 'sessions') return sessionsStub
+        if (key === 'http') return httpStub
+        return undefined
+      },
+      account: { store },
+      sessions: sessionsStub,
+      tools: { schemas: () => [], invoke: async () => ({ ok: true }) },
+      http: httpStub,
+      effect: () => undefined,
+    } as unknown as Context
+
+    const svc = new ChannelService(fakeCtx, () => ({ chat: async () => ({ content: '', toolCalls: [] }) }), { db })
+    const asUser = <T,>(uid: string, fn: () => T) => runWithAccount(uid, () => runWithRequestWorkspace(ws.id, fn))
+
+    try {
+      const created = asUser(alice.id, () =>
+        svc.createChannel({ name: '批量导入测试群', memberAccountIds: [bob.id], agentIds: ['ag-a1'] }),
+      )
+      const chId = created.channel.id
+      broadcasts.length = 0
+
+      // 批量静态导入人类成员：bob 已在群内跳过，outsider 非本空间成员跳过，carol 正常导入
+      const humanRes = asUser(alice.id, () =>
+        svc.addMembers(chId, 'account', [bob.id, carol.id, carol.id, outsider.id]),
+      )
+      assert.deepEqual(humanRes.addedIds, [carol.id])
+      assert.deepEqual(humanRes.skippedExistingIds, [bob.id])
+      assert.deepEqual(humanRes.skippedForbiddenIds, [outsider.id])
+      const humanBroadcastAccounts = new Set(
+        broadcasts.filter((b) => b.type === 'channel/members').map((b) => b.accountId),
+      )
+      assert.equal(humanBroadcastAccounts.size, 3)
+      assert.equal(broadcasts.filter((b) => b.type === 'channel/members').length, 3)
+
+      // 批量静态导入 Agent：ag-a1 已在群内跳过，ag-bob 他人归属跳过，ag-a2 正常导入
+      broadcasts.length = 0
+      const agentRes = asUser(alice.id, () =>
+        svc.addMembers(chId, 'agent', ['ag-a1', 'ag-a2', 'ag-bob']),
+      )
+      assert.deepEqual(agentRes.addedIds, ['ag-a2'])
+      assert.deepEqual(agentRes.skippedExistingIds, ['ag-a1'])
+      assert.deepEqual(agentRes.skippedForbiddenIds, ['ag-bob'])
+      assert.ok(agentRes.members.some((m) => m.memberType === 'agent' && m.memberId === 'ag-a2'))
+      assert.equal(agentRes.members.some((m) => m.memberType === 'agent' && m.memberId === 'ag-bob'), false)
+
+      // 1v1 私聊拒绝批量导入人类成员
+      const dm = asUser(alice.id, () => svc.openOrCreateDm(bob.id))
+      assert.throws(() => asUser(alice.id, () => svc.addMembers(dm.channel.id, 'account', [carol.id])), /1v1 私聊/)
+    } finally {
+      svc.dispose()
+      db.close()
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
 })
