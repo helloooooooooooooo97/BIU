@@ -2,7 +2,6 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import {
   TAG_PROPERTY_TYPES,
   normalizeSchemaValue,
-  pruneSchemaValue,
   retagSchemaValue,
   type AtomicFieldType,
   type CollectionSchemaPack,
@@ -11,13 +10,30 @@ import {
   type SchemaFieldValue,
   type SchemaPackField,
 } from '@biu/type-file-system'
-import { ArrowUturnLeftIcon, ChevronDownIcon, InformationCircleIcon, PlusIcon, TagIcon, XMarkIcon } from '@heroicons/react/16/solid'
+import {
+  ArchiveBoxIcon,
+  ArrowUturnLeftIcon,
+  ChevronDownIcon,
+  ClipboardDocumentIcon,
+  InformationCircleIcon,
+  PlusIcon,
+  TagIcon,
+  TrashIcon,
+  XMarkIcon,
+} from '@heroicons/react/16/solid'
 import { TagChip, TagChips, tagTone, HeadlessPopover } from '@biu/biu-ui'
 import { TAGS_COLLECTION_PATH } from './database-path.ts'
 import { DefaultCell, FieldGlyph } from './fsdb-cells.tsx'
 import { FieldValuePop } from './field-value-pop.tsx'
 import { PropertyDescriptionPop } from './property-row.tsx'
-import { inferPackFieldType, orphanPackEntries } from './fields.ts'
+import {
+  adaptTagFieldValue,
+  formatRawValuePreview,
+  inferPackFieldType,
+  isLossyFieldTypeChange,
+  orphanPackEntries,
+  retainArchivedSchemaValue,
+} from './fields.ts'
 import { createTag, tagFieldLabelOk, tagLabel, jumpTag, loadTags, persistTags, registerTagFieldKey, subscribeTags } from './tag-catalog.ts'
 import { peekRecord, subscribeCrumbs } from './view-storage.ts'
 
@@ -403,28 +419,84 @@ function persistPack(pack: CollectionSchemaPack) {
   void persistTags([pack])
 }
 
+function copyValueToClipboard(value: unknown) {
+  const text = formatRawValuePreview(value, 4000)
+  if (!text) return
+  if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+    void navigator.clipboard.writeText(text).catch(() => undefined)
+  }
+}
+
+function updateFieldType(fields: SchemaPackField[], key: string, nextType: AtomicFieldType): SchemaPackField[] {
+  return fields.map((row) => {
+    if (row.key !== key) return row
+    const keepEnum =
+      (row.type === 'select' || row.type === 'multi-select') &&
+      (nextType === 'select' || nextType === 'multi-select')
+    const updated: SchemaPackField = { ...row, type: nextType }
+    if (!keepEnum) {
+      delete updated.enum
+      delete updated.enumLabels
+    }
+    return updated
+  })
+}
+
+function softDeleteField(fields: SchemaPackField[], key: string): SchemaPackField[] {
+  return fields.map((row) => (row.key === key ? { ...row, deleted: true } : row))
+}
+
+function restoreArchivedField(fields: SchemaPackField[], key: string): SchemaPackField[] {
+  return fields.map((row) => {
+    if (row.key !== key) return row
+    const next = { ...row }
+    delete next.deleted
+    return next
+  })
+}
+
 export function TagPackEditor({ tagId }: { tagId: string }) {
   const [catalog, setCatalog] = useState(() => loadTags())
+  const [typeNotice, setTypeNotice] = useState('')
+  const [archivedOpen, setArchivedOpen] = useState(false)
   useEffect(() => subscribeTags(undefined, () => setCatalog(loadTags())), [])
   const tag = catalog.find((item) => item.id === tagId)
 
   if (!tag) return <p className="fsdb-muted">这条标签已不在目录里。</p>
   const pack = tag
   const live = pack.fields.filter((field) => !field.deleted)
+  const archived = pack.fields.filter((field) => field.deleted)
 
   function addField(name: string, type: AtomicFieldType) {
+    const clean = name.trim()
+    const deletedMatch = pack.fields.find(
+      (item) => item.deleted && (item.label ?? item.key).trim().toLowerCase() === clean.toLowerCase(),
+    )
+    if (deletedMatch) {
+      persistPack({
+        ...pack,
+        fields: pack.fields.map((row) => {
+          if (row.key !== deletedMatch.key) return row
+          const restored: SchemaPackField = { ...row, type, label: clean }
+          delete restored.deleted
+          return restored
+        }),
+      })
+      setTypeNotice(`已恢复同名归档字段「${clean}」，关联的历史数据将自动回显。`)
+      return true
+    }
     const key = registerTagFieldKey(name, {
       keys: pack.fields.map((item) => item.key),
-      labels: pack.fields.map((item) => item.label ?? item.key),
+      labels: live.map((item) => item.label ?? item.key),
     })
     if (!key) return false
-    const field: SchemaPackField = { key, type, label: name.trim(), writable: true }
+    const field: SchemaPackField = { key, type, label: clean, writable: true }
     persistPack({ ...pack, fields: [...pack.fields, field] })
     return true
   }
 
   function renameField(from: string, name: string) {
-    const others = pack.fields.filter((item) => item.key !== from)
+    const others = live.filter((item) => item.key !== from)
     if (!tagFieldLabelOk(name, others.map((item) => item.label ?? item.key))) return false
     const label = name.trim()
     persistPack({
@@ -451,8 +523,31 @@ export function TagPackEditor({ tagId }: { tagId: string }) {
     })
   }
 
+  function changeFieldType(key: string, nextType: AtomicFieldType) {
+    const current = pack.fields.find((row) => row.key === key)
+    if (!current || current.type === nextType) return
+    persistPack({ ...pack, fields: updateFieldType(pack.fields, key, nextType) })
+    const label = current.label ?? current.key
+    if (isLossyFieldTypeChange(current.type, nextType)) {
+      setTypeNotice(
+        `已将「${label}」切换为${TYPE_LABEL[nextType] ?? nextType}：历史旧值已原样保留，不兼容值会在对应记录标出，切回「${TYPE_LABEL[current.type] ?? current.type}」可无损还原。`,
+      )
+    } else {
+      setTypeNotice('')
+    }
+  }
+
   function removeField(key: string) {
-    persistPack({ ...pack, fields: pack.fields.filter((row) => row.key !== key) })
+    const target = pack.fields.find((row) => row.key === key)
+    persistPack({ ...pack, fields: softDeleteField(pack.fields, key) })
+    if (target) {
+      setTypeNotice(`已归档字段「${target.label ?? target.key}」：历史数据未删除，可在下方「已归档字段」或记录属性区随时恢复。`)
+    }
+  }
+
+  function restoreFieldByKey(key: string) {
+    persistPack({ ...pack, fields: restoreArchivedField(pack.fields, key) })
+    setTypeNotice('')
   }
 
   return (
@@ -471,6 +566,14 @@ export function TagPackEditor({ tagId }: { tagId: string }) {
       ) : (
         <span className="fsdb-muted">添加属性</span>
       )}
+      {typeNotice ? (
+        <div className="fsdb-schema-compat-notice" data-testid="fsdb-type-change-hint" role="status">
+          <span>{typeNotice}</span>
+          <button type="button" className="fsdb-schema-compat-close" aria-label="关闭提示" onClick={() => setTypeNotice('')}>
+            <XMarkIcon aria-hidden className="size-3" />
+          </button>
+        </div>
+      ) : null}
       <div className="fsdb-schema-pack">
         <div className="fsdb-schema-pack-inner">
           {live.map((field) => (
@@ -484,8 +587,7 @@ export function TagPackEditor({ tagId }: { tagId: string }) {
               />
               <div className="fsdb-schema-prop-v">
                 <span className="fsdb-schema-prop-type">
-                  <FieldGlyph kind={field.type} />
-                  <span className="fsdb-muted">{TYPE_LABEL[field.type]}</span>
+                  <TypeMenu value={field.type} onChange={(next) => changeFieldType(field.key, next)} />
                 </span>
                 <button type="button" className="fsdb-schema-prop-del" aria-label={`删除 ${field.label ?? field.key}`} onClick={() => removeField(field.key)}>
                   <XMarkIcon aria-hidden className="size-3" />
@@ -494,6 +596,42 @@ export function TagPackEditor({ tagId }: { tagId: string }) {
             </div>
           ))}
           <AddProperty onAdd={addField} />
+          {archived.length ? (
+            <div className="fsdb-schema-archived" data-testid="fsdb-tag-archived-fields">
+              <button
+                type="button"
+                className="fsdb-schema-archived-head"
+                aria-expanded={archivedOpen}
+                onClick={() => setArchivedOpen((open) => !open)}
+              >
+                <ArchiveBoxIcon aria-hidden className="size-3.5" />
+                <span>已归档字段（{archived.length}）</span>
+                <ChevronDownIcon aria-hidden className={`size-3 fsdb-schema-archived-caret${archivedOpen ? ' is-open' : ''}`} />
+              </button>
+              {archivedOpen
+                ? archived.map((field) => (
+                    <div key={`archived:${field.key}`} className="fsdb-schema-prop is-orphan">
+                      <span className="fsdb-schema-prop-k" title={field.label ?? field.key}>
+                        <FieldGlyph kind={field.type} />
+                        <span className="fsdb-schema-prop-name">{field.label ?? field.key}</span>
+                      </span>
+                      <div className="fsdb-schema-prop-v">
+                        <span className="fsdb-muted">{TYPE_LABEL[field.type] ?? field.type}</span>
+                        <button
+                          type="button"
+                          className="fsdb-schema-prop-restore"
+                          aria-label={`恢复 ${field.label ?? field.key}`}
+                          data-dock-tip="恢复"
+                          onClick={() => restoreFieldByKey(field.key)}
+                        >
+                          <ArrowUturnLeftIcon aria-hidden className="size-3" />
+                        </button>
+                      </div>
+                    </div>
+                  ))
+                : null}
+            </div>
+          ) : null}
         </div>
       </div>
     </div>
@@ -521,21 +659,58 @@ export function SchemaFieldEditor({
   liveRef.current = parsed
   const [catalog, setCatalog] = useState(() => loadTags())
   const [, setTagMarks] = useState(0)
+  const [collectorOpen, setCollectorOpen] = useState(true)
+  const [typeNotice, setTypeNotice] = useState('')
 
   useEffect(() => subscribeTags(undefined, () => setCatalog(loadTags())), [])
   useEffect(() => subscribeCrumbs(() => setTagMarks((n) => n + 1)), [])
 
-  const shown = pruneSchemaValue(parsed, catalog)
+  const shown = retainArchivedSchemaValue(value, catalog)
+  const catalogById = useMemo(() => new Map(catalog.map((tag) => [tag.id, tag])), [catalog])
   const selected = useMemo(
     () =>
-      parsed.tags.map((id) => catalog.find((tag) => tag.id === id) ?? { id, label: tagLabel(id), fields: [] }),
-    [catalog, parsed.tags],
+      parsed.tags
+        .filter((id) => catalogById.has(id))
+        .map((id) => catalogById.get(id)!),
+    [catalogById, parsed.tags],
   )
+  const detachedOrphans = useMemo(() => {
+    const entries: Array<{
+      tagId: string
+      tagLabel: string
+      key: string
+      label: string
+      type: AtomicFieldType
+      value: unknown
+    }> = []
+    for (const [tagId, bag] of Object.entries(shown.values)) {
+      if (catalogById.has(tagId)) continue
+      for (const orphan of orphanPackEntries([], bag)) {
+        entries.push({
+          tagId,
+          tagLabel: tagLabel(tagId),
+          ...orphan,
+        })
+      }
+    }
+    return entries
+  }, [catalogById, shown.values])
 
   function patchValue(next: SchemaFieldValue, packs = catalog) {
-    const cleaned = pruneSchemaValue(next, packs)
+    const cleaned = retainArchivedSchemaValue(next, packs)
     liveRef.current = cleaned
     onChange(cleaned)
+  }
+
+  function dismissOrphan(tagId: string, key: string) {
+    const currentBag = { ...(parsed.values[tagId] ?? {}) }
+    currentBag[key] = null
+    const nextValues = { ...parsed.values, [tagId]: currentBag }
+    // 本地预览移除该项，同时把 null 传给服务端让 applyTagBagPatch 显式清理该归档 key
+    const localBag = { ...currentBag }
+    delete localBag[key]
+    liveRef.current = { tags: parsed.tags, values: { ...parsed.values, [tagId]: localBag } }
+    onChange({ tags: parsed.tags, values: nextValues })
   }
 
   function finishTags(resolved: string[]) {
@@ -577,18 +752,35 @@ export function SchemaFieldEditor({
   }
 
   function addField(tag: CollectionSchemaPack, name: string, type: AtomicFieldType) {
+    const clean = name.trim()
+    const deletedMatch = tag.fields.find(
+      (item) => item.deleted && (item.label ?? item.key).trim().toLowerCase() === clean.toLowerCase(),
+    )
+    if (deletedMatch) {
+      persistPack({
+        ...tag,
+        fields: tag.fields.map((row) => {
+          if (row.key !== deletedMatch.key) return row
+          const restored: SchemaPackField = { ...row, type, label: clean }
+          delete restored.deleted
+          return restored
+        }),
+      })
+      return true
+    }
+    const liveFields = tag.fields.filter((item) => !item.deleted)
     const key = registerTagFieldKey(name, {
       keys: tag.fields.map((item) => item.key),
-      labels: tag.fields.map((item) => item.label ?? item.key),
+      labels: liveFields.map((item) => item.label ?? item.key),
     })
     if (!key) return false
-    const field: SchemaPackField = { key, type, label: name.trim(), writable: true }
+    const field: SchemaPackField = { key, type, label: clean, writable: true }
     persistPack({ ...tag, fields: [...tag.fields, field] })
     return true
   }
 
   function renameField(tag: CollectionSchemaPack, from: string, name: string) {
-    const others = tag.fields.filter((item) => item.key !== from)
+    const others = tag.fields.filter((item) => !item.deleted && item.key !== from)
     if (!tagFieldLabelOk(name, others.map((item) => item.label ?? item.key))) return false
     const label = name.trim()
     persistPack({
@@ -615,8 +807,22 @@ export function SchemaFieldEditor({
     })
   }
 
+  function changeFieldType(tag: CollectionSchemaPack, key: string, nextType: AtomicFieldType) {
+    const current = tag.fields.find((item) => item.key === key)
+    if (!current || current.type === nextType) return
+    persistPack({ ...tag, fields: updateFieldType(tag.fields, key, nextType) })
+    const label = current.label ?? current.key
+    if (isLossyFieldTypeChange(current.type, nextType)) {
+      setTypeNotice(
+        `已将「${label}」切换为${TYPE_LABEL[nextType] ?? nextType}：旧值已原样保留，切回「${TYPE_LABEL[current.type] ?? current.type}」可无损恢复。`,
+      )
+    } else {
+      setTypeNotice('')
+    }
+  }
+
   function removeField(tag: CollectionSchemaPack, key: string) {
-    persistPack({ ...tag, fields: tag.fields.filter((item) => item.key !== key) })
+    persistPack({ ...tag, fields: softDeleteField(tag.fields, key) })
   }
 
   function restoreField(tag: CollectionSchemaPack, key: string, value: unknown) {
@@ -626,12 +832,7 @@ export function SchemaFieldEditor({
     if (kept?.deleted && hit) {
       persistPack({
         ...hit,
-        fields: hit.fields.map((row) => {
-          if (row.key !== key) return row
-          const next = { ...row }
-          delete next.deleted
-          return next
-        }),
+        fields: restoreArchivedField(hit.fields, key),
       })
       return
     }
@@ -655,11 +856,19 @@ export function SchemaFieldEditor({
     />
   )
   if (!writable) return <SchemaChips value={value} tags={catalog} />
-  if (!parsed.tags.length) return tagPop
+  if (!parsed.tags.length && !detachedOrphans.length) return tagPop
 
   return (
     <div className="fsdb-schema" data-testid="fsdb-schema">
       {tagPop}
+      {typeNotice && !compact ? (
+        <div className="fsdb-schema-compat-notice" data-testid="fsdb-type-change-hint" role="status">
+          <span>{typeNotice}</span>
+          <button type="button" className="fsdb-schema-compat-close" aria-label="关闭提示" onClick={() => setTypeNotice('')}>
+            <XMarkIcon aria-hidden className="size-3" />
+          </button>
+        </div>
+      ) : null}
       {compact
         ? null
         : selected.map((tag) => {
@@ -676,64 +885,170 @@ export function SchemaFieldEditor({
                 onRemove={() => applyTags(parsed.tags.filter((id) => id !== tag.id))}
               />
             </div>
-            {tag.fields.filter((field) => !field.deleted).map((field) => (
-              <div key={field.key} className="fsdb-schema-prop">
-                <SchemaPropName
-                  name={field.label ?? field.key}
-                  kind={field.type}
-                  description={field.description}
-                  onRename={(next) => renameField(tag, field.key, next)}
-                  onDescribe={(next) => describeField(tag, field.key, next)}
-                />
-                <div className="fsdb-schema-prop-v">
-                  <FieldValuePop
-                    record={record}
-                    fieldKey={field.key}
-                    field={field}
-                    value={bag[field.key]}
-                    collectionPath={_collectionPath}
-                    onSubmit={(next) => {
-                      const bagNext = { ...(parsed.values[tag.id] ?? {}) }
-                      bagNext[field.key] = next
-                      patchValue({ tags: parsed.tags, values: { ...parsed.values, [tag.id]: bagNext } })
-                    }}
+            {tag.fields.filter((field) => !field.deleted).map((field) => {
+              const rawVal = bag[field.key]
+              const adapted = adaptTagFieldValue(field, rawVal)
+              return (
+                <div key={field.key} className={`fsdb-schema-prop${adapted.incompatible ? ' is-mismatch' : ''}`}>
+                  <SchemaPropName
+                    name={field.label ?? field.key}
+                    kind={field.type}
+                    description={field.description}
+                    onRename={(next) => renameField(tag, field.key, next)}
+                    onDescribe={(next) => describeField(tag, field.key, next)}
                   />
-                  <button
-                    type="button"
-                    className="fsdb-schema-prop-del"
-                    aria-label={`删除 ${field.label ?? field.key}`}
-                    onClick={() => removeField(tag, field.key)}
-                  >
-                    <XMarkIcon aria-hidden className="size-3" />
-                  </button>
+                  <div className="fsdb-schema-prop-v">
+                    <FieldValuePop
+                      record={record}
+                      fieldKey={field.key}
+                      field={field}
+                      value={rawVal}
+                      collectionPath={_collectionPath}
+                      onSubmit={(next) => {
+                        const bagNext = { ...(parsed.values[tag.id] ?? {}) }
+                        bagNext[field.key] = next
+                        patchValue({ tags: parsed.tags, values: { ...parsed.values, [tag.id]: bagNext } })
+                      }}
+                    />
+                    {adapted.incompatible ? (
+                      <>
+                        <button
+                          type="button"
+                          className="fsdb-schema-prop-restore"
+                          aria-label={`复制 ${field.label ?? field.key} 原值`}
+                          data-dock-tip="复制原值"
+                          onClick={() => copyValueToClipboard(rawVal)}
+                        >
+                          <ClipboardDocumentIcon aria-hidden className="size-3" />
+                        </button>
+                        <button
+                          type="button"
+                          className="fsdb-schema-prop-restore"
+                          aria-label={`清空 ${field.label ?? field.key} 不兼容值`}
+                          data-dock-tip="清空"
+                          onClick={() => {
+                            const bagNext = { ...(parsed.values[tag.id] ?? {}) }
+                            bagNext[field.key] = ''
+                            patchValue({ tags: parsed.tags, values: { ...parsed.values, [tag.id]: bagNext } })
+                          }}
+                        >
+                          <TrashIcon aria-hidden className="size-3" />
+                        </button>
+                      </>
+                    ) : null}
+                    <span className="fsdb-schema-prop-type-mini">
+                      <TypeMenu value={field.type} onChange={(next) => changeFieldType(tag, field.key, next)} />
+                    </span>
+                    <button
+                      type="button"
+                      className="fsdb-schema-prop-del"
+                      aria-label={`删除 ${field.label ?? field.key}`}
+                      onClick={() => removeField(tag, field.key)}
+                    >
+                      <XMarkIcon aria-hidden className="size-3" />
+                    </button>
+                  </div>
                 </div>
-              </div>
-            ))}
-            {orphans.map((orphan) => (
-              <div key={`orphan:${orphan.key}`} className="fsdb-schema-prop is-orphan">
-                <span className="fsdb-schema-prop-k" title={orphan.label}>
-                  <FieldGlyph kind={orphan.type} />
-                  {orphan.label}
-                </span>
-                <div className="fsdb-schema-prop-v">
-                  <DefaultCell field={{ type: orphan.type, label: orphan.label, writable: false }} value={orphan.value} />
-                  <button
-                    type="button"
-                    className="fsdb-schema-prop-restore"
-                    aria-label={`恢复 ${orphan.label}`}
-                    data-dock-tip="恢复"
-                    onClick={() => restoreField(tag, orphan.key, orphan.value)}
-                  >
-                    <ArrowUturnLeftIcon aria-hidden className="size-3" />
-                  </button>
+              )
+            })}
+            {orphans.length ? (
+              <div className="fsdb-schema-archived" data-testid={`fsdb-pack-orphans-${tag.id}`}>
+                <div className="fsdb-schema-archived-label">
+                  <ArchiveBoxIcon aria-hidden className="size-3" />
+                  <span>已归档属性（{orphans.length}）</span>
                 </div>
+                {orphans.map((orphan) => (
+                  <div key={`orphan:${orphan.key}`} className="fsdb-schema-prop is-orphan">
+                    <span className="fsdb-schema-prop-k" title={orphan.label}>
+                      <FieldGlyph kind={orphan.type} />
+                      <span className="fsdb-schema-prop-name">{orphan.label}</span>
+                    </span>
+                    <div className="fsdb-schema-prop-v">
+                      <DefaultCell field={{ type: orphan.type, label: orphan.label, writable: false }} value={orphan.value} />
+                      <button
+                        type="button"
+                        className="fsdb-schema-prop-restore"
+                        aria-label={`复制 ${orphan.label}`}
+                        data-dock-tip="复制值"
+                        onClick={() => copyValueToClipboard(orphan.value)}
+                      >
+                        <ClipboardDocumentIcon aria-hidden className="size-3" />
+                      </button>
+                      <button
+                        type="button"
+                        className="fsdb-schema-prop-restore"
+                        aria-label={`恢复 ${orphan.label}`}
+                        data-dock-tip="恢复"
+                        onClick={() => restoreField(tag, orphan.key, orphan.value)}
+                      >
+                        <ArrowUturnLeftIcon aria-hidden className="size-3" />
+                      </button>
+                      <button
+                        type="button"
+                        className="fsdb-schema-prop-restore"
+                        aria-label={`清理 ${orphan.label}`}
+                        data-dock-tip="清理"
+                        onClick={() => dismissOrphan(tag.id, orphan.key)}
+                      >
+                        <TrashIcon aria-hidden className="size-3" />
+                      </button>
+                    </div>
+                  </div>
+                ))}
               </div>
-            ))}
+            ) : null}
             <AddProperty onAdd={(name, type) => addField(tag, name, type)} />
             </div>
           </div>
         )
       })}
+      {!compact && detachedOrphans.length ? (
+        <div className="fsdb-schema-pack is-collector" data-testid="fsdb-orphan-collector">
+          <div className="fsdb-schema-pack-inner">
+            <button
+              type="button"
+              className="fsdb-schema-archived-head"
+              aria-expanded={collectorOpen}
+              onClick={() => setCollectorOpen((open) => !open)}
+            >
+              <ArchiveBoxIcon aria-hidden className="size-3.5" />
+              <span>未归属属性（{detachedOrphans.length}）</span>
+              <ChevronDownIcon aria-hidden className={`size-3 fsdb-schema-archived-caret${collectorOpen ? ' is-open' : ''}`} />
+            </button>
+            {collectorOpen
+              ? detachedOrphans.map((orphan) => (
+                  <div key={`detached:${orphan.tagId}:${orphan.key}`} className="fsdb-schema-prop is-orphan">
+                    <span className="fsdb-schema-prop-k" title={`原属 ${orphan.tagLabel} · ${orphan.label}`}>
+                      <FieldGlyph kind={orphan.type} />
+                      <span className="fsdb-schema-prop-name">{orphan.label}</span>
+                    </span>
+                    <div className="fsdb-schema-prop-v">
+                      <DefaultCell field={{ type: orphan.type, label: orphan.label, writable: false }} value={orphan.value} />
+                      <button
+                        type="button"
+                        className="fsdb-schema-prop-restore"
+                        aria-label={`复制 ${orphan.label}`}
+                        data-dock-tip="复制值"
+                        onClick={() => copyValueToClipboard(orphan.value)}
+                      >
+                        <ClipboardDocumentIcon aria-hidden className="size-3" />
+                      </button>
+                      <button
+                        type="button"
+                        className="fsdb-schema-prop-restore"
+                        aria-label={`清理 ${orphan.label}`}
+                        data-dock-tip="清理"
+                        onClick={() => dismissOrphan(orphan.tagId, orphan.key)}
+                      >
+                        <TrashIcon aria-hidden className="size-3" />
+                      </button>
+                    </div>
+                  </div>
+                ))
+              : null}
+          </div>
+        </div>
+      ) : null}
     </div>
   )
 }

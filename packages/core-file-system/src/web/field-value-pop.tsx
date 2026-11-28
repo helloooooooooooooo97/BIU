@@ -4,7 +4,7 @@ import { CellDateTime } from '@biu/biu-ui/db-ui'
 import { CellPop, cellUsesPop } from './cell-pop.tsx'
 import { CellPopDraft } from './cell-pop-draft.tsx'
 import { ActionCell, BoolCell, DefaultCell } from './fsdb-cells.tsx'
-import { fieldHasValue, isRecordLinkField, resolveFieldType } from './fields.ts'
+import { adaptTagFieldValue, fieldHasValue, isRecordLinkField, resolveFieldType } from './fields.ts'
 import { isViewCatalogField } from './view-catalog.ts'
 
 const POP_HOST_IGNORE = '.fsdb-ref-chip, .biu-tag-wrap, .fsdb-boolbtn, .fsdb-thumb-btn, .fsdb-thumb, .biu-image, .fsdb-file-tools, .fsdb-action-btn, .db-datetime, .biu-calendar'
@@ -39,15 +39,41 @@ export function FieldValuePop({
   if (kind === 'action') {
     return <ActionCell field={field} fieldKey={fieldKey} />
   }
+  const adapted = adaptTagFieldValue(field, value)
   if (kind === 'boolean') {
-    const on = value === true || value === 'true'
+    if (adapted.incompatible) {
+      return (
+        <span className="fsdb-compat-inline">
+          <DefaultCell field={field} fieldKey={fieldKey} record={record} collectionPath={collectionPath} value={value} />
+          {field.writable ? <BoolCell on={false} writable onToggle={() => onSubmit(true)} /> : null}
+        </span>
+      )
+    }
+    const on = adapted.value === true || adapted.value === 'true'
     if (!field.writable) return <BoolCell on={on} />
     return <BoolCell on={on} writable onToggle={() => onSubmit(!on)} />
   }
   if (kind === 'datetime') {
+    if (adapted.incompatible) {
+      return (
+        <span className="fsdb-compat-inline">
+          <DefaultCell field={field} fieldKey={fieldKey} record={record} collectionPath={collectionPath} value={value} />
+          {field.writable ? (
+            <CellDateTime
+              value={null}
+              empty="重设"
+              writable
+              onChange={(next) => {
+                if (field.writable) onSubmit(next)
+              }}
+            />
+          ) : null}
+        </span>
+      )
+    }
     return (
       <CellDateTime
-        value={value}
+        value={adapted.value}
         empty="空"
         writable={Boolean(field.writable)}
         onChange={(next) => {
@@ -57,7 +83,7 @@ export function FieldValuePop({
     )
   }
   const display =
-    fieldHasValue(field, value) || isViewCatalogField(fieldKey) ? (
+    adapted.incompatible || fieldHasValue(field, adapted.value) || isViewCatalogField(fieldKey) ? (
     <DefaultCell
       field={field}
       fieldKey={fieldKey}

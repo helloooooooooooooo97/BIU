@@ -10,11 +10,11 @@ import {
   isEmptySchemaValue,
   normalizeSchemaPack,
   normalizeSchemaValue,
-  pruneSchemaValue,
   type CollectionSchemaPack,
   type PersonValue,
   type SchemaFieldValue,
 } from '@biu/type-file-system'
+import { retainArchivedSchemaValue } from '../shared/tag-value-compat.ts'
 import { parseTagFlatColumnKey } from '../query-logic.ts'
 import { TAGS_COLLECTION_PATH } from '../paths.ts'
 import { strategyForField } from '../shared/group-strategies.ts'
@@ -669,7 +669,7 @@ export class TagStore {
   }
 
   writeRecordTag(collection: string, recordId: string, tag: unknown, title: string) {
-    const value = pruneSchemaValue(tag, this.list())
+    const value = retainArchivedSchemaValue(tag, this.list())
     const db = this.ensure()
     db.exec('SAVEPOINT tag_value_write')
     try {
