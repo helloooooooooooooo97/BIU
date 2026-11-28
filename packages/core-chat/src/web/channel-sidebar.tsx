@@ -9,6 +9,7 @@ import {
   UserGroupIcon,
   XMarkIcon,
 } from '@heroicons/react/16/solid'
+import { Button } from '@biu/biu-ui'
 import { AiAvatar } from '@biu/biu-ui/ai-avatar'
 import { apiFetch } from '@biu/biu-ui/api-client'
 import { onAppEvents } from '@biu/biu-ui/app-events'
@@ -476,151 +477,156 @@ function CreateChannelDialog({
 
   return createPortal(
     <div
-      className="fixed inset-0 z-[1200] flex items-center justify-center bg-black/50 p-4"
+      className="biu-float-overlay"
       onClick={onClose}
+      role="dialog"
+      aria-modal="true"
+      aria-label="新建群聊"
       data-testid="create-channel-dialog"
     >
       <div
-        className="w-full max-w-md rounded-xl border border-(--biu-color-border) bg-(--biu-color-bg-popover) p-4 text-(--biu-color-text) shadow-2xl"
-        role="dialog"
-        aria-label="新建群聊"
+        className="biu-float scfg-float !w-[min(480px,calc(100vw-32px))]"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="mb-3 flex items-center justify-between">
-          <div className="flex items-center gap-2 text-[15px] font-semibold">
-            <UserGroupIcon className="size-4 opacity-80" />
-            <span>新建群聊</span>
-          </div>
+        <div className="biu-float-head scfg-head">
+          <h2 className="biu-float-title scfg-title">新建群聊</h2>
           <button
             type="button"
-            className="grid size-7 place-items-center rounded-md text-(--biu-color-text-muted) hover:bg-(--biu-color-bg-hover)"
+            className="biu-float-close"
+            title="关闭"
             aria-label="关闭"
             onClick={onClose}
           >
-            <XMarkIcon className="size-4" />
+            <XMarkIcon className="size-4 shrink-0" />
           </button>
         </div>
 
-        <div className="space-y-3 text-[13px]">
-          <div>
-            <label className="mb-1 block text-[12px] text-(--biu-color-text-muted)">群聊名称</label>
-            <input
-              type="text"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="例如：产品研发群、发布协作"
-              autoFocus
-              className="w-full rounded-md border border-(--biu-color-border) bg-(--biu-color-bg) px-2.5 py-1.5 text-[13px] outline-none focus:border-(--biu-color-emphasis)"
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') void submit()
-              }}
-            />
-          </div>
-
-          <div>
-            <label className="mb-1 block text-[12px] text-(--biu-color-text-muted)">群主题（可选）</label>
-            <input
-              type="text"
-              value={topic}
-              onChange={(e) => setTopic(e.target.value)}
-              placeholder="描述这个群聊的协作目标"
-              className="w-full rounded-md border border-(--biu-color-border) bg-(--biu-color-bg) px-2.5 py-1.5 text-[13px] outline-none focus:border-(--biu-color-emphasis)"
-            />
-          </div>
-
-          <div className="flex gap-2">
-            <button
-              type="button"
-              className={`flex-1 rounded-md border px-2.5 py-1.5 text-[12px] font-medium ${
-                accessMode === 'private'
-                  ? 'border-(--biu-color-emphasis) bg-(--biu-color-bg-hover)'
-                  : 'border-(--biu-color-border) opacity-75'
-              }`}
-              onClick={() => setAccessMode('private')}
-            >
-              <LockClosedIcon className="mr-1 inline size-3.5" />
-              私密邀请群
-            </button>
-            <button
-              type="button"
-              className={`flex-1 rounded-md border px-2.5 py-1.5 text-[12px] font-medium ${
-                accessMode === 'workspace'
-                  ? 'border-(--biu-color-emphasis) bg-(--biu-color-bg-hover)'
-                  : 'border-(--biu-color-border) opacity-75'
-              }`}
-              onClick={() => setAccessMode('workspace')}
-            >
-              <HashtagIcon className="mr-1 inline size-3.5" />
-              空间公开群
-            </button>
-          </div>
-
-          {members.length > 0 ? (
-            <div>
-              <div className="mb-1 text-[12px] text-(--biu-color-text-muted)">邀请空间成员</div>
-              <div className="max-h-28 space-y-1 overflow-y-auto rounded-md border border-(--biu-color-border) p-1.5">
-                {members.map((m) => (
-                  <label key={m.id} className="flex cursor-pointer items-center gap-2 rounded px-1.5 py-1 hover:bg-(--biu-color-bg-hover)">
-                    <input
-                      type="checkbox"
-                      checked={pickedMembers.includes(m.id)}
-                      onChange={() => toggleItem(pickedMembers, setPickedMembers, m.id)}
-                    />
-                    {m.avatar ? (
-                      <img src={m.avatar} alt="" className="size-4 rounded-full object-cover" />
-                    ) : (
-                      <AiAvatar seed={m.id} size={16} />
-                    )}
-                    <span className="truncate">{m.name}</span>
-                  </label>
-                ))}
-              </div>
+        <div className="scfg-body">
+          {error ? (
+            <div className="scfg-error" role="alert">
+              {error}
             </div>
           ) : null}
 
-          {myAgents.length > 0 ? (
-            <div>
-              <div className="mb-1 text-[12px] text-(--biu-color-text-muted)">拉入我的 Agent（仅归属人可拉入）</div>
-              <div className="max-h-32 space-y-1 overflow-y-auto rounded-md border border-(--biu-color-border) p-1.5">
-                {myAgents.slice(0, 30).map((agent) => (
-                  <label key={agent.id} className="flex cursor-pointer items-center gap-2 rounded px-1.5 py-1 hover:bg-(--biu-color-bg-hover)">
-                    <input
-                      type="checkbox"
-                      checked={pickedAgents.includes(agent.id)}
-                      onChange={() => toggleItem(pickedAgents, setPickedAgents, agent.id)}
-                    />
-                    <SidebarMascot
-                      size={16}
-                      sessionId={agent.id}
-                      identity={resolveSessionMascot(agent.id, agent.mascot)}
-                      animate={false}
-                      title=""
-                    />
-                    <span className="truncate">{agent.title}</span>
-                  </label>
-                ))}
+          <div className="scfg-sections">
+            <div className="scfg-section">
+              <label className="scfg-field">
+                <span className="scfg-label">群聊名称</span>
+                <input
+                  type="text"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder="例如：产品研发群、发布协作"
+                  autoFocus
+                  className="scfg-input"
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') void submit()
+                  }}
+                />
+              </label>
+
+              <label className="scfg-field">
+                <span className="scfg-label">群主题（可选）</span>
+                <input
+                  type="text"
+                  value={topic}
+                  onChange={(e) => setTopic(e.target.value)}
+                  placeholder="描述这个群聊的协作目标"
+                  className="scfg-input"
+                />
+              </label>
+
+              <div className="scfg-field">
+                <span className="scfg-label">可见范围</span>
+                <div className="flex gap-2">
+                  <Button
+                    variant={accessMode === 'private' ? 'default' : 'secondary'}
+                    className="h-8 flex-1 text-[12px]"
+                    onClick={() => setAccessMode('private')}
+                  >
+                    <LockClosedIcon className="size-3.5" />
+                    <span>私密邀请群</span>
+                  </Button>
+                  <Button
+                    variant={accessMode === 'workspace' ? 'default' : 'secondary'}
+                    className="h-8 flex-1 text-[12px]"
+                    onClick={() => setAccessMode('workspace')}
+                  >
+                    <HashtagIcon className="size-3.5" />
+                    <span>空间公开群</span>
+                  </Button>
+                </div>
               </div>
             </div>
-          ) : null}
 
-          {error ? <div className="text-[12px] text-red-400">{error}</div> : null}
+            {members.length > 0 ? (
+              <div className="scfg-section">
+                <div className="scfg-tools-head">
+                  <span className="scfg-label">邀请空间成员</span>
+                  <span className="scfg-hint">已选 {pickedMembers.length} 人</span>
+                </div>
+                <ul className="scfg-tools-list max-h-36 overflow-y-auto">
+                  {members.map((m) => (
+                    <li key={m.id} className="scfg-tool-row is-active">
+                      <label className="flex min-w-0 flex-1 cursor-pointer items-center gap-2">
+                        <input
+                          type="checkbox"
+                          className="scfg-tool-check"
+                          checked={pickedMembers.includes(m.id)}
+                          onChange={() => toggleItem(pickedMembers, setPickedMembers, m.id)}
+                        />
+                        {m.avatar ? (
+                          <img src={m.avatar} alt="" className="size-4.5 shrink-0 rounded-full object-cover" />
+                        ) : (
+                          <AiAvatar seed={m.id} size={18} className="shrink-0 rounded-full" />
+                        )}
+                        <span className="scfg-tool-name !font-sans">{m.name}</span>
+                      </label>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
 
-          <div className="flex justify-end gap-2 pt-1">
-            <button
-              type="button"
-              className="rounded-md border border-(--biu-color-border) px-3 py-1.5 text-[12px] hover:bg-(--biu-color-bg-hover)"
-              onClick={onClose}
-            >
-              取消
-            </button>
-            <button
-              type="button"
-              disabled={!name.trim() || submitting}
-              className="rounded-md bg-(--biu-color-emphasis) px-3 py-1.5 text-[12px] font-medium text-(--biu-color-on-emphasis) disabled:opacity-50"
-              onClick={() => void submit()}
-            >
-              {submitting ? '创建中…' : '创建群聊'}
-            </button>
+            {myAgents.length > 0 ? (
+              <div className="scfg-section">
+                <div className="scfg-tools-head">
+                  <span className="scfg-label">拉入我的 Agent</span>
+                  <span className="scfg-hint">仅归属人可拉入 · 已选 {pickedAgents.length}</span>
+                </div>
+                <ul className="scfg-tools-list max-h-40 overflow-y-auto">
+                  {myAgents.slice(0, 30).map((agent) => (
+                    <li key={agent.id} className="scfg-tool-row is-active">
+                      <label className="flex min-w-0 flex-1 cursor-pointer items-center gap-2">
+                        <input
+                          type="checkbox"
+                          className="scfg-tool-check"
+                          checked={pickedAgents.includes(agent.id)}
+                          onChange={() => toggleItem(pickedAgents, setPickedAgents, agent.id)}
+                        />
+                        <SidebarMascot
+                          size={18}
+                          sessionId={agent.id}
+                          identity={resolveSessionMascot(agent.id, agent.mascot)}
+                          animate={false}
+                          title=""
+                        />
+                        <span className="scfg-tool-name !font-sans">{agent.title}</span>
+                      </label>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
+
+            <div className="flex justify-end gap-2 pt-3">
+              <Button variant="secondary" onClick={onClose}>
+                取消
+              </Button>
+              <Button disabled={!name.trim() || submitting} onClick={() => void submit()}>
+                {submitting ? '创建中…' : '创建群聊'}
+              </Button>
+            </div>
           </div>
         </div>
       </div>

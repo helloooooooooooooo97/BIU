@@ -1725,21 +1725,28 @@ export class CollabStore {
     if (workspaceId) {
       const row = this.db
         .prepare(
-          `SELECT COALESCE(NULLIF(m.display_name, ''), NULLIF(a.name, ''), NULLIF(a.email, ''), '用户') AS name
+          `SELECT COALESCE(NULLIF(m.display_name, ''), NULLIF(a.name, ''), NULLIF(a.email, ''), '用户') AS name,
+                  COALESCE(NULLIF(m.avatar, ''), '') AS avatar
            FROM workspace_members m
            JOIN accounts a ON a.id = m.account_id
            WHERE m.workspace_id = ? AND m.account_id = ?`,
         )
-        .get(workspaceId, actorId) as { name: string } | undefined
-      if (row) return { accountId: actorId, workspaceId, name: row.name }
+        .get(workspaceId, actorId) as { name: string; avatar: string } | undefined
+      if (row) {
+        const avatar = row.avatar.trim()
+        return { accountId: actorId, workspaceId, name: row.name, ...(avatar ? { avatar } : {}) }
+      }
     }
     const account = this.db
       .prepare(
-        `SELECT COALESCE(NULLIF(name, ''), NULLIF(email, ''), '用户') AS name
+        `SELECT COALESCE(NULLIF(name, ''), NULLIF(email, ''), '用户') AS name,
+                COALESCE(NULLIF(avatar, ''), '') AS avatar
          FROM accounts WHERE id = ?`,
       )
-      .get(actorId) as { name: string } | undefined
-    return account ? { accountId: actorId, workspaceId: workspaceId ?? '', name: account.name } : null
+      .get(actorId) as { name: string; avatar: string } | undefined
+    if (!account) return null
+    const avatar = account.avatar.trim()
+    return { accountId: actorId, workspaceId: workspaceId ?? '', name: account.name, ...(avatar ? { avatar } : {}) }
   }
 
   /** 读取指定工作区成员用于公开分享页展示的昵称与头像（不暴露邮箱等私密信息）。 */

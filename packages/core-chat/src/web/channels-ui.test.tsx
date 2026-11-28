@@ -254,3 +254,119 @@ test('web-app-shell declares chat-sidebar-channels and channel-stage slots in ro
   assert.match(shell, /'chat-sidebar-channels':\s*\{\s*kind:\s*'list'\s*\}/)
   assert.match(shell, /'channel-stage':\s*\{\s*kind:\s*'list'\s*\}/)
 })
+
+test('ChannelStage reuses 1v1 chat card/composer/float styles and syncs workspace avatars identically', async () => {
+  const aliceAvatar = 'data:image/svg+xml;utf8,alice-maroon-orb'
+  const bobAvatar = 'data:image/svg+xml;utf8,bob-silver-orb'
+  const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+    const url = new URL(String(input), 'http://test.local')
+    if (url.pathname === '/api/db/list') {
+      return new Response(
+        JSON.stringify({
+          items: [
+            { id: 'acc-alice', title: 'lulu@qq.com', avatar: aliceAvatar },
+            { id: 'acc-bob', title: '97', avatar: bobAvatar },
+          ],
+        }),
+        { status: 200 },
+      )
+    }
+    if (url.pathname === '/api/channels/dm-1') {
+      return new Response(
+        JSON.stringify({
+          channel: {
+            id: 'dm-1',
+            workspaceId: 'ws-1',
+            kind: 'dm',
+            dmKey: 'acc-alice\0acc-bob',
+            peerAccountId: 'acc-bob',
+            peerName: '97',
+            name: '97',
+            topic: '',
+            accessMode: 'private',
+            createdBy: 'acc-alice',
+            createdAt: 1,
+            updatedAt: 10,
+            memberCount: 2,
+            agentCount: 0,
+            lastMessageAt: 10,
+            lastMessageText: '你好',
+          },
+          members: [
+            { channelId: 'dm-1', memberType: 'account', memberId: 'acc-alice', role: 'owner', addedBy: 'acc-alice', addedAt: 1, name: 'lulu@qq.com', isOwn: true },
+            { channelId: 'dm-1', memberType: 'account', memberId: 'acc-bob', role: 'member', addedBy: 'acc-alice', addedAt: 1, name: '97', isOwn: false },
+          ],
+          messages: [
+            {
+              id: 'm-bob',
+              channelId: 'dm-1',
+              seq: 1,
+              senderType: 'account',
+              senderId: 'acc-bob',
+              senderName: '97',
+              replyToId: '',
+              text: '你好呀',
+              mentions: [],
+              traceId: '',
+              ephemeralTo: '',
+              createdAt: 10,
+            },
+            {
+              id: 'm-alice',
+              channelId: 'dm-1',
+              seq: 2,
+              senderType: 'account',
+              senderId: 'acc-alice',
+              senderName: 'lulu@qq.com',
+              replyToId: '',
+              text: '收到！',
+              mentions: [],
+              traceId: '',
+              ephemeralTo: '',
+              createdAt: 11,
+            },
+          ],
+          activities: [],
+          myAccountId: 'acc-alice',
+          canManageMembers: true,
+        }),
+        { status: 200 },
+      )
+    }
+    return new Response(JSON.stringify({}), { status: 200 })
+  })
+  vi.stubGlobal('fetch', fetchMock)
+
+  const view = render(
+    <MemoryRouter initialEntries={['/channels/dm-1']}>
+      <ChannelStage channelId="dm-1" />
+    </MemoryRouter>,
+  )
+
+  await waitFor(() => {
+    // 复用与 1v1 聊天一致的核心 DOM 类名
+    assert.ok(view.container.querySelector('.chat-view-header'))
+    assert.ok(view.container.querySelector('.chat-stage'))
+    assert.ok(view.container.querySelector('.chat-node-list'))
+    assert.ok(view.container.querySelector('.chat-user-card'))
+    assert.ok(view.container.querySelector('.user-turn-bar'))
+    assert.ok(view.container.querySelector('.chat-composer-dock'))
+    assert.ok(view.container.querySelector('.composer-pill'))
+    assert.ok(view.container.querySelector('.composer-plus'))
+    assert.ok(view.container.querySelector('.composer-send'))
+
+    // 头像全部与空间成员表头像一致，不能退化成默认彩虹 AiAvatar
+    const imgs = [...view.container.querySelectorAll('img')].map((el) => el.getAttribute('src'))
+    assert.ok(imgs.includes(bobAvatar), 'peer avatar in header/message must match workspace avatar')
+    assert.ok(imgs.includes(aliceAvatar), 'self avatar in message must match workspace avatar')
+    assert.equal(view.container.querySelector('[data-ai-avatar="mesh"]'), null)
+  })
+
+  // 打开「群成员与 Agent」弹窗：必须使用统一 .biu-float-overlay / .scfg-float 且头像一致
+  fireEvent.click(view.getByTestId('channel-manage-members'))
+  const modal = document.querySelector('.biu-float-overlay .biu-float.scfg-float')
+  assert.ok(modal, 'members modal must reuse unified .biu-float.scfg-float dialog style')
+  const modalImgs = [...modal.querySelectorAll('img')].map((el) => el.getAttribute('src'))
+  assert.ok(modalImgs.includes(aliceAvatar))
+  assert.ok(modalImgs.includes(bobAvatar))
+})
