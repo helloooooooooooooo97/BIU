@@ -1,73 +1,155 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { useFloatingPosition } from '@biu/biu-ui/floating-position'
 import { HeadlessDismiss } from '@biu/biu-ui/headless-dismiss'
-import { OVERLAY_Z, overlayPortalRoot, overlayZ } from '@biu/biu-ui/overlay-portal'
-import { buildAccessExplanation, type AccessExplanation } from '../access-explanation.ts'
+import {
+  OVERLAY_Z,
+  claimOverlayOpen,
+  overlayPortalRoot,
+  overlayZ,
+  releaseOverlayOpen,
+} from '@biu/biu-ui/overlay-portal'
+import {
+  VIEWS_COLLECTION_PATH,
+  isIndexCollection,
+  isPersonalOnlyCollection,
+  isSystemCollection,
+  normalizeCollectionPath,
+} from '../paths.ts'
 import { roleActionLabel } from '../shared/authz-labels.ts'
-import { fetchAccessExplanation } from './authz-api.ts'
+import { SHARE_POPOVER_OVERLAY_GROUP, SharePanel } from './share-popover.tsx'
 import { AccessMark, accessText, accessTone, ScopeMark, scopeText, scopeTone } from './share-scope-label.tsx'
 
 export function roleLabel(role: string) {
   return roleActionLabel(role)
 }
 
-function subjectNote(subjectType: 'account' | 'member_view' | 'workspace_members', audienceKind: 'internal' | 'external') {
-  if (subjectType === 'workspace_members') return '空间全员'
-  if (subjectType === 'member_view') return '锁定成员视图'
-  return audienceKind === 'external' ? '外部协作者' : '空间成员'
+function isNonShareableRecord(collection: string, builtin: boolean) {
+  if (builtin) return true
+  const normalized = normalizeCollectionPath(collection)
+  if (isIndexCollection(normalized) || isPersonalOnlyCollection(normalized)) return true
+  return isSystemCollection(normalized) && normalized !== VIEWS_COLLECTION_PATH
 }
 
-function useAccessExplanation(
-  open: boolean,
-  params: {
-    collection: string
-    recordId: string
-    tableLabel: string
-    builtin: boolean
-    localOnly: boolean | null
-    roleHint?: string
-  },
-) {
-  const [data, setData] = useState<AccessExplanation | null>(null)
-  const [error, setError] = useState('')
-  const { collection, recordId, tableLabel, builtin, localOnly, roleHint = '' } = params
+function RecordSharePopoverTrigger({
+  collection,
+  recordId,
+  title,
+  builtin,
+  localOnly,
+  defaultTab,
+  className,
+  testId,
+  ariaLabel,
+  children,
+}: {
+  collection: string
+  recordId: string
+  title: string
+  builtin: boolean
+  localOnly: boolean | null
+  defaultTab: 'public' | 'collaboration'
+  className: string
+  testId: string
+  ariaLabel: string
+  children: ReactNode
+}) {
+  const wrapRef = useRef<HTMLDivElement>(null)
+  const panelRef = useRef<HTMLDivElement>(null)
+  const overlayIdRef = useRef(Symbol('fsdb-share-popover'))
+  const [open, setOpen] = useState(false)
+  const [anchorEl, setAnchorEl] = useState<HTMLElement | null>(null)
+  const panelPos = useFloatingPosition(anchorEl, panelRef, {
+    placement: 'bottom-end',
+    offset: 6,
+    padding: 8,
+    fallbackWidth: 380,
+    fallbackHeight: 360,
+    enabled: open,
+  })
 
   useEffect(() => {
-    if (localOnly == null) return
-    if (!open) {
-      setError('')
-      return
-    }
-    if (builtin) {
-      setData(buildAccessExplanation({ collection, recordId, tableLabel, builtin: true, localOnly }))
-      setError('')
-      return
-    }
-    let cancelled = false
-    void fetchAccessExplanation({ collection, recordId, tableLabel, roleHint })
-      .then((res) => {
-        if (cancelled) return
-        setData(res)
-        setError('')
-      })
-      .catch((err) => {
-        if (cancelled) return
-        setError(err instanceof Error ? err.message : '无法读取权限说明')
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [open, collection, recordId, tableLabel, builtin, localOnly, roleHint])
+    if (!open) return
+    const overlayId = overlayIdRef.current
+    claimOverlayOpen(
+      {
+        id: overlayId,
+        group: SHARE_POPOVER_OVERLAY_GROUP,
+        close: () => setOpen(false),
+        contentEl: () => panelRef.current,
+      },
+      anchorEl,
+    )
+    return () => releaseOverlayOpen(overlayId)
+  }, [open, anchorEl])
 
-  return { data, error }
+  if (isNonShareableRecord(collection, builtin)) {
+    return (
+      <span className={className} data-testid={testId}>
+        {children}
+      </span>
+    )
+  }
+
+  return (
+    <div className="fsdb-scope-detail" ref={wrapRef}>
+      <button
+        type="button"
+        className={className}
+        data-testid={testId}
+        aria-label={ariaLabel}
+        aria-haspopup="dialog"
+        aria-expanded={open}
+        onPointerDown={(event) => event.stopPropagation()}
+        onClick={(event) => {
+          event.stopPropagation()
+          setAnchorEl(event.currentTarget)
+          setOpen((prev) => !prev)
+        }}
+      >
+        {children}
+      </button>
+      {open ? createPortal(
+        <HeadlessDismiss
+          onDismiss={() => setOpen(false)}
+          inside={(node) => Boolean(wrapRef.current?.contains(node) || panelRef.current?.contains(node))}
+        >
+          <div
+            ref={panelRef}
+            className="fsdb-share-floating"
+            style={{
+              position: 'fixed',
+              top: panelPos.top,
+              left: panelPos.left,
+              maxHeight: panelPos.maxHeight,
+              zIndex: overlayZ(OVERLAY_Z.popover, anchorEl),
+            }}
+          >
+            <SharePanel
+              target={{
+                kind: 'record',
+                collection,
+                recordId,
+                title,
+              }}
+              localOnly={Boolean(localOnly)}
+              embedded
+              defaultTab={defaultTab}
+            />
+          </div>
+        </HeadlessDismiss>,
+        overlayPortalRoot(anchorEl) ?? document.body,
+      ) : null}
+    </div>
+  )
 }
 
-/** 可见范围胶囊。点开后按真实生效来源展示谁能访问以及继承链。 */
+/** 分享范围胶囊。点击统一打开右上角同款分享与权限管理弹窗。 */
 export function ShareScopeDetail({
   collection,
   recordId,
   label,
+  title = '',
   tableLabel = '',
   builtin = false,
   localOnly = false,
@@ -75,194 +157,35 @@ export function ShareScopeDetail({
   collection: string
   recordId: string
   label: string
+  title?: string
   tableLabel?: string
   builtin?: boolean
-  /** null：还不知道是不是本机空间，先不要发请求。 */
   localOnly?: boolean | null
 }) {
-  const wrapRef = useRef<HTMLDivElement>(null)
-  const panelRef = useRef<HTMLDivElement>(null)
-  const [open, setOpen] = useState(false)
-  const [anchorEl, setAnchorEl] = useState<HTMLElement | null>(null)
-  const panelPos = useFloatingPosition(anchorEl, panelRef, {
-    placement: 'bottom-start',
-    offset: 6,
-    padding: 8,
-    fallbackWidth: 320,
-    fallbackHeight: 240,
-    enabled: open,
-  })
-  const { data, error } = useAccessExplanation(open, {
-    collection,
-    recordId,
-    tableLabel,
-    builtin,
-    localOnly,
-  })
-  const shown = scopeTone(label)
-  const chip = open && data ? data.visibility.scope : shown
-  const hasInheritance = Boolean(
-    data && data.inheritance.mode === 'inherit' && data.inheritance.ancestors.length > 0,
-  )
-  const hasAnySource = Boolean(
-    data && (
-      hasInheritance
-      || data.audience.inherited.length > 0
-      || data.audience.direct.length > 0
-      || data.audience.publicLinks.length > 0
-    ),
-  )
-
+  const chip = scopeTone(label)
   return (
-    <div className="fsdb-scope-detail" ref={wrapRef}>
-      <button
-        type="button"
-        className={`fsdb-scope-tag is-${chip}`}
-        data-testid="fsdb-scope-tag"
-        aria-label={`${label || scopeText(chip)}的可见范围详情`}
-        aria-expanded={open}
-        onPointerDown={(event) => event.stopPropagation()}
-        onClick={(event) => {
-          event.stopPropagation()
-          setAnchorEl(event.currentTarget)
-          setOpen((prev) => !prev)
-        }}
-      >
-        <ScopeMark scope={chip} />
-      </button>
-      {open ? createPortal(
-        <HeadlessDismiss
-          onDismiss={() => setOpen(false)}
-          inside={(node) => Boolean(wrapRef.current?.contains(node) || panelRef.current?.contains(node))}
-        >
-          <div
-            ref={panelRef}
-            className="fsdb-scope-panel"
-            role="dialog"
-            aria-label="可见范围"
-            style={{
-              top: panelPos.top,
-              left: panelPos.left,
-              maxHeight: panelPos.maxHeight,
-              overflowY: 'auto',
-              zIndex: overlayZ(OVERLAY_Z.menu, anchorEl),
-            }}
-          >
-            <header className="fsdb-scope-head">
-              <div>
-                <strong>可见范围</strong>
-                <em>{data?.visibility.summary ?? (error ? '读取失败' : '正在读取…')}</em>
-              </div>
-              <b className={`fsdb-scope-pill is-${chip}`}><ScopeMark scope={chip} /></b>
-            </header>
-
-            {error && !data ? (
-              <p className="fsdb-scope-empty">{error}</p>
-            ) : !data ? (
-              <p className="fsdb-scope-empty">正在读取…</p>
-            ) : data.builtin ? (
-              <p className="fsdb-scope-empty">内置插件随产品提供，所有成员均可查看。</p>
-            ) : !hasAnySource ? (
-              <p className="fsdb-scope-empty">
-                {data.localOnly
-                  ? '仅本机可见，未开启局域网分享链接。'
-                  : '仅创建者自己可见，未继承上级权限，也未通过视图或链接对外开放。'}
-              </p>
-            ) : (
-              <div className="fsdb-scope-sections">
-                {hasInheritance || data.audience.inherited.length > 0 ? (
-                  <section className="fsdb-scope-section">
-                    <h3>继承链</h3>
-                    {hasInheritance ? (
-                      <div className="fsdb-scope-crumb" aria-label="继承路径">
-                        {data.inheritance.ancestors.map((anc) => (
-                          <span key={`${anc.collection}:${anc.recordId}`}>
-                            <strong>{anc.title}</strong>
-                            <i aria-hidden>›</i>
-                          </span>
-                        ))}
-                        <span className="is-current">
-                          <strong>本条</strong>
-                          <em>继承上级</em>
-                        </span>
-                      </div>
-                    ) : null}
-                    {data.audience.inherited.length > 0 ? (
-                      <ul className="fsdb-scope-list">
-                        {data.audience.inherited.map((item) => (
-                          <li key={item.id}>
-                            <div>
-                              <strong>{item.subjectName}</strong>
-                              <em>{subjectNote(item.subjectType, item.audienceKind)} · 来自「{item.sourceTitle}」</em>
-                            </div>
-                            <span>{roleLabel(item.role)}</span>
-                          </li>
-                        ))}
-                      </ul>
-                    ) : null}
-                  </section>
-                ) : null}
-
-                {data.audience.direct.length > 0 ? (
-                  <section className="fsdb-scope-section">
-                    <h3>本条直接授权</h3>
-                    <ul className="fsdb-scope-list">
-                      {data.audience.direct.map((item) => (
-                        <li key={item.id}>
-                          <div>
-                            <strong>{item.subjectName}</strong>
-                            <em>{subjectNote(item.subjectType, item.audienceKind)}</em>
-                          </div>
-                          <span>{roleLabel(item.role)}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  </section>
-                ) : null}
-
-                {data.audience.publicLinks.length > 0 ? (
-                  <section className="fsdb-scope-section">
-                    <h3>{data.localOnly ? '局域网链接' : '公开链接'}</h3>
-                    <ul className="fsdb-scope-list">
-                      {data.audience.publicLinks.map((link) => (
-                        <li key={link.id}>
-                          <div>
-                            <strong>
-                              {link.inheritedFrom
-                                ? '继承的公开链接'
-                                : link.lanOnly
-                                  ? '本条局域网链接'
-                                  : '本条公开链接'}
-                            </strong>
-                            <em>
-                              {link.inheritedFrom
-                                ? `来自「${link.inheritedFrom.title}」 · 获得链接的人可查看`
-                                : link.lanOnly
-                                  ? '同一局域网内打开链接可查看'
-                                  : '获得链接的人可查看'}
-                            </em>
-                          </div>
-                          <span>可查看</span>
-                        </li>
-                      ))}
-                    </ul>
-                  </section>
-                ) : null}
-              </div>
-            )}
-          </div>
-        </HeadlessDismiss>,
-        overlayPortalRoot(anchorEl) ?? document.body,
-      ) : null}
-    </div>
+    <RecordSharePopoverTrigger
+      collection={collection}
+      recordId={recordId}
+      title={title || tableLabel}
+      builtin={builtin}
+      localOnly={localOnly}
+      defaultTab={localOnly ? 'public' : 'collaboration'}
+      className={`fsdb-scope-tag is-${chip}`}
+      testId="fsdb-scope-tag"
+      ariaLabel={`${label || scopeText(chip)}的分享与权限设置`}
+    >
+      <ScopeMark scope={chip} />
+    </RecordSharePopoverTrigger>
   )
 }
 
-/** 我的权限胶囊。点开后展示当前登录用户的生效权限路径与继承链。 */
+/** 我的权限胶囊。点击统一打开右上角同款分享与权限管理弹窗。 */
 export function ShareRoleDetail({
   collection,
   recordId,
   label,
+  title = '',
   tableLabel = '',
   builtin = false,
   localOnly = false,
@@ -270,143 +193,25 @@ export function ShareRoleDetail({
   collection: string
   recordId: string
   label: string
+  title?: string
   tableLabel?: string
   builtin?: boolean
-  /** null：还不知道是不是本机空间，先不要发请求。 */
   localOnly?: boolean | null
 }) {
-  const wrapRef = useRef<HTMLDivElement>(null)
-  const panelRef = useRef<HTMLDivElement>(null)
-  const [open, setOpen] = useState(false)
-  const [anchorEl, setAnchorEl] = useState<HTMLElement | null>(null)
-  const panelPos = useFloatingPosition(anchorEl, panelRef, {
-    placement: 'bottom-start',
-    offset: 6,
-    padding: 8,
-    fallbackWidth: 320,
-    fallbackHeight: 240,
-    enabled: open,
-  })
-  const { data, error } = useAccessExplanation(open, {
-    collection,
-    recordId,
-    tableLabel,
-    builtin,
-    localOnly,
-    roleHint: label,
-  })
-  const shown = open && data ? accessText(data.myAccess.effectiveRole) : accessText(label)
-  const primaryPath = data?.myAccess.paths.find((path) => path.isPrimary) ?? data?.myAccess.paths[0] ?? null
-  const otherPaths = (data?.myAccess.paths ?? []).filter((path) => path !== primaryPath)
-
+  const shown = accessText(label)
   return (
-    <div className="fsdb-scope-detail" ref={wrapRef}>
-      <button
-        type="button"
-        className={`fsdb-scope-tag is-${accessTone(shown)}`}
-        data-testid="fsdb-role-tag"
-        aria-label={`${shown}的我的权限详情`}
-        aria-expanded={open}
-        onPointerDown={(event) => event.stopPropagation()}
-        onClick={(event) => {
-          event.stopPropagation()
-          setAnchorEl(event.currentTarget)
-          setOpen((prev) => !prev)
-        }}
-      >
-        <AccessMark role={shown} />
-      </button>
-      {open ? createPortal(
-        <HeadlessDismiss
-          onDismiss={() => setOpen(false)}
-          inside={(node) => Boolean(wrapRef.current?.contains(node) || panelRef.current?.contains(node))}
-        >
-          <div
-            ref={panelRef}
-            className="fsdb-scope-panel"
-            role="dialog"
-            aria-label="我的权限"
-            style={{
-              top: panelPos.top,
-              left: panelPos.left,
-              maxHeight: panelPos.maxHeight,
-              overflowY: 'auto',
-              zIndex: overlayZ(OVERLAY_Z.menu, anchorEl),
-            }}
-          >
-            <header className="fsdb-scope-head">
-              <div>
-                <strong>我的权限</strong>
-                <em>{data?.myAccess.primarySummary ?? (error ? '读取失败' : '正在读取…')}</em>
-              </div>
-              <b className={`fsdb-scope-pill is-${accessTone(shown)}`}><AccessMark role={shown} /></b>
-            </header>
-
-            {error && !data ? (
-              <p className="fsdb-scope-empty">{error}</p>
-            ) : !primaryPath ? (
-              <p className="fsdb-scope-empty">正在读取…</p>
-            ) : (
-              <div className="fsdb-scope-sections">
-                <section className="fsdb-scope-section">
-                  <h3>生效路径</h3>
-                  {primaryPath.kind === 'inherited' && primaryPath.chain && primaryPath.chain.length > 0 ? (
-                    <ol className="fsdb-scope-tree">
-                      {primaryPath.chain.map((node, index) => {
-                        const isLast = index === primaryPath.chain!.length - 1
-                        return (
-                          <li key={`${node.recordId}:${index}`} className={isLast ? 'is-current' : ''}>
-                            <span className="fsdb-scope-tree-dot" aria-hidden />
-                            <div className="fsdb-scope-tree-body">
-                              <strong>
-                                {node.title}
-                                {isLast ? <span className="fsdb-scope-badge">当前生效</span> : null}
-                              </strong>
-                              <em>{node.note}</em>
-                            </div>
-                            <span className="fsdb-scope-tree-role">{roleLabel(primaryPath.role)}</span>
-                          </li>
-                        )
-                      })}
-                    </ol>
-                  ) : (
-                    <ul className="fsdb-scope-list">
-                      <li>
-                        <div>
-                          <strong>
-                            {primaryPath.title}
-                            <span className="fsdb-scope-badge">当前生效</span>
-                          </strong>
-                          <em>{primaryPath.reason}</em>
-                        </div>
-                        <span>{roleLabel(primaryPath.role)}</span>
-                      </li>
-                    </ul>
-                  )}
-                </section>
-
-                {otherPaths.length > 0 ? (
-                  <section className="fsdb-scope-section is-secondary">
-                    <h3>其他同时命中的途径</h3>
-                    <ul className="fsdb-scope-list">
-                      {otherPaths.map((path) => (
-                        <li key={path.id}>
-                          <div>
-                            <strong>{path.title}</strong>
-                            <em>{path.reason}</em>
-                          </div>
-                          <span>{roleLabel(path.role)}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  </section>
-                ) : null}
-              </div>
-            )}
-          </div>
-        </HeadlessDismiss>,
-        overlayPortalRoot(anchorEl) ?? document.body,
-      ) : null}
-    </div>
+    <RecordSharePopoverTrigger
+      collection={collection}
+      recordId={recordId}
+      title={title || tableLabel}
+      builtin={builtin}
+      localOnly={localOnly}
+      defaultTab={localOnly ? 'public' : 'collaboration'}
+      className={`fsdb-scope-tag is-${accessTone(shown)}`}
+      testId="fsdb-role-tag"
+      ariaLabel={`${shown}的分享与权限设置`}
+    >
+      <AccessMark role={shown} />
+    </RecordSharePopoverTrigger>
   )
 }

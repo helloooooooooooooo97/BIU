@@ -4,7 +4,8 @@ import { TagChip, TagChips } from '@biu/biu-ui/tag-chip'
 import { normalizeSchemaValue, type CollectionActionInfo, type CollectionInfo, type CollectionSchema, type DbRecord, type FieldSpec, type PersonValue } from '@biu/type-file-system'
 import type { CollectionChrome } from '@biu/type-file-system/ui'
 import { CellPop } from './cell-pop.tsx'
-import { PLUGINS_COLLECTION_PATH, TAGS_COLLECTION_PATH } from './database-path.ts'
+import { stampRowOpenTarget } from '../catalog-views.ts'
+import { DATA_COLLECTION_PATH, PLUGINS_COLLECTION_PATH, TAGS_COLLECTION_PATH } from './database-path.ts'
 import {
   formatField,
   isRecordLinkField,
@@ -93,14 +94,18 @@ export function renderBrowserCell(
     const raw = String(row[key] ?? (localData ? '私人' : ''))
     const label = localData && raw === '空间' ? '私人' : raw
     const hasExternal = Boolean((row as { hasExternal?: unknown }).hasExternal)
+    const target = collectionPath === DATA_COLLECTION_PATH ? stampRowOpenTarget(row) : null
+    const targetCollection = target?.collection ?? collectionPath
+    const targetRecordId = target?.recordId ?? row.id
     return (
       <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
         <ShareScopeDetail
-          collection={collectionPath}
-          recordId={row.id}
+          collection={targetCollection}
+          recordId={targetRecordId}
           label={label}
+          title={String(row.title ?? currentTable?.label ?? '')}
           tableLabel={currentTable?.label}
-          builtin={collectionPath === PLUGINS_COLLECTION_PATH && row.builtin === true}
+          builtin={targetCollection === PLUGINS_COLLECTION_PATH && row.builtin === true}
           localOnly={localKnown ? localData : null}
         />
         {hasExternal ? (
@@ -121,13 +126,17 @@ export function renderBrowserCell(
     )
   }
   if (key === 'shareRole') {
+    const target = collectionPath === DATA_COLLECTION_PATH ? stampRowOpenTarget(row) : null
+    const targetCollection = target?.collection ?? collectionPath
+    const targetRecordId = target?.recordId ?? row.id
     return (
       <ShareRoleDetail
-        collection={collectionPath}
-        recordId={row.id}
+        collection={targetCollection}
+        recordId={targetRecordId}
         label={String(row[key] ?? '')}
+        title={String(row.title ?? currentTable?.label ?? '')}
         tableLabel={currentTable?.label}
-        builtin={collectionPath === PLUGINS_COLLECTION_PATH && row.builtin === true}
+        builtin={targetCollection === PLUGINS_COLLECTION_PATH && row.builtin === true}
         localOnly={localKnown ? localData : null}
       />
     )

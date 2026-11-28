@@ -140,7 +140,7 @@ test('record share page supports inheriting subpages directory, unified inherita
   assert.match(popover, /data-testid="fsdb-share-inherited"/)
   assert.match(popover, /data-testid="fsdb-share-public-inherit"/)
   assert.match(popover, /data-testid="fsdb-share-inherited-public"/)
-  assert.match(detail, /继承的公开链接/)
+  assert.match(detail, /<SharePanel/)
   assert.match(browser, /for \(const parentId of Object\.keys\(treeKidsByParentRef\.current\)\)/)
 })
 

@@ -2,6 +2,7 @@ import { readStorageString, removeStorageKey, writeStorageString } from '@biu/bi
 import { useEffect, useRef, useState } from 'react'
 import { ArrowPathIcon, CheckIcon, LinkIcon, ShareIcon } from '@heroicons/react/16/solid'
 import { HeadlessDismiss } from '@biu/biu-ui/headless-dismiss'
+import { claimOverlayOpen, releaseOverlayOpen } from '@biu/biu-ui/overlay-portal'
 import { VIEWS_COLLECTION_PATH } from './database-path.ts'
 import {
   fetchRecordAccess,
@@ -16,7 +17,7 @@ import { WorkspaceAccess } from './share-workspace-access.tsx'
 
 export { FSDB_OPEN_VIEW_SHARE_EVENT }
 export { ShareScopeLabel, ShareRoleLabel } from './share-scope-label.tsx'
-export { ShareScopeDetail, ShareRoleDetail } from './share-chain-detail.tsx'
+export const SHARE_POPOVER_OVERLAY_GROUP = 'fsdb-share-popover'
 
 export type ShareKind = 'record'
 
@@ -87,8 +88,24 @@ export function ShareButton({
   localOnly?: boolean
 }) {
   const wrapRef = useRef<HTMLDivElement>(null)
+  const overlayIdRef = useRef(Symbol('fsdb-share-button'))
   const [open, setOpen] = useState(false)
   const [hasActiveShare, setHasActiveShare] = useState(false)
+
+  useEffect(() => {
+    if (!open) return
+    const overlayId = overlayIdRef.current
+    claimOverlayOpen(
+      {
+        id: overlayId,
+        group: SHARE_POPOVER_OVERLAY_GROUP,
+        close: () => setOpen(false),
+        contentEl: () => wrapRef.current,
+      },
+      wrapRef.current,
+    )
+    return () => releaseOverlayOpen(overlayId)
+  }, [open])
 
   useEffect(() => {
     if (!target) {
@@ -182,13 +199,17 @@ export function SharePanel({
   target,
   embedded = false,
   localOnly = false,
+  defaultTab,
 }: {
   target: ShareTarget
   embedded?: boolean
   localOnly?: boolean
+  defaultTab?: 'public' | 'collaboration'
 }) {
   const [tab, setTab] = useState<'public' | 'collaboration'>(
-    !localOnly && target.collection === VIEWS_COLLECTION_PATH ? 'collaboration' : 'public',
+    localOnly
+      ? 'public'
+      : defaultTab ?? (target.collection === VIEWS_COLLECTION_PATH ? 'collaboration' : 'public'),
   )
   const [share, setShare] = useState<ShareInfo | null>(null)
   const [inheritedShare, setInheritedShare] = useState<InheritedShareInfo | null>(null)
