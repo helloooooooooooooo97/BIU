@@ -14,6 +14,7 @@ import { CollabStore } from '@biu/host-account/store'
 import {
   ChannelService,
   MAX_CHANNEL_HANDOFF_HOPS,
+  buildReadonlySessionContextSummary,
   redactChannelRunEvents,
   registerChannelRoutes,
   resolveMentionedAgents,
@@ -764,6 +765,134 @@ describe('Slack-style Group Channels: RBAC, Mention Dispatch, Per-Invoker Queue,
       const afterHard = asUser(alice.id, () => svc.getChannelDetail(created.channel.id))
       const hardAgentIds = afterHard.members.filter((m) => m.memberType === 'agent').map((m) => m.memberId)
       assert.deepEqual(hardAgentIds, ['ag-keep'])
+    } finally {
+      svc.dispose()
+      db.close()
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('projects 1v1 project & work summary read-only into channel, tags owner vs member, blocks non-owner mode/sync, and never pollutes 1v1', async () => {
+    const summaryText = buildReadonlySessionContextSummary({
+      project: { name: 'hello', path: '/workspace/hello' },
+      goal: { objective: '定位支付 502', status: 'pursuing' },
+      events: [
+        { type: 'user/message', text: '排查一下支付回调为什么偶发 502' },
+        { type: 'assistant/message', text: '已定位到上游网关超时配置偏短，需调高至 30s。' },
+      ],
+    })
+    assert.ok(summaryText.includes('绑定项目：hello · /workspace/hello'))
+    assert.ok(summaryText.includes('已定位到上游网关超时配置偏短'))
+
+    const dir = mkdtempSync(join(tmpdir(), 'biu-channels-projection-'))
+    const db = openAndMigrateBiu(join(dir, 'biu.sqlite'))
+    const store = new CollabStore(db)
+    const alice = store.register('Alice', Date.now(), 'pass123456', 'alice@example.com')
+    const bob = store.register('Bob', Date.now(), 'pass123456', 'bob@example.com')
+    const ws = store.createWorkspace(alice.id, 'Proj WS')
+    store.addMemberByEmail(alice.id, ws.id, 'bob@example.com')
+    runWithAccount(alice.id, () =>
+      runWithRequestWorkspace(ws.id, () => {
+        store.attach(ws.id, '/agents', 'ag-diag', Date.now(), { accessMode: 'private' })
+      }),
+    )
+
+    const appendedTo1v1: Array<{ id: string; body: { type: string; text: string; kind?: string } }> = []
+    const capturedPrompts: Array<{ system: string; users: string[] }> = []
+
+    const fakeCtx = {
+      get: (key: string) => (key === 'account' ? { store } : undefined),
+      account: { store },
+      sessions: {
+        peekSummary: (id: string) =>
+          id === 'ag-diag'
+            ? { id, title: '项目问题诊断', project: { name: 'hello', path: '/workspace/hello' }, config: {} }
+            : null,
+        require: async (id: string) => {
+          if (id !== 'ag-diag') throw new Error('not found')
+          return {
+            id,
+            title: '项目问题诊断',
+            project: { name: 'hello', path: '/workspace/hello' },
+            events: [
+              { type: 'user/message', text: '排查支付 502 根因' },
+              { type: 'assistant/message', text: '确认是连接池耗尽导致的 502。' },
+            ],
+          }
+        },
+        append: async (id: string, body: { type: string; text: string; kind?: string }) => {
+          appendedTo1v1.push({ id, body })
+        },
+      },
+      tools: { schemas: () => [], invoke: async () => ({ ok: true }) },
+      http: { broadcast: () => undefined, broadcastAccount: () => undefined },
+      effect: () => undefined,
+    } as unknown as Context
+
+    const svc = new ChannelService(
+      fakeCtx,
+      () => ({
+        chat: async (messages) => {
+          const system = String(messages.find((m) => m.role === 'system')?.content ?? '')
+          const users = messages.filter((m) => m.role === 'user').map((m) => String(m.content ?? ''))
+          capturedPrompts.push({ system, users })
+          return { content: '结论：连接池耗尽导致 502，已同步方案。', toolCalls: [] }
+        },
+      }),
+      { db },
+    )
+    const asUser = <T>(acc: string, fn: () => T) => runWithAccount(acc, () => runWithRequestWorkspace(ws.id, fn))
+
+    try {
+      // 默认创建为 summary（单向只读投影）
+      const ch = asUser(alice.id, () =>
+        svc.createChannel({ name: '排障群', memberAccountIds: [bob.id], agentIds: ['ag-diag'] }),
+      )
+      assert.equal(ch.members.find((m) => m.memberId === 'ag-diag')?.contextMode, 'summary')
+
+      // Bob（非归属人）在群里 @ Alice 的 Agent
+      asUser(bob.id, () => svc.sendMessage(ch.channel.id, { text: '@项目问题诊断 同步一下刚才排查的结论' }))
+      await waitFor(() => capturedPrompts.length === 1)
+
+      // 1. 系统提示词单向投影了项目和 1v1 摘要 + 防干扰护栏
+      assert.ok(capturedPrompts[0]!.system.includes('【主工作台只读背景'))
+      assert.ok(capturedPrompts[0]!.system.includes('绑定项目：hello · /workspace/hello'))
+      assert.ok(capturedPrompts[0]!.system.includes('确认是连接池耗尽导致的 502'))
+      assert.ok(capturedPrompts[0]!.system.includes('非归属人无权通过群聊指令修改'))
+      // 2. 消息明确区分归属人 vs 群成员
+      assert.ok(capturedPrompts[0]!.users.some((u) => u.includes('[Bob · 群成员]:')))
+      // 3. 严格单向只读：群聊对话绝对不会自动写回 1v1
+      assert.equal(appendedTo1v1.length, 0)
+
+      // 4. 非归属人（Bob）不能切换 Alice 的 Agent 的上下文模式，也不能向其 1v1 同步写回
+      assert.throws(
+        () => asUser(bob.id, () => svc.updateAgentContextMode(ch.channel.id, 'ag-diag', 'isolated')),
+        /permission denied/,
+      )
+      await assert.rejects(
+        () => asUser(bob.id, () => svc.syncChannelToAgent(ch.channel.id, 'ag-diag')),
+        /permission denied/,
+      )
+
+      // 5. 归属人（Alice）切换为 isolated（仅群聊隔离）后，再次 @ 不再注入 1v1 背景
+      const updatedMembers = asUser(alice.id, () => svc.updateAgentContextMode(ch.channel.id, 'ag-diag', 'isolated'))
+      assert.equal(updatedMembers.find((m) => m.memberId === 'ag-diag')?.contextMode, 'isolated')
+
+      asUser(alice.id, () => svc.sendMessage(ch.channel.id, { text: '@项目问题诊断 现在呢？' }))
+      await waitFor(() => capturedPrompts.length === 2)
+      assert.equal(capturedPrompts[1]!.system.includes('【主工作台只读背景'), false)
+      assert.ok(capturedPrompts[1]!.users.some((u) => u.includes('[Alice · 归属人]:')))
+      assert.equal(appendedTo1v1.length, 0)
+
+      // 6. 归属人（Alice）手动同步某条群聊结论回 1v1 主工作台 → 成功写入
+      const agentReplyMsg = asUser(alice.id, () => svc.listMessages(ch.channel.id)).find((m) => m.senderType === 'agent')
+      assert.ok(agentReplyMsg)
+      const syncRes = await asUser(alice.id, () => svc.syncChannelToAgent(ch.channel.id, 'ag-diag', agentReplyMsg.id))
+      assert.equal(syncRes.ok, true)
+      assert.equal(appendedTo1v1.length, 1)
+      assert.equal(appendedTo1v1[0]!.id, 'ag-diag')
+      assert.ok(appendedTo1v1[0]!.body.text.includes('来自聊天「#排障群」的同步结论'))
+      assert.ok(appendedTo1v1[0]!.body.text.includes('连接池耗尽导致 502'))
     } finally {
       svc.dispose()
       db.close()

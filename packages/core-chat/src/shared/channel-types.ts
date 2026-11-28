@@ -30,6 +30,8 @@ export type ChannelAccessMode = 'private' | 'workspace'
 export type ChannelMemberType = 'account' | 'agent'
 export type ChannelMemberRole = 'owner' | 'admin' | 'member'
 export type ChannelSenderType = 'account' | 'agent' | 'system'
+/** 群内 Agent 上下文模式：summary=单向只读投影主工作台项目与近期摘要；isolated=仅看当前群聊 */
+export type ChannelAgentContextMode = 'summary' | 'isolated'
 
 export interface ChannelMention {
   kind: 'account' | 'agent' | 'everyone'
@@ -72,6 +74,8 @@ export interface ChannelMemberView {
   ownerName?: string
   systemPrompt?: string
   model?: string
+  contextMode?: ChannelAgentContextMode
+  projectName?: string
   isOwn?: boolean
 }
 

@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom'
 import {
   ArrowUpIcon,
   ArrowUturnLeftIcon,
+  BookmarkSquareIcon,
   CheckIcon,
   ChevronDoubleLeftIcon,
   ChevronDoubleRightIcon,
@@ -29,6 +30,7 @@ import { useWorkspaceProfile } from '@biu/biu-ui/use-workspace-profile'
 import { SidebarMascot, resolveSessionMascot } from '@biu/public-mascot'
 import { bindSessionView, sessionAppPath, type SessionViewService } from '@biu/web-session-view'
 import type {
+  ChannelAgentContextMode,
   ChannelMemberView,
   ChannelMention,
   ChannelMessageView,
@@ -44,6 +46,8 @@ import {
   removeChannelMember,
   renameChannel,
   sendChannelMessage,
+  syncChannelToAgent,
+  updateChannelAgentContextMode,
   useChannelStore,
 } from './channel-store.ts'
 
@@ -210,6 +214,7 @@ export const ChannelStage = memo(function ChannelStage({
   const [namingTitle, setNamingTitle] = useState(false)
   const [editingTitle, setEditingTitle] = useState(false)
   const [titleDraft, setTitleDraft] = useState('')
+  const [syncedMsgIds, setSyncedMsgIds] = useState<Record<string, boolean>>({})
 
   const scrollRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
@@ -667,6 +672,31 @@ export const ChannelStage = memo(function ChannelStage({
                           ) : (
                             <>
                               {isAgent ? <MessageCopyAction text={msg.text} /> : null}
+                              {isAgent && memberById.get(`agent:${msg.senderId}`)?.isOwn ? (
+                                <button
+                                  type="button"
+                                  className="inline-flex shrink-0 cursor-pointer items-center gap-1 rounded-md border border-transparent bg-transparent px-1.5 py-0.5 text-(length:--biu-chat-ui-font-size) leading-none text-(--biu-color-text-subtle) opacity-0 transition-opacity hover:bg-(--biu-color-bg-hover) hover:text-(--biu-color-text) group-hover:opacity-100"
+                                  title="仅归属人可见：将本条结论手动沉淀回该代理的 1v1 主工作台"
+                                  data-testid={`channel-msg-sync-${msg.id}`}
+                                  onClick={() => {
+                                    void syncChannelToAgent(channelId, msg.senderId, msg.id)
+                                      .then(() => {
+                                        setSyncedMsgIds((prev) => ({ ...prev, [msg.id]: true }))
+                                        window.setTimeout(() => {
+                                          setSyncedMsgIds((prev) => ({ ...prev, [msg.id]: false }))
+                                        }, 1800)
+                                      })
+                                      .catch((err) => setError(err instanceof Error ? err.message : String(err)))
+                                  }}
+                                >
+                                  {syncedMsgIds[msg.id] ? (
+                                    <CheckIcon className="size-3 text-emerald-500" />
+                                  ) : (
+                                    <BookmarkSquareIcon className="size-3" />
+                                  )}
+                                  <span>{syncedMsgIds[msg.id] ? '已同步' : '同步到 1v1'}</span>
+                                </button>
+                              ) : null}
                               <button
                                 type="button"
                                 className="inline-flex shrink-0 cursor-pointer items-center gap-1 rounded-md border border-transparent bg-transparent px-1.5 py-0.5 text-(length:--biu-chat-ui-font-size) leading-none text-(--biu-color-text-subtle) opacity-0 transition-opacity hover:bg-(--biu-color-bg-hover) hover:text-(--biu-color-text) group-hover:opacity-100"
@@ -1011,6 +1041,8 @@ function ChannelMembersModal({
   const allSessions = useSessionView ? useSessionView((s) => s.sessions) : []
   const [wsMembers, setWsMembers] = useState<Array<{ id: string; name: string; avatar?: string }>>([])
   const [error, setError] = useState('')
+  const [syncNotice, setSyncNotice] = useState('')
+  const [busyAgentId, setBusyAgentId] = useState<string | null>(null)
 
   useEffect(() => {
     const params = new URLSearchParams({ path: '/workspace-members', limit: '200', columns: 'title,email,avatar' })
@@ -1058,6 +1090,33 @@ function ChannelMembersModal({
     }
   }
 
+  const handleToggleContextMode = async (agentId: string, current?: ChannelAgentContextMode) => {
+    setError('')
+    setBusyAgentId(agentId)
+    try {
+      const next: ChannelAgentContextMode = current === 'isolated' ? 'summary' : 'isolated'
+      await updateChannelAgentContextMode(channelId, agentId, next)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setBusyAgentId(null)
+    }
+  }
+
+  const handleSyncAgent = async (agentId: string, agentName: string) => {
+    setError('')
+    setSyncNotice('')
+    setBusyAgentId(agentId)
+    try {
+      await syncChannelToAgent(channelId, agentId)
+      setSyncNotice(`已将近期聊天结论同步到「${agentName}」的 1v1 主工作台。`)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setBusyAgentId(null)
+    }
+  }
+
   return createPortal(
     <div
       className="biu-float-overlay"
@@ -1080,6 +1139,11 @@ function ChannelMembersModal({
               {error}
             </div>
           ) : null}
+          {syncNotice ? (
+            <div className="mb-3 rounded-[var(--biu-radius-md)] border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-[12px] text-emerald-400">
+              {syncNotice}
+            </div>
+          ) : null}
 
           <div className="scfg-sections">
             {/* 当前在群 Agent */}
@@ -1094,28 +1158,64 @@ function ChannelMembersModal({
                 <ul className="scfg-tools-list">
                   {members
                     .filter((m) => m.memberType === 'agent')
-                    .map((a) => (
-                      <li key={a.memberId} className="scfg-tool-row is-active">
-                        <SidebarMascot
-                          size={18}
-                          sessionId={a.memberId}
-                          identity={resolveSessionMascot(a.memberId, a.mascot)}
-                          animate={false}
-                          title=""
-                        />
-                        <span className="scfg-tool-name !font-sans font-medium">{a.name}</span>
-                        <span className="scfg-hint shrink-0">归属 {a.ownerName}</span>
-                        {a.isOwn || canManageMembers ? (
-                          <button
-                            type="button"
-                            className="ml-2 cursor-pointer border-0 bg-transparent p-0 text-[12px] text-(--biu-color-danger) hover:underline"
-                            onClick={() => void handleRemove('agent', a.memberId)}
-                          >
-                            移出
-                          </button>
-                        ) : null}
-                      </li>
-                    ))}
+                    .map((a) => {
+                      const mode: ChannelAgentContextMode = a.contextMode === 'isolated' ? 'isolated' : 'summary'
+                      const isBusy = busyAgentId === a.memberId
+                      return (
+                        <li key={a.memberId} className="scfg-tool-row is-active flex-wrap gap-y-1.5">
+                          <SidebarMascot
+                            size={18}
+                            sessionId={a.memberId}
+                            identity={resolveSessionMascot(a.memberId, a.mascot)}
+                            animate={false}
+                            title=""
+                          />
+                          <span className="scfg-tool-name !font-sans font-medium">{a.name}</span>
+                          <span className="scfg-hint shrink-0">归属 {a.ownerName}</span>
+                          {a.isOwn ? (
+                            <>
+                              <button
+                                type="button"
+                                disabled={isBusy}
+                                data-testid={`agent-context-mode-${a.memberId}`}
+                                className="cursor-pointer rounded-md border border-(--biu-color-border) bg-(--biu-color-bg-subtle) px-1.5 py-0.5 text-[11px] text-(--biu-color-text-muted) hover:bg-(--biu-color-bg-hover) hover:text-(--biu-color-text) disabled:opacity-50"
+                                title={
+                                  mode === 'summary'
+                                    ? '当前：单向只读投影项目与 1v1 工作摘要（点击切换为仅群聊隔离）'
+                                    : '当前：仅群聊隔离（点击切换为同步工作摘要）'
+                                }
+                                onClick={() => void handleToggleContextMode(a.memberId, mode)}
+                              >
+                                {mode === 'summary' ? '同步工作摘要' : '仅群聊隔离'}
+                              </button>
+                              <button
+                                type="button"
+                                disabled={isBusy}
+                                data-testid={`agent-sync-channel-${a.memberId}`}
+                                className="cursor-pointer border-0 bg-transparent p-0 text-[11.5px] text-(--biu-color-text-muted) hover:text-(--biu-color-text) hover:underline disabled:opacity-50"
+                                title="将当前聊天近期结论手动同步回该代理的 1v1 主工作台"
+                                onClick={() => void handleSyncAgent(a.memberId, a.name)}
+                              >
+                                沉淀到 1v1
+                              </button>
+                            </>
+                          ) : (
+                            <span className="rounded bg-(--biu-color-bg-muted) px-1.5 py-0.5 text-[11px] text-(--biu-color-text-subtle)">
+                              {mode === 'summary' ? '同步摘要' : '仅群聊'}
+                            </span>
+                          )}
+                          {a.isOwn || canManageMembers ? (
+                            <button
+                              type="button"
+                              className="ml-1 cursor-pointer border-0 bg-transparent p-0 text-[12px] text-(--biu-color-danger) hover:underline"
+                              onClick={() => void handleRemove('agent', a.memberId)}
+                            >
+                              移出
+                            </button>
+                          ) : null}
+                        </li>
+                      )
+                    })}
                 </ul>
               )}
 

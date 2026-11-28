@@ -509,8 +509,10 @@ test('CreateChannelDialog replaces name/topic fields with search box and builds 
   assert.ok(dialog.textContent?.includes('赤板灵'))
   assert.equal(dialog.textContent?.includes('紫晶美'), false)
 
-  // 先勾选 Agent「赤板灵」
+  // 先勾选 Agent「赤板灵」→ 显示只读上下文模式开关，可切换为仅群聊隔离
   fireEvent.click(view.getByText('赤板灵'))
+  assert.ok(view.getByTestId('create-channel-agent-context-mode'))
+  fireEvent.click(view.getByTestId('create-context-mode-isolated'))
 
   // 清空搜索并勾选人类成员「97」
   fireEvent.change(searchInput, { target: { value: '' } })
@@ -523,5 +525,105 @@ test('CreateChannelDialog replaces name/topic fields with search box and builds 
   fireEvent.click(view.getByTestId('create-channel-submit'))
   await waitFor(() => {
     assert.equal(postedBody?.name, 'Alice、97、赤板灵')
+    assert.equal(postedBody?.agentContextMode, 'isolated')
+  })
+})
+
+test('ChannelStage allows agent owner to toggle contextMode and manually sync conclusions back to 1v1', async () => {
+  let patchedMode: string | null = null
+  let syncedPayload: Record<string, unknown> | null = null
+  const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = new URL(String(input), 'http://test.local')
+    if (url.pathname === '/api/channels/ch-own' && (!init?.method || init.method === 'GET')) {
+      return new Response(
+        JSON.stringify({
+          channel: {
+            id: 'ch-own',
+            workspaceId: 'ws-1',
+            kind: 'channel',
+            dmKey: '',
+            name: '排障群',
+            topic: '',
+            accessMode: 'private',
+            createdBy: 'acc-alice',
+            createdAt: 1,
+            updatedAt: 10,
+            memberCount: 1,
+            agentCount: 1,
+            lastMessageAt: 10,
+            lastMessageText: '已定位根因',
+          },
+          members: [
+            { channelId: 'ch-own', memberType: 'account', memberId: 'acc-alice', role: 'owner', addedBy: 'acc-alice', addedAt: 1, name: 'Alice', isOwn: true },
+            { channelId: 'ch-own', memberType: 'agent', memberId: 'ag-mine', role: 'member', addedBy: 'acc-alice', addedAt: 1, name: '排障助手', ownerAccountId: 'acc-alice', ownerName: 'Alice', contextMode: 'summary', isOwn: true },
+          ],
+          messages: [
+            {
+              id: 'm-ag',
+              channelId: 'ch-own',
+              seq: 1,
+              senderType: 'agent',
+              senderId: 'ag-mine',
+              senderName: '排障助手',
+              replyToId: '',
+              text: '已定位根因：超时设置偏短',
+              mentions: [],
+              traceId: 'run-own',
+              ephemeralTo: '',
+              createdAt: 10,
+            },
+          ],
+          activities: [],
+          myAccountId: 'acc-alice',
+          canManageMembers: true,
+        }),
+        { status: 200 },
+      )
+    }
+    if (url.pathname === '/api/channels/ch-own/members/agent/ag-mine' && init?.method === 'PATCH') {
+      const body = JSON.parse(String(init.body ?? '{}')) as { contextMode?: string }
+      patchedMode = body.contextMode ?? null
+      return new Response(
+        JSON.stringify({
+          members: [
+            { channelId: 'ch-own', memberType: 'account', memberId: 'acc-alice', role: 'owner', addedBy: 'acc-alice', addedAt: 1, name: 'Alice', isOwn: true },
+            { channelId: 'ch-own', memberType: 'agent', memberId: 'ag-mine', role: 'member', addedBy: 'acc-alice', addedAt: 1, name: '排障助手', ownerAccountId: 'acc-alice', ownerName: 'Alice', contextMode: patchedMode, isOwn: true },
+          ],
+        }),
+        { status: 200 },
+      )
+    }
+    if (url.pathname === '/api/channels/ch-own/sync-to-agent' && init?.method === 'POST') {
+      syncedPayload = JSON.parse(String(init.body ?? '{}')) as Record<string, unknown>
+      return new Response(JSON.stringify({ ok: true, agentId: 'ag-mine', syncedText: 'ok' }), { status: 200 })
+    }
+    return new Response(JSON.stringify({ items: [] }), { status: 200 })
+  })
+  vi.stubGlobal('fetch', fetchMock)
+
+  const view = render(
+    <MemoryRouter initialEntries={['/channels/ch-own']}>
+      <ChannelStage channelId="ch-own" />
+    </MemoryRouter>,
+  )
+
+  await waitFor(() => {
+    assert.ok(view.getByTestId('channel-msg-sync-m-ag'))
+  })
+
+  // 归属人点击单条消息上的「同步到 1v1」
+  fireEvent.click(view.getByTestId('channel-msg-sync-m-ag'))
+  await waitFor(() => {
+    assert.deepEqual(syncedPayload, { agentId: 'ag-mine', messageId: 'm-ag' })
+  })
+
+  // 打开群成员与 Agent 弹窗并切换只读上下文模式
+  fireEvent.click(view.getByTestId('channel-manage-members'))
+  const toggleBtn = await waitFor(() => view.getByTestId('agent-context-mode-ag-mine'))
+  assert.equal(toggleBtn.textContent, '同步工作摘要')
+  fireEvent.click(toggleBtn)
+  await waitFor(() => {
+    assert.equal(patchedMode, 'isolated')
+    assert.equal(view.getByTestId('agent-context-mode-ag-mine').textContent, '仅群聊隔离')
   })
 })

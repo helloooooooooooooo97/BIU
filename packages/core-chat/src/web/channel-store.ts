@@ -4,6 +4,7 @@ import { useSyncExternalStore } from 'react'
 import type {
   ChannelAccessMode,
   ChannelAgentActivity,
+  ChannelAgentContextMode,
   ChannelDetailPayload,
   ChannelMemberType,
   ChannelMemberView,
@@ -113,6 +114,7 @@ export async function createChannel(input: {
   accessMode?: ChannelAccessMode
   memberAccountIds?: string[]
   agentIds?: string[]
+  agentContextMode?: ChannelAgentContextMode
 }): Promise<ChannelDetailPayload> {
   const res = await apiFetch('/api/channels', {
     method: 'POST',
@@ -206,11 +208,12 @@ export async function addChannelMember(
   channelId: string,
   memberType: ChannelMemberType,
   memberId: string,
+  contextMode?: ChannelAgentContextMode,
 ): Promise<ChannelMemberView[]> {
   const res = await apiFetch(`/api/channels/${encodeURIComponent(channelId)}/members`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ memberType, memberId }),
+    body: JSON.stringify({ memberType, memberId, ...(contextMode ? { contextMode } : {}) }),
   })
   const body = (await res.json()) as { members?: ChannelMemberView[]; error?: string }
   if (!res.ok) throw new Error(body.error || '添加失败')
@@ -224,6 +227,48 @@ export async function addChannelMember(
     }
   })
   return members
+}
+
+export async function updateChannelAgentContextMode(
+  channelId: string,
+  agentId: string,
+  contextMode: ChannelAgentContextMode,
+): Promise<ChannelMemberView[]> {
+  const res = await apiFetch(
+    `/api/channels/${encodeURIComponent(channelId)}/members/agent/${encodeURIComponent(agentId)}`,
+    {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ contextMode }),
+    },
+  )
+  const body = (await res.json()) as { members?: ChannelMemberView[]; error?: string }
+  if (!res.ok) throw new Error(body.error || '更新上下文模式失败')
+  const members = body.members ?? []
+  setState((prev) => {
+    const detail = prev.details[channelId]
+    if (!detail) return prev
+    return {
+      ...prev,
+      details: { ...prev.details, [channelId]: { ...detail, members } },
+    }
+  })
+  return members
+}
+
+export async function syncChannelToAgent(
+  channelId: string,
+  agentId: string,
+  messageId?: string,
+): Promise<{ ok: true; agentId: string; syncedText: string }> {
+  const res = await apiFetch(`/api/channels/${encodeURIComponent(channelId)}/sync-to-agent`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ agentId, ...(messageId ? { messageId } : {}) }),
+  })
+  const body = (await res.json()) as { ok?: true; agentId?: string; syncedText?: string; error?: string }
+  if (!res.ok || !body.ok) throw new Error(body.error || '同步到代理失败')
+  return { ok: true, agentId: body.agentId ?? agentId, syncedText: body.syncedText ?? '' }
 }
 
 export async function removeChannelMember(
