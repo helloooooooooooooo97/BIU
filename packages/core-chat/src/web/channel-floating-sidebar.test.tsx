@@ -74,7 +74,7 @@ test('ChannelFloatingSidebar collapses to avatar rail, expands on hover, persist
   const clickedAgents: string[] = []
   const dmTargets: string[] = []
   let pinsOpened = 0
-  let summarizeOpened = 0
+  const summarizeCalls: boolean[] = []
 
   const renderSidebar = () =>
     render(
@@ -96,8 +96,8 @@ test('ChannelFloatingSidebar collapses to avatar rail, expands on hover, persist
           pinsOpened += 1
         }}
         onOpenSaved={() => {}}
-        onSummarize={() => {
-          summarizeOpened += 1
+        onSummarize={(unreadOnly) => {
+          summarizeCalls.push(Boolean(unreadOnly))
         }}
         onToggleSearch={() => {}}
         onToggleChannelPinned={() => {}}
@@ -129,14 +129,19 @@ test('ChannelFloatingSidebar collapses to avatar rail, expands on hover, persist
   // 快捷入口：在右侧悬浮面板内原地切换置顶、总结、搜索
   fireEvent.click(view.getByTestId('channel-quick-pins'))
   assert.equal(Boolean(view.queryByTestId('channel-pins-modal')), true)
+  // 切换到总结 Tab 不应自动触发 AI 调用；切换范围也不自动调用，点击「生成总结」才触发
   fireEvent.click(view.getByTestId('channel-quick-summarize'))
   assert.equal(Boolean(view.queryByTestId('channel-summary-modal')), true)
+  assert.deepEqual(summarizeCalls, [])
+  fireEvent.click(view.getByTestId('channel-summary-scope-unread'))
+  assert.deepEqual(summarizeCalls, [])
+  fireEvent.click(view.getByTestId('channel-summary-generate'))
+  assert.deepEqual(summarizeCalls, [true])
   fireEvent.click(view.getByTestId('channel-quick-search'))
   assert.equal(Boolean(view.queryByTestId('channel-search-input')), true)
   fireEvent.click(view.getByTestId('channel-quick-roster'))
   fireEvent.click(view.getByTestId('channel-roster-dm-acc-lulu'))
   assert.equal(pinsOpened, 1)
-  assert.equal(summarizeOpened, 1)
   assert.deepEqual(dmTargets, ['acc-lulu'])
 
   // 点击图钉固定右侧栏，持久化到 localStorage，重新挂载后保持展开常驻

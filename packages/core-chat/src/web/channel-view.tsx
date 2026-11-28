@@ -383,6 +383,7 @@ export const ChannelStage = memo(function ChannelStage({
 
   const scrollRef = useRef<HTMLDivElement>(null)
   const composerRef = useRef<ChannelComposerHandle>(null)
+  const summaryReqIdRef = useRef(0)
   const titleInputRef = useRef<HTMLInputElement>(null)
   const headerMenuRef = useRef<HTMLDivElement>(null)
   const nearBottomRef = useRef(true)
@@ -405,6 +406,8 @@ export const ChannelStage = memo(function ChannelStage({
     setHeaderMenuOpen(false)
     setMsgMenu(null)
     setFloatingTab(null)
+    summaryReqIdRef.current += 1
+    setSummaryState({ loading: false, summary: '', messageCount: 0, scopeLabel: '近期消息', error: '' })
     nearBottomRef.current = true
     prevMsgCountRef.current = 0
     prevLastMsgIdRef.current = ''
@@ -576,6 +579,7 @@ export const ChannelStage = memo(function ChannelStage({
 
   const handleSummarize = useCallback(
     (unreadOnly = false) => {
+      const reqId = ++summaryReqIdRef.current
       setFloatingTab('summary')
       setSummaryState({
         loading: true,
@@ -586,6 +590,7 @@ export const ChannelStage = memo(function ChannelStage({
       })
       void summarizeChannel(channelId, unreadOnly)
         .then((res) => {
+          if (summaryReqIdRef.current !== reqId) return
           setSummaryState({
             loading: false,
             summary: res.summary,
@@ -595,6 +600,7 @@ export const ChannelStage = memo(function ChannelStage({
           })
         })
         .catch((err) => {
+          if (summaryReqIdRef.current !== reqId) return
           setSummaryState((prev) => ({
             ...prev,
             loading: false,
