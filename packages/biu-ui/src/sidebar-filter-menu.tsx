@@ -158,7 +158,7 @@ function ChevronRightGlyph({ open }: { open: boolean }) {
 
 function CheckGlyph() {
   return (
-    <svg viewBox="0 0 16 16" fill="none" aria-hidden="true" className="size-3.5 shrink-0 text-sky-400">
+    <svg viewBox="0 0 16 16" fill="none" aria-hidden="true" className="size-3.5 shrink-0 text-(--biu-color-emphasis)">
       <path
         d="M3.5 8.5 6.5 11.5 12.5 4.75"
         stroke="currentColor"
@@ -273,7 +273,7 @@ export function SidebarFilterMenu({
           <span className="truncate font-normal">{row.label}</span>
           <span className="flex shrink-0 items-center gap-1.5">
             {showDot && isActive ? (
-              <span className="size-1.5 rounded-full bg-sky-400" aria-hidden="true" />
+              <span className="size-1.5 rounded-full bg-(--biu-color-emphasis)" aria-hidden="true" />
             ) : !showDot ? (
               <span className="text-[12px] text-(--biu-color-text-muted)">{currentLabel}</span>
             ) : null}
@@ -324,7 +324,7 @@ export function SidebarFilterMenu({
         aria-expanded={open}
         className={`relative grid size-6 shrink-0 cursor-pointer place-items-center rounded-md border-0 p-0 transition-colors ${
           open || hasNonDefaultView
-            ? 'bg-sky-500/15 text-sky-400 hover:bg-sky-500/20'
+            ? 'bg-(--biu-color-emphasis-muted) text-(--biu-color-emphasis)'
             : 'bg-transparent text-(--biu-color-text-muted) hover:bg-(--biu-color-bg-hover) hover:text-(--biu-color-text)'
         }`}
         onClick={(event) => {
@@ -335,7 +335,7 @@ export function SidebarFilterMenu({
         <FilterLinesGlyph />
         {hasNonDefaultView ? (
           <span
-            className="pointer-events-none absolute top-0.5 right-0.5 size-1.5 rounded-full bg-sky-400"
+            className="pointer-events-none absolute top-0.5 right-0.5 size-1.5 rounded-full bg-(--biu-color-emphasis)"
             aria-hidden="true"
           />
         ) : null}
