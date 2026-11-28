@@ -78,4 +78,10 @@ test('tagsCollection lists tags with stamp counts and supports create/update/del
   assert.equal(collected[0]?.sourceId, 'home')
   assert.equal(collected[0]?.tagId, 'dp')
   assert.deepEqual((collected[0]?.tag as { values?: { dp?: { complexity?: string } } })?.values?.dp, { complexity: 'O(n)' })
+
+  const deleteAction = specWithTables.actions?.find((item) => item.id === 'delete')
+  assert.ok(deleteAction)
+  assert.equal(deleteAction.label, '删除')
+  assert.equal(deleteAction.tone, 'danger')
+  assert.deepEqual(deleteAction.when, { sourceId: '' })
 })
