@@ -16,6 +16,7 @@ import type {
   ChannelRunEvent,
   ChannelSavedMessageView,
   ChannelSearchHit,
+  ChannelSidebarThreadItem,
   ChannelSummary,
   ChannelThreadPayload,
 } from '../shared/channel-types.ts'
@@ -105,14 +106,50 @@ function sortChannels(channels: ChannelSummary[]): ChannelSummary[] {
   )
 }
 
+function formatSidebarThreadTitle(msg: Pick<ChannelMessageView, 'text' | 'attachments'>): string {
+  const cleanLine = String(msg.text ?? '')
+    .replace(/[#>*`[\]()]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+  if (cleanLine) {
+    return cleanLine.length > 28 ? `${cleanLine.slice(0, 28)}…` : cleanLine
+  }
+  const firstAtt = msg.attachments?.[0]
+  if (firstAtt?.name) return `[附件] ${firstAtt.name.slice(0, 20)}`
+  return '讨论串'
+}
+
+function deriveSidebarThreadsFromMessages(messages: ChannelMessageView[]): ChannelSidebarThreadItem[] {
+  const items: ChannelSidebarThreadItem[] = []
+  for (const m of messages) {
+    if (m.deletedAt || m.ephemeralTo || !m.threadSummary || m.threadSummary.replyCount <= 0) continue
+    items.push({
+      rootId: m.id,
+      title: formatSidebarThreadTitle(m),
+      replyCount: m.threadSummary.replyCount,
+      lastReplyAt: m.threadSummary.lastReplyAt || m.createdAt,
+    })
+  }
+  return items.sort((a, b) => b.lastReplyAt - a.lastReplyAt).slice(0, 12)
+}
+
 export async function loadChannels(): Promise<ChannelSummary[]> {
   try {
     const res = await apiFetch('/api/channels')
     if (!res.ok) return state.channels
     const body = (await res.json()) as { channels?: ChannelSummary[] }
-    const channels = Array.isArray(body.channels) ? body.channels : []
-    setState((prev) => ({ ...prev, channels, loaded: true }))
-    return channels
+    const rawChannels = Array.isArray(body.channels) ? body.channels : []
+    setState((prev) => {
+      const channels = rawChannels.map((ch) => {
+        if (ch.threads?.length) return ch
+        const detailMsgs = prev.details[ch.id]?.messages
+        if (!detailMsgs?.length) return ch
+        const derived = deriveSidebarThreadsFromMessages(detailMsgs)
+        return derived.length ? { ...ch, threads: derived } : ch
+      })
+      return { ...prev, channels, loaded: true }
+    })
+    return state.channels
   } catch {
     return state.channels
   }
@@ -124,18 +161,24 @@ export async function loadChannelDetail(channelId: string): Promise<ChannelDetai
     const res = await apiFetch(`/api/channels/${encodeURIComponent(channelId)}`)
     if (!res.ok) return null
     const detail = (await res.json()) as ChannelDetailPayload
+    const derivedThreads =
+      detail.channel.threads?.length ? detail.channel.threads : deriveSidebarThreadsFromMessages(detail.messages ?? [])
+    const hydratedChannel: ChannelSummary = derivedThreads.length
+      ? { ...detail.channel, threads: derivedThreads }
+      : detail.channel
+    const hydratedDetail: ChannelDetailPayload = { ...detail, channel: hydratedChannel }
     setState((prev) => {
-      const exists = prev.channels.some((c) => c.id === detail.channel.id)
+      const exists = prev.channels.some((c) => c.id === hydratedChannel.id)
       const channels = exists
-        ? prev.channels.map((c) => (c.id === detail.channel.id ? detail.channel : c))
-        : [detail.channel, ...prev.channels]
+        ? prev.channels.map((c) => (c.id === hydratedChannel.id ? hydratedChannel : c))
+        : [hydratedChannel, ...prev.channels]
       return {
         ...prev,
         channels,
-        details: { ...prev.details, [channelId]: detail },
+        details: { ...prev.details, [channelId]: hydratedDetail },
       }
     })
-    return detail
+    return hydratedDetail
   } catch {
     return null
   }

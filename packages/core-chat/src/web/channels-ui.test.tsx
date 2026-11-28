@@ -1218,14 +1218,20 @@ test('ChannelStage supports Breadcrumb Threads, sidebar expandable sub-threads, 
   })
   vi.stubGlobal('fetch', fetchMock)
 
-  // 0. 左侧侧边栏支持在有子讨论串的聊天项下展开/收起子讨论串
+  // 0. 左侧侧边栏支持原生 hover 切换展开/收起图标（sidebar-group-fold），点击后展开子讨论串
   const sidebar = render(
     <MemoryRouter initialEntries={['/channels/ch-p2']}>
       <ChannelSidebarSections routeChannelId="ch-p2" />
     </MemoryRouter>,
   )
   const toggleBtn = await waitFor(() => sidebar.getByTestId('sidebar-channel-threads-toggle-ch-p2'))
+  assert.ok(toggleBtn.querySelector('.sidebar-group-fold .sidebar-group-fold-face'))
+  assert.ok(toggleBtn.querySelector('.sidebar-group-fold .sidebar-group-fold-chevron .sidebar-chevron'))
+  assert.equal(toggleBtn.querySelector('.sidebar-chevron.is-open'), null)
   fireEvent.click(toggleBtn)
+  await waitFor(() => {
+    assert.ok(toggleBtn.querySelector('.sidebar-chevron.is-open'))
+  })
   const threadLink = await waitFor(() => sidebar.getByTestId('sidebar-thread-m-root'))
   assert.equal(threadLink.getAttribute('href'), '/channels/ch-p2?thread=m-root')
   assert.ok(threadLink.textContent?.includes('讨论一下数据库分库方案'))
@@ -1279,4 +1285,95 @@ test('ChannelStage supports Breadcrumb Threads, sidebar expandable sub-threads, 
     assert.equal(createdPageBody?.path, '/pages')
     assert.ok(stage.getByTestId('channel-saved-page-toast'))
   })
+})
+
+test('ChannelSidebarSections derives expandable sub-threads from loaded channel detail when /api/channels omits threads', async () => {
+  const now = Date.now()
+  const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+    const url = new URL(String(input), 'http://test.local')
+    if (url.pathname === '/api/channels') {
+      return new Response(
+        JSON.stringify({
+          channels: [
+            {
+              id: 'ch-legacy',
+              workspaceId: 'ws-1',
+              kind: 'channel',
+              dmKey: '',
+              name: '最近的消息',
+              topic: '',
+              accessMode: 'workspace',
+              createdBy: 'acc-alice',
+              createdAt: now,
+              updatedAt: now,
+              memberCount: 2,
+              agentCount: 1,
+              lastMessageAt: now,
+              lastMessageText: '根消息',
+            },
+          ],
+        }),
+        { status: 200 },
+      )
+    }
+    if (url.pathname === '/api/channels/ch-legacy') {
+      return new Response(
+        JSON.stringify({
+          channel: {
+            id: 'ch-legacy',
+            workspaceId: 'ws-1',
+            kind: 'channel',
+            dmKey: '',
+            name: '最近的消息',
+            topic: '',
+            accessMode: 'workspace',
+            createdBy: 'acc-alice',
+            createdAt: now,
+            updatedAt: now,
+            memberCount: 2,
+            agentCount: 1,
+            lastMessageAt: now,
+            lastMessageText: '根消息',
+          },
+          members: [],
+          messages: [
+            {
+              id: 'm-thread-root',
+              channelId: 'ch-legacy',
+              seq: 1,
+              senderType: 'agent',
+              senderId: 'ag-1',
+              senderName: '助手',
+              replyToId: '',
+              text: '关于产品数据划分的方案',
+              mentions: [],
+              threadSummary: { replyCount: 3, lastReplyAt: now, participantNames: ['lulu'] },
+              traceId: '',
+              ephemeralTo: '',
+              createdAt: now,
+            },
+          ],
+          activities: [],
+          myAccountId: 'acc-alice',
+          canManageMembers: true,
+        }),
+        { status: 200 },
+      )
+    }
+    return new Response(JSON.stringify({ items: [] }), { status: 200 })
+  })
+  vi.stubGlobal('fetch', fetchMock)
+
+  const view = render(
+    <MemoryRouter initialEntries={['/channels/ch-legacy']}>
+      <ChannelSidebarSections routeChannelId="ch-legacy" />
+      <ChannelStage channelId="ch-legacy" />
+    </MemoryRouter>,
+  )
+
+  const toggleBtn = await waitFor(() => view.getByTestId('sidebar-channel-threads-toggle-ch-legacy'))
+  fireEvent.click(toggleBtn)
+  const link = await waitFor(() => view.getByTestId('sidebar-thread-m-thread-root'))
+  assert.ok(link.textContent?.includes('关于产品数据划分的方案'))
+  assert.ok(link.textContent?.includes('3'))
 })

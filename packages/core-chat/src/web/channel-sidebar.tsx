@@ -5,7 +5,6 @@ import {
   BellSlashIcon,
   BookmarkIcon,
   ChatBubbleLeftRightIcon,
-  ChevronDownIcon,
   ChevronRightIcon,
   HashtagIcon,
   LockClosedIcon,
@@ -27,7 +26,7 @@ import {
   useSidebarCollapseStore,
   type SessionViewService,
 } from '@biu/web-session-view'
-import { SIDEBAR_ROW_MAIN_CLASS, SidebarRow } from '@biu/web-session-view/sidebar-row'
+import { SIDEBAR_ROW_MAIN_CLASS, SidebarRow, SidebarRowMain } from '@biu/web-session-view/sidebar-row'
 import { TrashGlyph } from '@biu/web-session-view/trash-glyph'
 import {
   buildDefaultChannelName,
@@ -322,16 +321,39 @@ export const ChannelSidebarSections = memo(function ChannelSidebarSections({
                 const threadExpanded =
                   hasThreads &&
                   (expandedChannels[ch.id] ?? (isChannelActive && Boolean(activeThreadId)))
+                const channelFace = (
+                  <>
+                    {isDm ? (
+                      peerAvatar ? (
+                        <img src={peerAvatar} alt="" className="size-4.5 rounded-full object-cover" />
+                      ) : (
+                        <AiAvatar seed={ch.peerAccountId || ch.id} size={18} className="rounded-full" />
+                      )
+                    ) : ch.accessMode === 'private' ? (
+                      <LockClosedIcon className="size-3.5" />
+                    ) : (
+                      <HashtagIcon className="size-3.5" />
+                    )}
+                    {peerOnline ? (
+                      <span
+                        className="absolute right-0 bottom-0 size-2 rounded-full bg-emerald-500 ring-[1.5px] ring-(--biu-color-bg-subtle)"
+                        data-testid={`sidebar-dm-online-${ch.id}`}
+                        aria-hidden
+                      />
+                    ) : null}
+                  </>
+                )
                 return (
                   <div key={ch.id} className="min-w-0">
                     <SidebarRow
                       active={active}
                       main={
-                        <div className="flex min-w-0 flex-1 items-center">
+                        <SidebarRowMain>
                           {hasThreads ? (
                             <button
                               type="button"
-                              className="mr-0.5 grid size-4 shrink-0 cursor-pointer place-items-center rounded border-0 bg-transparent p-0 text-(--biu-color-text-subtle) hover:bg-(--biu-color-bg-hover) hover:text-(--biu-color-text)"
+                              className="group/fold relative grid size-6 shrink-0 cursor-pointer place-items-center border-0 bg-transparent p-0 text-inherit"
+                              title={threadExpanded ? `收起 ${ch.name} 的子话题` : `展开 ${ch.name} 的子话题`}
                               aria-label={threadExpanded ? `收起 ${ch.name} 的子话题` : `展开 ${ch.name} 的子话题`}
                               aria-expanded={threadExpanded}
                               data-testid={`sidebar-channel-threads-toggle-${ch.id}`}
@@ -341,39 +363,28 @@ export const ChannelSidebarSections = memo(function ChannelSidebarSections({
                                 setExpandedChannels((prev) => ({ ...prev, [ch.id]: !threadExpanded }))
                               }}
                             >
-                              {threadExpanded ? (
-                                <ChevronDownIcon className="size-3" />
-                              ) : (
-                                <ChevronRightIcon className="size-3" />
-                              )}
+                              <span className="sidebar-rail-icon sidebar-group-fold">
+                                <span className="sidebar-group-fold-face relative group-hover:hidden! group-hover/fold:hidden!">
+                                  {channelFace}
+                                </span>
+                                <span className="sidebar-group-fold-chevron group-hover:grid! group-hover/fold:grid!">
+                                  <ChevronRightIcon
+                                    className={`size-4 shrink-0 opacity-80 sidebar-chevron${threadExpanded ? ' is-open' : ''}`}
+                                  />
+                                </span>
+                              </span>
                             </button>
-                          ) : null}
+                          ) : (
+                            <span className="relative grid size-6 shrink-0 place-items-center" aria-hidden>
+                              <span className="sidebar-rail-icon relative opacity-85">{channelFace}</span>
+                            </span>
+                          )}
                           <Link
                             to={channelAppPath(ch.id)}
-                            className={SIDEBAR_ROW_MAIN_CLASS}
+                            className="flex h-full min-w-0 flex-1 items-center gap-1.5 text-inherit no-underline"
                             title={ch.topic ? `${ch.name} · ${ch.topic}` : ch.name}
                             onClick={() => popoverClose?.()}
                           >
-                            <span className="relative grid size-5 shrink-0 place-items-center opacity-85" aria-hidden>
-                              {isDm ? (
-                                peerAvatar ? (
-                                  <img src={peerAvatar} alt="" className="size-4.5 rounded-full object-cover" />
-                                ) : (
-                                  <AiAvatar seed={ch.peerAccountId || ch.id} size={18} className="rounded-full" />
-                                )
-                              ) : ch.accessMode === 'private' ? (
-                                <LockClosedIcon className="size-3.5" />
-                              ) : (
-                                <HashtagIcon className="size-3.5" />
-                              )}
-                              {peerOnline ? (
-                                <span
-                                  className="absolute right-0 bottom-0 size-2 rounded-full bg-emerald-500 ring-[1.5px] ring-(--biu-color-bg-subtle)"
-                                  data-testid={`sidebar-dm-online-${ch.id}`}
-                                  aria-hidden
-                                />
-                              ) : null}
-                            </span>
                             <span
                               className={`sidebar-label min-w-0 flex-1 truncate ${hasUnreadEmphasis ? 'font-semibold text-(--biu-color-text)' : 'font-medium'}`}
                             >
@@ -419,32 +430,43 @@ export const ChannelSidebarSections = memo(function ChannelSidebarSections({
                               </span>
                             ) : null}
                           </Link>
-                        </div>
+                        </SidebarRowMain>
                       }
                       onDelete={() => void handleDeleteChannel(ch.id)}
                       deleteLabel={isDm ? `删除聊天 ${ch.name}` : `解散聊天 ${ch.name}`}
                       deleteIcon={<TrashGlyph className="size-4 shrink-0" />}
                     />
                     {hasThreads ? (
-                      <SidebarFold open={threadExpanded}>
-                        <div className="flex flex-col gap-0.5 py-0.5 pl-5" data-testid={`sidebar-channel-threads-${ch.id}`}>
+                      <SidebarFold open={threadExpanded} className="sidebar-session-list min-w-0">
+                        <div className="flex min-w-0 flex-col" data-testid={`sidebar-channel-threads-${ch.id}`}>
                           {subThreads.map((t) => {
                             const threadActive = isChannelActive && activeThreadId === t.rootId
                             return (
-                              <Link
+                              <SidebarRow
                                 key={t.rootId}
-                                to={`${channelAppPath(ch.id)}?thread=${encodeURIComponent(t.rootId)}`}
-                                data-testid={`sidebar-thread-${t.rootId}`}
-                                className={`chat-session-row !h-7 !min-h-7 !gap-1.5 !px-2 text-[12px] ${threadActive ? 'is-active' : 'text-(--biu-color-text-muted)'}`}
-                                title={`${t.title}（${t.replyCount} 条回复）`}
-                                onClick={() => popoverClose?.()}
-                              >
-                                <ChatBubbleLeftRightIcon className="size-3 shrink-0 opacity-70" aria-hidden />
-                                <span className="min-w-0 flex-1 truncate">{t.title}</span>
-                                <span className="shrink-0 text-[10.5px] text-(--biu-color-text-subtle) tabular-nums">
-                                  {t.replyCount}
-                                </span>
-                              </Link>
+                                active={threadActive}
+                                main={
+                                  <Link
+                                    to={`${channelAppPath(ch.id)}?thread=${encodeURIComponent(t.rootId)}`}
+                                    data-testid={`sidebar-thread-${t.rootId}`}
+                                    className={SIDEBAR_ROW_MAIN_CLASS}
+                                    title={`${t.title}（${t.replyCount} 条回复）`}
+                                    onClick={() => popoverClose?.()}
+                                  >
+                                    <span className="grid size-6 shrink-0 place-items-center" aria-hidden>
+                                      <span className="sidebar-rail-icon">
+                                        <ChatBubbleLeftRightIcon className="size-3.5 opacity-75" />
+                                      </span>
+                                    </span>
+                                    <span className="sidebar-label min-w-0 flex-1 truncate text-[13px]">
+                                      {t.title}
+                                    </span>
+                                    <span className="shrink-0 text-[11px] leading-none text-(--biu-color-text-subtle) tabular-nums">
+                                      {t.replyCount}
+                                    </span>
+                                  </Link>
+                                }
+                              />
                             )
                           })}
                         </div>
