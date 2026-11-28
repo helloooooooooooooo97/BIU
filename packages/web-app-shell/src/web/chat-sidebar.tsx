@@ -12,11 +12,18 @@ import { apiFetch } from '@biu/biu-ui/api-client'
 import { onAppEvents } from '@biu/biu-ui/app-events'
 import { ChatCount } from '@biu/biu-ui/chat-count'
 import { SidebarFold } from '@biu/biu-ui/sidebar-fold'
+import {
+  SidebarFilterMenu,
+  TIME_BUCKET_ORDER,
+  timeBucketForTimestamp,
+  useSidebarViewPrefs,
+} from '@biu/biu-ui/sidebar-filter-menu'
 import { useActiveWorkspaceLocation } from './shell-chrome.tsx'
 import {
   bindSessionView,
   buildSidebarSections,
   folderNameFromPath,
+  sessionActivityAt,
   sessionAppPath,
   useSidebarCollapseStore,
   type SessionListItem,
@@ -31,6 +38,7 @@ import { chromeIcon, chromeIconClass } from './chrome-icon.ts'
 import { isChatPagePath, openOverlayComposer } from './chat-overlay.ts'
 import {
   ChevronRightIcon,
+  ClockIcon,
   FolderMinusIcon,
   PlusIcon,
   StarIcon,
@@ -154,6 +162,7 @@ const SessionRow = memo(function SessionRow({
   busy,
   dancing,
   creator,
+  showTime = true,
   onDelete,
   onPin,
   onOpen,
@@ -163,12 +172,13 @@ const SessionRow = memo(function SessionRow({
   busy: boolean
   dancing: boolean
   creator?: ChatMemberInfo | null
+  showTime?: boolean
   onDelete: (item: SessionListItem) => void
   onPin: (item: SessionListItem) => void
   onOpen?: (item: SessionListItem) => void
 }) {
   const pinned = Boolean(item.pinned)
-  const timeLabel = formatSessionTime(item.updatedAt)
+  const timeLabel = showTime ? formatSessionTime(item.updatedAt) : ''
   const label = (
     <span className="sidebar-label min-w-0 flex-1 truncate font-medium">{item.title}</span>
   )
@@ -256,6 +266,7 @@ const WindowedSessionList = memo(function WindowedSessionList({
   busySessions,
   dancing,
   creatorOf,
+  showTime = true,
   onDelete,
   onPin,
   onOpen,
@@ -267,6 +278,7 @@ const WindowedSessionList = memo(function WindowedSessionList({
   busySessions: Record<string, true>
   dancing: boolean
   creatorOf?: (item: SessionListItem) => ChatMemberInfo | null
+  showTime?: boolean
   onDelete: (item: SessionListItem) => void
   onPin: (item: SessionListItem) => void
   onOpen?: (item: SessionListItem) => void
@@ -320,6 +332,7 @@ const WindowedSessionList = memo(function WindowedSessionList({
               busy={Boolean(busySessions[item.id])}
               dancing={dancing}
               creator={creatorOf?.(item) ?? null}
+              showTime={showTime}
               onDelete={onDelete}
               onPin={onPin}
               onOpen={onOpen}
@@ -379,7 +392,80 @@ export const ChatSidebar = memo(function ChatSidebar({
   const collapsedProjects = useSidebarCollapseStore((state) => state.collapsed)
   const toggleProjectGroup = useSidebarCollapseStore((state) => state.toggle)
   const expandProjectGroup = useSidebarCollapseStore((state) => state.expand)
-  const sections = useMemo(() => buildSidebarSections(sessions), [sessions])
+  const [agentPrefs, patchAgentPrefs, resetAgentPrefs] = useSidebarViewPrefs('biu.sidebar.agents.view', {
+    groupBy: 'project',
+    orderBy: 'updated',
+    status: 'all',
+    starred: 'all',
+    showTime: true,
+  })
+  const filteredSessions = useMemo(() => {
+    const filtered = sessions.filter((item) => {
+      if (agentPrefs.status === 'busy' && !busySessions[item.id]) return false
+      if (agentPrefs.status === 'idle' && busySessions[item.id]) return false
+      if (agentPrefs.starred === 'starred' && !item.pinned) return false
+      return true
+    })
+    if (agentPrefs.orderBy === 'name') {
+      return [...filtered].sort(
+        (a, b) => a.title.localeCompare(b.title, 'zh-CN') || sessionActivityAt(b) - sessionActivityAt(a),
+      )
+    }
+    return filtered
+  }, [agentPrefs.orderBy, agentPrefs.starred, agentPrefs.status, busySessions, sessions])
+  const sections = useMemo(() => {
+    const base = buildSidebarSections(filteredSessions)
+    const sortRows = (rows: SessionListItem[]) =>
+      agentPrefs.orderBy === 'name'
+        ? [...rows].sort((a, b) => a.title.localeCompare(b.title, 'zh-CN') || a.id.localeCompare(b.id))
+        : rows
+    if (agentPrefs.groupBy === 'project') {
+      if (agentPrefs.orderBy === 'name') {
+        return base.map((sec) => ({
+          ...sec,
+          ...(sec.sessions ? { sessions: sortRows(sec.sessions) } : {}),
+          ...(sec.groups
+            ? { groups: sec.groups.map((g) => ({ ...g, sessions: sortRows(g.sessions) })) }
+            : {}),
+        }))
+      }
+      return base
+    }
+    const out: SidebarSection[] = []
+    const pinnedSec = base.find((sec) => sec.kind === 'pinned')
+    if (pinnedSec) {
+      out.push({ ...pinnedSec, sessions: sortRows(pinnedSec.sessions ?? []) })
+    }
+    if (agentPrefs.groupBy === 'none') {
+      out.push({ kind: 'project', label: '代理', sessions: sortRows(filteredSessions) })
+      return out
+    }
+    // groupBy === 'updated'
+    const now = Date.now()
+    const bucketMap = new Map<string, SessionListItem[]>()
+    for (const item of filteredSessions) {
+      const bucket = timeBucketForTimestamp(sessionActivityAt(item), now)
+      const list = bucketMap.get(bucket) ?? []
+      list.push(item)
+      bucketMap.set(bucket, list)
+    }
+    const groups: SessionSidebarGroup[] = TIME_BUCKET_ORDER.flatMap(({ key, label }) => {
+      const rows = bucketMap.get(key)
+      if (!rows?.length) return []
+      const sorted = sortRows(rows)
+      return [
+        {
+          key: `time:${key}`,
+          label,
+          sessions: sorted,
+          updatedAt: sorted.reduce((max, item) => Math.max(max, sessionActivityAt(item)), 0),
+          kind: 'ungrouped' as const,
+        },
+      ]
+    })
+    out.push({ kind: 'project', label: '代理', groups })
+    return out
+  }, [agentPrefs.groupBy, agentPrefs.orderBy, filteredSessions])
   const railSessions = useMemo(() => {
     if (!iconRail) return []
     const seen = new Set<string>()
@@ -502,6 +588,7 @@ export const ChatSidebar = memo(function ChatSidebar({
       busySessions={busySessions}
       dancing={dancing}
       creatorOf={creatorOf}
+      showTime={agentPrefs.showTime}
       onDelete={deleteChat}
       onPin={pinChat}
       onOpen={popover ? openSession : undefined}
@@ -560,27 +647,91 @@ export const ChatSidebar = memo(function ChatSidebar({
                   </button>
                   <ChatCount count={count} />
                   {section.kind === 'project' ? (
-                    <button
-                      type="button"
-                      className="grid size-6 shrink-0 cursor-pointer place-items-center rounded-md border-0 bg-transparent p-0 text-(--biu-color-text-muted) hover:bg-(--biu-color-bg-hover) hover:text-(--biu-color-text)"
-                      title="添加 Agent"
-                      aria-label="添加 Agent"
-                      data-testid="sidebar-create-agent"
-                      onClick={(event) => {
-                        event.stopPropagation()
-                        createChat()
-                      }}
-                    >
-                      <PlusIcon className="size-4 shrink-0" />
-                    </button>
+                    <>
+                      <SidebarFilterMenu
+                        testId="sidebar-agents-filter"
+                        title="代理分组、排序与筛选"
+                        grouping={{
+                          id: 'groupBy',
+                          label: '分组',
+                          value: agentPrefs.groupBy,
+                          defaultValue: 'project',
+                          options: [
+                            { value: 'project', label: '项目' },
+                            { value: 'updated', label: '更新时间' },
+                            { value: 'none', label: '不分组' },
+                          ],
+                          onChange: (value) => patchAgentPrefs({ groupBy: value }),
+                        }}
+                        ordering={{
+                          id: 'orderBy',
+                          label: '排序',
+                          value: agentPrefs.orderBy,
+                          defaultValue: 'updated',
+                          options: [
+                            { value: 'updated', label: '最近活跃' },
+                            { value: 'name', label: '名称' },
+                          ],
+                          onChange: (value) => patchAgentPrefs({ orderBy: value }),
+                        }}
+                        shows={[
+                          {
+                            id: 'showTime',
+                            label: '显示时间',
+                            checked: agentPrefs.showTime,
+                            onChange: (checked) => patchAgentPrefs({ showTime: checked }),
+                          },
+                        ]}
+                        filters={[
+                          {
+                            id: 'status',
+                            label: '状态',
+                            value: agentPrefs.status,
+                            defaultValue: 'all',
+                            options: [
+                              { value: 'all', label: '全部' },
+                              { value: 'busy', label: '运行中' },
+                              { value: 'idle', label: '空闲' },
+                            ],
+                            onChange: (value) => patchAgentPrefs({ status: value }),
+                          },
+                          {
+                            id: 'starred',
+                            label: '收藏',
+                            value: agentPrefs.starred,
+                            defaultValue: 'all',
+                            options: [
+                              { value: 'all', label: '全部' },
+                              { value: 'starred', label: '仅收藏' },
+                            ],
+                            onChange: (value) => patchAgentPrefs({ starred: value }),
+                          },
+                        ]}
+                        onResetFilters={resetAgentPrefs}
+                      />
+                      <button
+                        type="button"
+                        className="grid size-6 shrink-0 cursor-pointer place-items-center rounded-md border-0 bg-transparent p-0 text-(--biu-color-text-muted) hover:bg-(--biu-color-bg-hover) hover:text-(--biu-color-text)"
+                        title="添加 Agent"
+                        aria-label="添加 Agent"
+                        data-testid="sidebar-create-agent"
+                        onClick={(event) => {
+                          event.stopPropagation()
+                          createChat()
+                        }}
+                      >
+                        <PlusIcon className="size-4 shrink-0" />
+                      </button>
+                    </>
                   ) : null}
                 </div>
 
                 <SidebarFold open={!sectionCollapsed}>
                   <div className="sidebar-section-rows flex min-w-0 flex-col pt-0.5">
-                    {section.sessions ? list(section, 'pinned', section.sessions) : null}
+                    {section.sessions ? list(section, section.kind === 'pinned' ? 'pinned' : 'flat', section.sessions) : null}
                     {section.groups?.map((group) => {
                       const collapsed = Boolean(collapsedProjects[group.key])
+                      const isTimeGroup = group.key.startsWith('time:')
                       const addLabel = group.kind === 'ungrouped' ? '在未分组下添加会话' : `在 ${group.label} 下添加会话`
                       return (
                         <div key={group.key} className="min-w-0">
@@ -599,24 +750,39 @@ export const ChatSidebar = memo(function ChatSidebar({
                               }}
                             >
                               <span className="grid size-6 shrink-0 place-items-center" aria-hidden>
-                                <GroupFoldGlyph group={group} collapsed={collapsed} />
+                                {isTimeGroup ? (
+                                  <span className="sidebar-rail-icon sidebar-group-fold">
+                                    <span className="sidebar-group-fold-face">
+                                      <ClockIcon {...chromeIcon} />
+                                    </span>
+                                    <span className="sidebar-group-fold-chevron">
+                                      <ChevronRightIcon
+                                        className={chromeIconClass(`opacity-80 sidebar-chevron${collapsed ? '' : ' is-open'}`)}
+                                      />
+                                    </span>
+                                  </span>
+                                ) : (
+                                  <GroupFoldGlyph group={group} collapsed={collapsed} />
+                                )}
                               </span>
                               <span className="sidebar-label min-w-0 flex-1 truncate">{group.label}</span>
                             </div>
                             <ChatCount count={group.sessions.length} />
-                            <button
-                              type="button"
-                              className="sidebar-add"
-                              title={addLabel}
-                              aria-label={addLabel}
-                              onClick={(event) => {
-                                event.stopPropagation()
-                                const projectPath = resolveSidebarGroupProjectPath(group, isCloudSpace)
-                                createChat(projectPath ? { projectPath, createProject: isCloudSpace } : {})
-                              }}
-                            >
-                              <PlusIcon {...chromeIcon} />
-                            </button>
+                            {!isTimeGroup ? (
+                              <button
+                                type="button"
+                                className="sidebar-add"
+                                title={addLabel}
+                                aria-label={addLabel}
+                                onClick={(event) => {
+                                  event.stopPropagation()
+                                  const projectPath = resolveSidebarGroupProjectPath(group, isCloudSpace)
+                                  createChat(projectPath ? { projectPath, createProject: isCloudSpace } : {})
+                                }}
+                              >
+                                <PlusIcon {...chromeIcon} />
+                              </button>
+                            ) : null}
                           </div>
                           <SidebarFold open={!collapsed} className="sidebar-session-list min-w-0">
                             {list(section, group.key, group.sessions)}
