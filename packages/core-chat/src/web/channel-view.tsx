@@ -14,6 +14,7 @@ import {
   LockClosedIcon,
   PlusIcon,
   ShieldCheckIcon,
+  SparklesIcon,
   Square2StackIcon,
   UserGroupIcon,
   UserPlusIcon,
@@ -35,11 +36,13 @@ import type {
 import { MarkdownBody } from './markdown.tsx'
 import {
   addChannelMember,
+  autoNameChannel,
   cancelChannelRun,
   decideChannelApproval,
   loadChannelDetail,
   openChannelRunTrace,
   removeChannelMember,
+  renameChannel,
   sendChannelMessage,
   useChannelStore,
 } from './channel-store.ts'
@@ -204,9 +207,13 @@ export const ChannelStage = memo(function ChannelStage({
   const [mentionIdx, setMentionIdx] = useState(0)
   const [decidingApproval, setDecidingApproval] = useState<string | null>(null)
   const [composerExpanded, setComposerExpanded] = useState(false)
+  const [namingTitle, setNamingTitle] = useState(false)
+  const [editingTitle, setEditingTitle] = useState(false)
+  const [titleDraft, setTitleDraft] = useState('')
 
   const scrollRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
+  const titleInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     setLoading(true)
@@ -386,6 +393,29 @@ export const ChannelStage = memo(function ChannelStage({
   const peerAvatar = resolveAvatar(channel?.peerAccountId, channel?.peerAvatar)
   const hasChips = Boolean(replyTo)
 
+  const handleAutoName = async () => {
+    if (isDm || namingTitle) return
+    setNamingTitle(true)
+    try {
+      await autoNameChannel(channelId)
+    } catch {
+      /* ignore */
+    } finally {
+      setNamingTitle(false)
+    }
+  }
+
+  const commitTitleEdit = async () => {
+    setEditingTitle(false)
+    const next = titleDraft.trim()
+    if (!next || next === (channel?.name ?? '').trim()) return
+    try {
+      await renameChannel(channelId, next)
+    } catch {
+      /* ignore */
+    }
+  }
+
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden" data-testid="channel-stage">
       {/* 顶部栏：与 1v1 Agent 聊天完全统一的 .chat-view-header */}
@@ -412,6 +442,20 @@ export const ChannelStage = memo(function ChannelStage({
         </div>
 
         <div className="chat-view-session-title-wrap gap-1.5">
+          {!isDm && channel ? (
+            <button
+              type="button"
+              className="chat-view-session-title-magic"
+              title="根据聊天内容自动命名"
+              aria-label="根据聊天内容自动命名"
+              data-testid="channel-auto-name"
+              disabled={namingTitle}
+              onMouseDown={(event) => event.preventDefault()}
+              onClick={() => void handleAutoName()}
+            >
+              <SparklesIcon aria-hidden className="size-[14px]" />
+            </button>
+          ) : null}
           {isDm ? (
             <MemberAvatar avatar={peerAvatar} seed={channel?.peerAccountId || channelId} size={18} />
           ) : channel?.accessMode === 'private' ? (
@@ -419,12 +463,42 @@ export const ChannelStage = memo(function ChannelStage({
           ) : (
             <HashtagIcon className="size-3.5 shrink-0 text-(--biu-color-icon)" aria-hidden />
           )}
-          <span
-            className="truncate text-[14px] font-semibold text-(--biu-color-text)"
-            data-testid="channel-title"
-          >
-            {channel?.name ?? (loading ? '加载中…' : '聊天')}
-          </span>
+          {!isDm && editingTitle ? (
+            <input
+              ref={titleInputRef}
+              className="chat-view-session-title is-editing pointer-events-auto"
+              value={titleDraft}
+              aria-label="聊天名称"
+              data-testid="channel-title-input"
+              size={Math.max(4, titleDraft.length)}
+              autoFocus
+              onChange={(event) => setTitleDraft(event.target.value)}
+              onBlur={() => void commitTitleEdit()}
+              onKeyDown={(event) => {
+                if (event.key === 'Escape') {
+                  setEditingTitle(false)
+                  return
+                }
+                if (event.key === 'Enter') {
+                  event.preventDefault()
+                  void commitTitleEdit()
+                }
+              }}
+            />
+          ) : (
+            <span
+              className={`truncate text-[14px] font-semibold text-(--biu-color-text)${!isDm && detail?.canManageMembers ? ' pointer-events-auto cursor-text rounded px-1 hover:bg-(--biu-color-bg-hover)' : ''}`}
+              data-testid="channel-title"
+              title={!isDm && detail?.canManageMembers ? '点击重命名' : channel?.name}
+              onClick={() => {
+                if (isDm || !detail?.canManageMembers || !channel) return
+                setTitleDraft(channel.name)
+                setEditingTitle(true)
+              }}
+            >
+              {channel?.name ?? (loading ? '加载中…' : '聊天')}
+            </span>
+          )}
         </div>
 
         <div className="chat-view-header-right">
