@@ -270,6 +270,7 @@ export function listProjectionKeys(opts: {
   add('blocked')
   add('usageParts')
   add('builtin')
+  add('shareRole')
   let needTag = false
   for (const key of opts.columns) {
     add(key)

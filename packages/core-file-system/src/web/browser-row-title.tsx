@@ -16,6 +16,7 @@ import {
   RecordMark,
   recordPreviewMascot,
 } from './record-mark.tsx'
+import { AccessIcon, accessText, accessTone } from './share-scope-label.tsx'
 import {
   normalizeRecordEmoji,
   recordPreviewEmoji,
@@ -233,6 +234,24 @@ export function RecordOpenControls({
   )
 }
 
+export function TitleRoleIcon({ role }: { role: unknown }) {
+  const raw = typeof role === 'string' ? role.trim() : ''
+  if (!raw) return null
+  const text = accessText(raw)
+  const tone = accessTone(text)
+  return (
+    <span
+      className={`fsdb-title-role is-${tone}`}
+      data-testid="fsdb-title-role-icon"
+      data-role={tone}
+      data-dock-tip={`我的权限：${text}`}
+      aria-label={`我的权限：${text}`}
+    >
+      <AccessIcon role={text} />
+    </span>
+  )
+}
+
 export function RecordTitle({
   row,
   label,
@@ -289,12 +308,17 @@ export function RecordTitle({
           <span className="fsdb-record-mark is-sm" data-icon={idleTableIconKind(tableIcon)} aria-hidden />
         )}
         <span className="fsdb-title-text">{label}</span>
+        <TitleRoleIcon role={row.shareRole} />
       </span>
     )
   }
   return (
     <>
-      <span className="fsdb-title-host" style={tree ? { paddingLeft: depth * 16 } : undefined} onMouseEnter={armTools}>
+      <span
+        className={`fsdb-title-host${tree && kidCount > 0 ? ' has-tree-count' : ''}`}
+        style={tree ? { paddingLeft: depth * 16 } : undefined}
+        onMouseEnter={armTools}
+      >
         {tree ? (
           hasKids ? (
             <button
@@ -322,6 +346,7 @@ export function RecordTitle({
           <RecordMark record={row} tableIcon={typeIcon} />
         )}
         <span className="fsdb-title-text">{toolsLive && Title ? <Title record={row} label={label} /> : label}</span>
+        <TitleRoleIcon role={row.shareRole} />
       </span>
       {toolsLive || (tree && kidCount > 0) ? (
         <span className="tasks-row-tools-slot">

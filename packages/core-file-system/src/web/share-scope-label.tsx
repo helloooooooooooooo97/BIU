@@ -40,16 +40,17 @@ export function accessTone(text: string) {
   return 'read'
 }
 
+export function AccessIcon({ role, className = 'size-[14px]' }: { role: string; className?: string }) {
+  const text = accessText(role)
+  if (text === '管理') return <ShieldCheckIcon aria-hidden className={className} />
+  if (text === '编辑') return <PencilSquareIcon aria-hidden className={className} />
+  if (text === '评论') return <ChatBubbleLeftEllipsisIcon aria-hidden className={className} />
+  return <EyeIcon aria-hidden className={className} />
+}
+
 export function AccessMark({ role }: { role: string }) {
   const text = accessText(role)
-  const icon = text === '管理'
-    ? <ShieldCheckIcon aria-hidden className="size-[14px]" />
-    : text === '编辑'
-      ? <PencilSquareIcon aria-hidden className="size-[14px]" />
-      : text === '评论'
-        ? <ChatBubbleLeftEllipsisIcon aria-hidden className="size-[14px]" />
-        : <EyeIcon aria-hidden className="size-[14px]" />
-  return <>{icon}{text}</>
+  return <><AccessIcon role={text} />{text}</>
 }
 
 /** 胶囊占位。点开后再拉权限链路。 */
