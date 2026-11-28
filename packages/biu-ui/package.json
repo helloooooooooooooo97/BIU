@@ -18,6 +18,7 @@
     "./overlay-portal": "./src/overlay-portal.ts",
     "./floating-position": "./src/floating-position.ts",
     "./sidebar-fold": "./src/sidebar-fold.tsx",
+    "./sidebar-filter-menu": "./src/sidebar-filter-menu.tsx",
     "./tag-chip": "./src/tag-chip.tsx",
     "./use-workspace-profile": "./src/use-workspace-profile.ts",
     "./workspace-profile": "./src/workspace-profile.ts",

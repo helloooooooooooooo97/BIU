@@ -9,6 +9,7 @@ import {
   ChatBubbleLeftRightIcon,
   CheckIcon,
   ChevronRightIcon,
+  ClockIcon,
   EyeSlashIcon,
   HashtagIcon,
   LockClosedIcon,
@@ -26,6 +27,12 @@ import { apiFetch } from '@biu/biu-ui/api-client'
 import { onAppEvents } from '@biu/biu-ui/app-events'
 import { ChatCount } from '@biu/biu-ui/chat-count'
 import { SidebarFold } from '@biu/biu-ui/sidebar-fold'
+import {
+  SidebarFilterMenu,
+  TIME_BUCKET_ORDER,
+  timeBucketForTimestamp,
+  useSidebarViewPrefs,
+} from '@biu/biu-ui/sidebar-filter-menu'
 import { SidebarMascot, resolveSessionMascot } from '@biu/public-mascot'
 import {
   bindSessionView,
@@ -337,40 +344,58 @@ export const ChannelSidebarSections = memo(function ChannelSidebarSections({
   }
 
   const channelsCollapsed = Boolean(collapsedMap['chat.section.channels'])
+  const [channelPrefs, patchChannelPrefs, resetChannelPrefs] = useSidebarViewPrefs('biu.sidebar.channels.view', {
+    groupBy: 'none',
+    orderBy: 'updated',
+    kind: 'all',
+    status: 'all',
+    showTime: true,
+  })
 
-  return (
-    <div className="space-y-1.5" data-testid="sidebar-slack-sections">
-      {/* 聊天（包含多人聊天与已发起的成员私聊；右上角 + 新建） */}
-      <section className="min-w-0" data-testid="sidebar-channels-section">
-        <div className="sidebar-section-head min-w-0">
-          <button
-            type="button"
-            className="flex h-full min-h-8 min-w-0 flex-1 items-center gap-2 text-left text-[12px] font-bold tracking-wider"
-            aria-expanded={!channelsCollapsed}
-            onClick={() => toggleSection('chat.section.channels')}
-          >
-            <span className="min-w-0 flex-1 truncate tracking-normal">聊天</span>
-          </button>
-          <ChatCount count={channels.length} />
-          <button
-            type="button"
-            className="grid size-6 shrink-0 cursor-pointer place-items-center rounded-md border-0 bg-transparent p-0 text-(--biu-color-text-muted) hover:bg-(--biu-color-bg-hover) hover:text-(--biu-color-text)"
-            title="新建聊天"
-            aria-label="新建聊天"
-            data-testid="sidebar-create-channel"
-            onClick={(event) => {
-              event.stopPropagation()
-              setCreateOpen(true)
-            }}
-          >
-            <PlusIcon className="size-4 shrink-0" />
-          </button>
-        </div>
+  const visibleChannels = useMemo(() => {
+    const filtered = channels.filter((ch) => {
+      if (channelPrefs.kind === 'dm' && ch.kind !== 'dm') return false
+      if (channelPrefs.kind === 'channel' && ch.kind === 'dm') return false
+      if (channelPrefs.status === 'unread' && !((ch.unreadCount ?? 0) > 0 && ch.id !== routeChannelId)) return false
+      if (channelPrefs.status === 'pinned' && !ch.pinned) return false
+      return true
+    })
+    if (channelPrefs.orderBy === 'name') {
+      return [...filtered].sort((a, b) => a.name.localeCompare(b.name, 'zh-CN'))
+    }
+    return filtered
+  }, [channelPrefs.kind, channelPrefs.orderBy, channelPrefs.status, channels, routeChannelId])
 
-        <SidebarFold open={!channelsCollapsed}>
-          {channels.length > 0 ? (
-            <div className="sidebar-section-rows flex min-w-0 flex-col pt-0.5">
-              {channels.map((ch) => {
+  const unreadChannels = useMemo(
+    () => channels.filter((ch) => (ch.unreadCount ?? 0) > 0 && ch.id !== routeChannelId),
+    [channels, routeChannelId],
+  )
+
+  const channelGroups = useMemo(() => {
+    if (channelPrefs.groupBy === 'none') return null
+    if (channelPrefs.groupBy === 'kind') {
+      const dms = visibleChannels.filter((ch) => ch.kind === 'dm')
+      const rooms = visibleChannels.filter((ch) => ch.kind !== 'dm')
+      return [
+        ...(dms.length ? [{ key: 'kind:dm', label: '私聊', rows: dms }] : []),
+        ...(rooms.length ? [{ key: 'kind:channel', label: '群聊', rows: rooms }] : []),
+      ]
+    }
+    const now = Date.now()
+    const buckets = new Map<string, typeof visibleChannels>()
+    for (const ch of visibleChannels) {
+      const key = timeBucketForTimestamp(ch.lastMessageAt || ch.updatedAt, now)
+      const list = buckets.get(key) ?? []
+      list.push(ch)
+      buckets.set(key, list)
+    }
+    return TIME_BUCKET_ORDER.flatMap(({ key, label }) => {
+      const rows = buckets.get(key)
+      return rows?.length ? [{ key: `time:${key}`, label, rows }] : []
+    })
+  }, [channelPrefs.groupBy, visibleChannels])
+
+  const renderChannelItem = (ch: (typeof channels)[number]) => {
                 const isDm = ch.kind === 'dm'
                 const isChannelActive = ch.id === routeChannelId
                 const active = isChannelActive && !activeThreadId
@@ -562,7 +587,7 @@ export const ChannelSidebarSections = memo(function ChannelSidebarSections({
                                 {unread > 99 ? '99+' : unread}
                               </span>
                             ) : null}
-                            {timeLabel ? (
+                            {channelPrefs.showTime && timeLabel ? (
                               <span
                                 className="shrink-0 text-[11px] leading-none text-(--biu-color-text-subtle) tabular-nums"
                                 data-testid="sidebar-channel-time"
@@ -630,7 +655,162 @@ export const ChannelSidebarSections = memo(function ChannelSidebarSections({
                     ) : null}
                   </div>
                 )
-              })}
+  }
+
+  return (
+    <div className="space-y-1.5" data-testid="sidebar-slack-sections">
+      {/* 聊天（包含多人聊天与已发起的成员私聊；右上角筛选 + 新建） */}
+      <section className="min-w-0" data-testid="sidebar-channels-section">
+        <div className="sidebar-section-head min-w-0">
+          <button
+            type="button"
+            className="flex h-full min-h-8 min-w-0 flex-1 items-center gap-2 text-left text-[12px] font-bold tracking-wider"
+            aria-expanded={!channelsCollapsed}
+            onClick={() => toggleSection('chat.section.channels')}
+          >
+            <span className="min-w-0 flex-1 truncate tracking-normal">聊天</span>
+          </button>
+          <ChatCount count={visibleChannels.length} />
+          <SidebarFilterMenu
+            testId="sidebar-channels-filter"
+            title="聊天分组、排序与筛选"
+            grouping={{
+              id: 'groupBy',
+              label: '分组',
+              value: channelPrefs.groupBy,
+              defaultValue: 'none',
+              options: [
+                { value: 'none', label: '不分组' },
+                { value: 'kind', label: '类型' },
+                { value: 'updated', label: '更新时间' },
+              ],
+              onChange: (value) => patchChannelPrefs({ groupBy: value }),
+            }}
+            ordering={{
+              id: 'orderBy',
+              label: '排序',
+              value: channelPrefs.orderBy,
+              defaultValue: 'updated',
+              options: [
+                { value: 'updated', label: '最近活跃' },
+                { value: 'name', label: '名称' },
+              ],
+              onChange: (value) => patchChannelPrefs({ orderBy: value }),
+            }}
+            shows={[
+              {
+                id: 'showTime',
+                label: '显示时间',
+                checked: channelPrefs.showTime,
+                onChange: (checked) => patchChannelPrefs({ showTime: checked }),
+              },
+            ]}
+            filters={[
+              {
+                id: 'kind',
+                label: '类型',
+                value: channelPrefs.kind,
+                defaultValue: 'all',
+                options: [
+                  { value: 'all', label: '全部' },
+                  { value: 'dm', label: '仅私聊' },
+                  { value: 'channel', label: '仅群聊' },
+                ],
+                onChange: (value) => patchChannelPrefs({ kind: value }),
+              },
+              {
+                id: 'status',
+                label: '状态',
+                value: channelPrefs.status,
+                defaultValue: 'all',
+                options: [
+                  { value: 'all', label: '全部' },
+                  { value: 'unread', label: '仅未读' },
+                  { value: 'pinned', label: '仅置顶' },
+                ],
+                onChange: (value) => patchChannelPrefs({ status: value }),
+              },
+            ]}
+            onResetFilters={resetChannelPrefs}
+            action={{
+              id: 'mark-all-read',
+              label: '全部标为已读',
+              disabled: unreadChannels.length === 0,
+              onSelect: () => {
+                for (const ch of unreadChannels) {
+                  void markChannelRead(ch.id)
+                }
+              },
+            }}
+          />
+          <button
+            type="button"
+            className="grid size-6 shrink-0 cursor-pointer place-items-center rounded-md border-0 bg-transparent p-0 text-(--biu-color-text-muted) hover:bg-(--biu-color-bg-hover) hover:text-(--biu-color-text)"
+            title="新建聊天"
+            aria-label="新建聊天"
+            data-testid="sidebar-create-channel"
+            onClick={(event) => {
+              event.stopPropagation()
+              setCreateOpen(true)
+            }}
+          >
+            <PlusIcon className="size-4 shrink-0" />
+          </button>
+        </div>
+
+        <SidebarFold open={!channelsCollapsed}>
+          {visibleChannels.length > 0 ? (
+            <div className="sidebar-section-rows flex min-w-0 flex-col pt-0.5">
+              {channelGroups
+                ? channelGroups.map((group) => {
+                    const collapseKey = `chat.channels.${group.key}`
+                    const collapsed = Boolean(collapsedMap[collapseKey])
+                    const isTime = group.key.startsWith('time:')
+                    return (
+                      <div key={group.key} className="min-w-0" data-testid={`sidebar-channels-group-${group.key}`}>
+                        <div className="sidebar-group-head">
+                          <div
+                            role="button"
+                            tabIndex={0}
+                            className="flex min-h-8 min-w-0 flex-1 cursor-pointer items-center gap-1.5 rounded-md text-left text-[14px] font-medium tracking-normal text-inherit outline-none hover:text-(--biu-color-text) focus-visible:ring-1 focus-visible:ring-(--biu-color-border)"
+                            title={group.label}
+                            aria-expanded={!collapsed}
+                            onClick={() => toggleSection(collapseKey)}
+                            onKeyDown={(event) => {
+                              if (event.key !== 'Enter' && event.key !== ' ') return
+                              event.preventDefault()
+                              toggleSection(collapseKey)
+                            }}
+                          >
+                            <span className="grid size-6 shrink-0 place-items-center" aria-hidden>
+                              <span className="sidebar-rail-icon sidebar-group-fold">
+                                <span className="sidebar-group-fold-face">
+                                  {isTime ? (
+                                    <ClockIcon className="size-4 shrink-0" />
+                                  ) : group.key === 'kind:dm' ? (
+                                    <ChatBubbleLeftRightIcon className="size-4 shrink-0" />
+                                  ) : (
+                                    <UserGroupIcon className="size-4 shrink-0" />
+                                  )}
+                                </span>
+                                <span className="sidebar-group-fold-chevron">
+                                  <ChevronRightIcon
+                                    className={`size-4 shrink-0 opacity-80 sidebar-chevron${collapsed ? '' : ' is-open'}`}
+                                  />
+                                </span>
+                              </span>
+                            </span>
+                            <span className="sidebar-label min-w-0 flex-1 truncate">{group.label}</span>
+                          </div>
+                          <ChatCount count={group.rows.length} />
+                        </div>
+                        <SidebarFold open={!collapsed} className="sidebar-session-list min-w-0">
+                          {group.rows.map(renderChannelItem)}
+                        </SidebarFold>
+                      </div>
+                    )
+                  })
+                : visibleChannels.map(renderChannelItem)}
             </div>
           ) : null}
         </SidebarFold>

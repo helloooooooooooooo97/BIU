@@ -1,6 +1,7 @@
 import { memo, useCallback, useEffect, useMemo, useState, useSyncExternalStore, type MouseEvent } from 'react'
 import {
   ChevronRightIcon,
+  ClockIcon,
   PlusIcon,
   StarIcon,
   UserGroupIcon,
@@ -11,6 +12,12 @@ import {
 import { onAppEvents } from '@biu/biu-ui/app-events'
 import { ChatCount } from '@biu/biu-ui/chat-count'
 import { SidebarFold } from '@biu/biu-ui/sidebar-fold'
+import {
+  SidebarFilterMenu,
+  TIME_BUCKET_ORDER,
+  timeBucketForTimestamp,
+  useSidebarViewPrefs,
+} from '@biu/biu-ui/sidebar-filter-menu'
 import { FSDB_CHANGE_EVENT, parseFsdbChange, type DbRecord } from '@biu/type-file-system'
 import { useSidebarCollapseStore } from '@biu/web-session-view'
 import { SidebarRow, SidebarRowMain, type SidebarRowMenuItem } from '@biu/web-session-view/sidebar-row'
@@ -104,6 +111,11 @@ export const SidebarDocsSection = memo(function SidebarDocsSection({
   const [docs, setDocs] = useState<DbRecord[]>([])
   const [openKids, setOpenKids] = useState<Record<string, boolean>>({})
   const [activeDocId, setActiveDocId] = useState<string | null>(null)
+  const [docPrefs, patchDocPrefs, resetDocPrefs] = useSidebarViewPrefs('biu.sidebar.docs.view', {
+    groupBy: 'scope',
+    orderBy: 'updated',
+    starred: 'all',
+  })
 
   useSyncExternalStore(subscribeStarredRecords, getStarredRecordsVersion, () => 0)
   const starredRecords = getStarredRecords()
@@ -155,7 +167,37 @@ export const SidebarDocsSection = memo(function SidebarDocsSection({
     }
   }, [iconRail, refreshDocs])
 
-  const grouped = useMemo(() => groupDocsByScope(docs), [docs])
+  const visibleDocs = useMemo(() => {
+    const filtered =
+      docPrefs.starred === 'starred'
+        ? docs.filter((row) => isRecordStarred(starredRecords, PAGES_COLLECTION_PATH, row.id))
+        : docs
+    if (docPrefs.orderBy === 'name') {
+      return [...filtered].sort((a, b) =>
+        recordPreviewLabel(a).localeCompare(recordPreviewLabel(b), 'zh-CN'),
+      )
+    }
+    return filtered
+  }, [docPrefs.orderBy, docPrefs.starred, docs, starredRecords])
+
+  const grouped = useMemo(() => groupDocsByScope(visibleDocs), [visibleDocs])
+
+  const timeGroupedDocs = useMemo(() => {
+    if (docPrefs.groupBy !== 'updated') return []
+    const now = Date.now()
+    const buckets = new Map<string, DbRecord[]>()
+    for (const row of visibleDocs) {
+      const ts = typeof row.updatedAt === 'number' ? row.updatedAt : 0
+      const key = timeBucketForTimestamp(ts, now)
+      const list = buckets.get(key) ?? []
+      list.push(row)
+      buckets.set(key, list)
+    }
+    return TIME_BUCKET_ORDER.flatMap(({ key, label }) => {
+      const rows = buckets.get(key)
+      return rows?.length ? [{ key, label, rows }] : []
+    })
+  }, [docPrefs.groupBy, visibleDocs])
 
   const openDoc = useCallback(
     (row: DbRecord, opts?: { newTab?: boolean }) => {
@@ -363,7 +405,48 @@ export const SidebarDocsSection = memo(function SidebarDocsSection({
         >
           <span className="min-w-0 flex-1 truncate tracking-normal">文档</span>
         </button>
-        <ChatCount count={docs.length} />
+        <ChatCount count={visibleDocs.length} />
+        <SidebarFilterMenu
+          testId="sidebar-docs-filter"
+          title="文档分组、排序与筛选"
+          grouping={{
+            id: 'groupBy',
+            label: '分组',
+            value: docPrefs.groupBy,
+            defaultValue: 'scope',
+            options: [
+              { value: 'scope', label: '权限' },
+              { value: 'updated', label: '更新时间' },
+              { value: 'none', label: '不分组' },
+            ],
+            onChange: (value) => patchDocPrefs({ groupBy: value }),
+          }}
+          ordering={{
+            id: 'orderBy',
+            label: '排序',
+            value: docPrefs.orderBy,
+            defaultValue: 'updated',
+            options: [
+              { value: 'updated', label: '最近更新' },
+              { value: 'name', label: '名称' },
+            ],
+            onChange: (value) => patchDocPrefs({ orderBy: value }),
+          }}
+          filters={[
+            {
+              id: 'starred',
+              label: '收藏',
+              value: docPrefs.starred,
+              defaultValue: 'all',
+              options: [
+                { value: 'all', label: '全部' },
+                { value: 'starred', label: '仅收藏' },
+              ],
+              onChange: (value) => patchDocPrefs({ starred: value }),
+            },
+          ]}
+          onResetFilters={resetDocPrefs}
+        />
         <button
           type="button"
           className="grid size-6 shrink-0 cursor-pointer place-items-center rounded-md border-0 bg-transparent p-0 text-(--biu-color-text-muted) hover:bg-(--biu-color-bg-hover) hover:text-(--biu-color-text)"
@@ -381,7 +464,54 @@ export const SidebarDocsSection = memo(function SidebarDocsSection({
 
       <SidebarFold open={!sectionCollapsed}>
         <div className="sidebar-section-rows flex min-w-0 flex-col pt-0.5">
-          {DOC_SCOPES.map(({ key, label, creatable, Icon }) => {
+          {docPrefs.groupBy === 'none' ? (
+            visibleDocs.length > 0 ? (
+              <div className="min-w-0">{renderTree(visibleDocs, 'personal')}</div>
+            ) : null
+          ) : docPrefs.groupBy === 'updated' ? (
+            timeGroupedDocs.map(({ key, label, rows }) => {
+              const collapseKey = `chat.docs.time.${key}`
+              const collapsed = Boolean(collapsedMap[collapseKey])
+              return (
+                <div key={key} className="min-w-0" data-testid={`sidebar-docs-time-${key}`}>
+                  <div className="sidebar-group-head">
+                    <div
+                      role="button"
+                      tabIndex={0}
+                      className="flex min-h-8 min-w-0 flex-1 cursor-pointer items-center gap-1.5 rounded-md text-left text-[14px] font-medium tracking-normal text-inherit outline-none hover:text-(--biu-color-text) focus-visible:ring-1 focus-visible:ring-(--biu-color-border)"
+                      title={label}
+                      aria-expanded={!collapsed}
+                      onClick={() => toggleCollapse(collapseKey)}
+                      onKeyDown={(event) => {
+                        if (event.key !== 'Enter' && event.key !== ' ') return
+                        event.preventDefault()
+                        toggleCollapse(collapseKey)
+                      }}
+                    >
+                      <span className="grid size-6 shrink-0 place-items-center" aria-hidden>
+                        <span className="sidebar-rail-icon sidebar-group-fold">
+                          <span className="sidebar-group-fold-face">
+                            <ClockIcon className="size-4 shrink-0" />
+                          </span>
+                          <span className="sidebar-group-fold-chevron">
+                            <ChevronRightIcon
+                              className={`size-4 shrink-0 opacity-80 sidebar-chevron${collapsed ? '' : ' is-open'}`}
+                            />
+                          </span>
+                        </span>
+                      </span>
+                      <span className="sidebar-label min-w-0 flex-1 truncate">{label}</span>
+                    </div>
+                    <ChatCount count={rows.length} />
+                  </div>
+                  <SidebarFold open={!collapsed} className="sidebar-session-list min-w-0">
+                    {renderTree(rows, 'personal')}
+                  </SidebarFold>
+                </div>
+              )
+            })
+          ) : (
+            DOC_SCOPES.map(({ key, label, creatable, Icon }) => {
             const scopeDocs = grouped[key]
             const collapseKey = `${SCOPE_COLLAPSE_PREFIX}${key}`
             const collapsed = Boolean(collapsedMap[collapseKey])
@@ -440,7 +570,8 @@ export const SidebarDocsSection = memo(function SidebarDocsSection({
                 ) : null}
               </div>
             )
-          })}
+          })
+          )}
         </div>
       </SidebarFold>
     </section>

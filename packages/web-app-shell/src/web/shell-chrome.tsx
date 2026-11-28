@@ -6,7 +6,7 @@ import { syncWorkspaceEndpoint } from '@biu/biu-ui/workspace-transport'
 import { lazy, Suspense, useCallback, useEffect, useRef, useState, useSyncExternalStore, type ReactNode, type Ref } from 'react'
 import { createPortal } from 'react-dom'
 import { useLocation, useNavigate } from 'react-router-dom'
-import { ArrowPathIcon, ArrowRightStartOnRectangleIcon, BellIcon, ChatBubbleLeftRightIcon, CheckIcon, ChevronDownIcon, ChevronRightIcon, CircleStackIcon, ClipboardDocumentIcon, CloudIcon, ComputerDesktopIcon, Cog6ToothIcon, CameraIcon, EyeIcon, EyeSlashIcon, MagnifyingGlassIcon, PlusIcon, XMarkIcon } from '@heroicons/react/16/solid'
+import { ArrowPathIcon, ArrowRightStartOnRectangleIcon, BellIcon, ChatBubbleLeftRightIcon, CheckIcon, ChevronDownIcon, ChevronRightIcon, CircleStackIcon, ClipboardDocumentIcon, CloudIcon, ComputerDesktopIcon, Cog6ToothIcon, CameraIcon, EyeIcon, EyeSlashIcon, HomeIcon, MagnifyingGlassIcon, PlusIcon, XMarkIcon } from '@heroicons/react/16/solid'
 import { AnchorMenu } from '@biu/biu-ui/anchor-menu'
 import {
   AI_AVATAR_THEMES,
@@ -3699,10 +3699,10 @@ export function ShellSidePlaces({
         onClick={onSettings}
       />
       <SideAction
-        title="会话"
+        title="主页"
         active={activeId === 'agent'}
         testId="chrome-chat-panel"
-        icon={<ChatBubbleLeftRightIcon {...chromeIcon} />}
+        icon={<HomeIcon {...chromeIcon} />}
         onClick={() => navigate(agentHref)}
       />
       <SideAction

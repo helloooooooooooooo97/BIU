@@ -1,5 +1,17 @@
 export { RenderBoundary } from './render-boundary.tsx'
 export { SidebarFold } from './sidebar-fold.tsx'
+export {
+  SidebarFilterMenu,
+  TIME_BUCKET_ORDER,
+  timeBucketForTimestamp,
+  useSidebarViewPrefs,
+  type SidebarFilterAction,
+  type SidebarFilterMenuProps,
+  type SidebarFilterOption,
+  type SidebarFilterSelectRow,
+  type SidebarFilterToggleRow,
+  type TimeBucketKey,
+} from './sidebar-filter-menu.tsx'
 export { ChatCount } from './chat-count.tsx'
 export {
   readWorkspaceProfile,

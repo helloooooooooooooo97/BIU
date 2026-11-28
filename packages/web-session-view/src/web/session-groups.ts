@@ -103,7 +103,7 @@ export function buildSidebarSections(sessions: SessionListItem[]): SidebarSectio
     sections.push({ kind: 'pinned', label: '收藏', sessions: pinned })
   }
 
-  sections.push({ kind: 'project', label: '项目', groups: groupSessionsByProject(sessions) })
+  sections.push({ kind: 'project', label: '代理', groups: groupSessionsByProject(sessions) })
   return sections
 }
 

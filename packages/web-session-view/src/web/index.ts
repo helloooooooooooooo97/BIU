@@ -61,6 +61,7 @@ export {
   UNGROUPED_PROJECT_KEY,
   mostRecentSessionId,
   buildSidebarSections,
+  sessionActivityAt,
   folderNameFromPath,
   type SessionSidebarGroup,
   type SidebarGroupKind,
