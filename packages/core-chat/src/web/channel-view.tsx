@@ -6,6 +6,7 @@ import {
   ArrowUturnLeftIcon,
   BellIcon,
   BellSlashIcon,
+  BoltIcon,
   BookmarkIcon,
   BookmarkSquareIcon,
   ChatBubbleLeftRightIcon,
@@ -1207,6 +1208,7 @@ export const ChannelStage = memo(function ChannelStage({
                     const isEphemeral = Boolean(msg.ephemeralTo)
                     const isRecalled = Boolean(msg.deletedAt && msg.deletedAt > 0)
                     const isAgent = msg.senderType === 'agent'
+                    const isWebhook = msg.senderType === 'webhook'
                     const isSystemAgent = msg.senderType === 'system' && Boolean(msg.senderId)
                     const approvalMeta = msg.meta?.kind === 'approval' ? msg.meta : null
                     const sentLabel = formatSentAt(msg.createdAt)
@@ -1308,7 +1310,7 @@ export const ChannelStage = memo(function ChannelStage({
                           ) : (
                             <>
                               {msg.text ? (
-                                isAgent && !isEphemeral ? (
+                                (isAgent || isWebhook) && !isEphemeral ? (
                                   <div className="chat-assistant-body">
                                     <MarkdownBody text={msg.text} />
                                   </div>
@@ -1484,6 +1486,23 @@ export const ChannelStage = memo(function ChannelStage({
                                 />
                                 <span className="truncate font-medium">{msg.senderName}</span>
                               </button>
+                            ) : isWebhook ? (
+                              <span
+                                className="inline-flex min-w-0 items-center gap-1.5"
+                                title={`外部 Webhook 推送：${msg.senderName}`}
+                                data-testid="channel-msg-avatar"
+                              >
+                                <span className="inline-flex size-4 shrink-0 items-center justify-center rounded-full bg-amber-500/18 text-amber-400">
+                                  <BoltIcon className="size-2.5" />
+                                </span>
+                                <span className="truncate font-medium text-(--biu-color-text)">{msg.senderName}</span>
+                                <span
+                                  className="shrink-0 rounded-full bg-(--biu-color-bg-muted) px-1.5 py-0.5 text-[10px] font-medium leading-none text-(--biu-color-text-subtle)"
+                                  data-testid="channel-msg-webhook-badge"
+                                >
+                                  Webhook
+                                </span>
+                              </span>
                             ) : (
                               <span
                                 className={`inline-flex min-w-0 items-center gap-1.5${isSelf ? ' flex-row-reverse' : ''}`}

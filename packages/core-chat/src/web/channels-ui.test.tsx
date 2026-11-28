@@ -1575,3 +1575,198 @@ test('sidebar uses hide/leave/unfollow menus, breadcrumb toggles thread follow, 
     assert.equal(disbandCalled, true)
   })
 })
+
+test('ChannelStage renders webhook messages with badge and manages webhooks in-place inside right floating panel', async () => {
+  const now = Date.now()
+  let webhooks: Array<{
+    id: string
+    channelId: string
+    name: string
+    token: string
+    url: string
+    enabled: boolean
+    autoTriggerAgentId?: string
+    createdBy: string
+    createdByName: string
+    canManage: boolean
+    lastUsedAt: number
+    createdAt: number
+    updatedAt: number
+  }> = []
+  let testedWebhookId = ''
+  let rotatedWebhookId = ''
+
+  const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = new URL(typeof input === 'string' ? input : input.toString(), 'http://localhost')
+    if (url.pathname === '/api/channels/ch-wh') {
+      return new Response(
+        JSON.stringify({
+          channel: {
+            id: 'ch-wh',
+            workspaceId: 'ws-1',
+            kind: 'channel',
+            dmKey: '',
+            name: '自动化告警群',
+            topic: '',
+            accessMode: 'private',
+            createdBy: 'acc-alice',
+            createdAt: now,
+            updatedAt: now,
+            memberCount: 1,
+            agentCount: 1,
+            lastMessageAt: now,
+            lastMessageText: '构建通过',
+          },
+          members: [
+            {
+              channelId: 'ch-wh',
+              memberType: 'account',
+              memberId: 'acc-alice',
+              role: 'owner',
+              addedBy: 'acc-alice',
+              addedAt: now,
+              name: 'Alice',
+              isOwn: true,
+            },
+            {
+              channelId: 'ch-wh',
+              memberType: 'agent',
+              memberId: 'ag-ops',
+              role: 'member',
+              addedBy: 'acc-alice',
+              addedAt: now,
+              name: '运维助手',
+              ownerAccountId: 'acc-alice',
+              ownerName: 'Alice',
+              isOwn: true,
+            },
+          ],
+          messages: [
+            {
+              id: 'm-wh-1',
+              channelId: 'ch-wh',
+              seq: 1,
+              senderType: 'webhook',
+              senderId: 'wh-existing',
+              senderName: 'GitHub Actions',
+              replyToId: '',
+              text: '**main 构建通过**\n\n全部 37 项单测通过',
+              mentions: [],
+              traceId: '',
+              ephemeralTo: '',
+              meta: { kind: 'info', webhookId: 'wh-existing', webhookName: 'GitHub Actions' },
+              createdAt: now,
+            },
+          ],
+          activities: [],
+          myAccountId: 'acc-alice',
+          canManageMembers: true,
+        }),
+        { status: 200 },
+      )
+    }
+    if (url.pathname === '/api/channels/ch-wh/webhooks' && (!init?.method || init.method === 'GET')) {
+      return new Response(JSON.stringify({ webhooks }), { status: 200 })
+    }
+    if (url.pathname === '/api/channels/ch-wh/webhooks' && init?.method === 'POST') {
+      const body = JSON.parse(String(init.body ?? '{}')) as { name?: string; autoTriggerAgentId?: string }
+      const created = {
+        id: 'wh-1',
+        channelId: 'ch-wh',
+        name: body.name || 'Webhook',
+        token: 'wh_secret_1',
+        url: '/api/webhooks/channels/wh_secret_1',
+        enabled: true,
+        ...(body.autoTriggerAgentId ? { autoTriggerAgentId: body.autoTriggerAgentId } : {}),
+        createdBy: 'acc-alice',
+        createdByName: 'Alice',
+        canManage: true,
+        lastUsedAt: 0,
+        createdAt: now,
+        updatedAt: now,
+      }
+      webhooks = [created, ...webhooks]
+      return new Response(JSON.stringify({ webhook: created }), { status: 200 })
+    }
+    if (url.pathname === '/api/channels/ch-wh/webhooks/wh-1/test' && init?.method === 'POST') {
+      testedWebhookId = 'wh-1'
+      return new Response(
+        JSON.stringify({
+          message: {
+            id: 'm-wh-test',
+            channelId: 'ch-wh',
+            seq: 2,
+            senderType: 'webhook',
+            senderId: 'wh-1',
+            senderName: 'Sentry',
+            replyToId: '',
+            text: '测试消息',
+            mentions: [],
+            traceId: '',
+            ephemeralTo: '',
+            createdAt: now,
+          },
+          triggeredRunIds: [],
+        }),
+        { status: 200 },
+      )
+    }
+    if (url.pathname === '/api/channels/ch-wh/webhooks/wh-1/rotate' && init?.method === 'POST') {
+      rotatedWebhookId = 'wh-1'
+      webhooks = webhooks.map((w) =>
+        w.id === 'wh-1' ? { ...w, token: 'wh_secret_2', url: '/api/webhooks/channels/wh_secret_2' } : w,
+      )
+      return new Response(JSON.stringify({ webhook: webhooks[0] }), { status: 200 })
+    }
+    if (url.pathname === '/api/channels/ch-wh/webhooks/wh-1' && init?.method === 'DELETE') {
+      webhooks = webhooks.filter((w) => w.id !== 'wh-1')
+      return new Response(JSON.stringify({ ok: true, id: 'wh-1' }), { status: 200 })
+    }
+    return new Response(JSON.stringify({ items: [] }), { status: 200 })
+  })
+  vi.stubGlobal('fetch', fetchMock)
+
+  const stage = render(
+    <MemoryRouter initialEntries={['/channels/ch-wh']}>
+      <ChannelStage channelId="ch-wh" />
+    </MemoryRouter>,
+  )
+
+  // 1. Webhook 消息带有 Webhook 徽标与 Markdown 内容
+  await waitFor(() => {
+    assert.ok(stage.queryByTestId('channel-msg-webhook-badge'))
+    assert.ok(stage.container.textContent?.includes('GitHub Actions'))
+    assert.ok(stage.container.textContent?.includes('main 构建通过'))
+  })
+
+  // 2. 在右侧悬浮面板「管理」中新建、查看 URL、发送测试、重置密钥与删除（零居中弹窗）
+  fireEvent.click(stage.getByTestId('channel-more-menu-btn'))
+  fireEvent.click(await waitFor(() => stage.getByTestId('channel-manage-members')))
+  assert.equal(document.querySelector('.biu-float-overlay'), null)
+  fireEvent.click(await waitFor(() => stage.getByTestId('channel-open-add-webhook')))
+  fireEvent.change(stage.getByTestId('channel-webhook-name-input'), { target: { value: 'Sentry 告警' } })
+  fireEvent.change(stage.getByTestId('channel-webhook-agent-select'), { target: { value: 'ag-ops' } })
+  fireEvent.click(stage.getByTestId('channel-create-webhook-submit'))
+
+  await waitFor(() => {
+    assert.ok(stage.queryByTestId('channel-webhook-url-wh-1')?.textContent?.includes('/api/webhooks/channels/wh_secret_1'))
+  })
+
+  fireEvent.click(stage.getByTestId('channel-webhook-test-wh-1'))
+  await waitFor(() => {
+    assert.equal(testedWebhookId, 'wh-1')
+    assert.ok(stage.container.textContent?.includes('发送一条测试消息'))
+  })
+
+  fireEvent.click(stage.getByTestId('channel-webhook-rotate-wh-1'))
+  await waitFor(() => {
+    assert.equal(rotatedWebhookId, 'wh-1')
+    assert.ok(stage.queryByTestId('channel-webhook-url-wh-1')?.textContent?.includes('/api/webhooks/channels/wh_secret_2'))
+    assert.ok(stage.container.textContent?.includes('旧链接已失效'))
+  })
+
+  fireEvent.click(stage.getByTestId('channel-webhook-delete-wh-1'))
+  await waitFor(() => {
+    assert.equal(Boolean(stage.queryByTestId('channel-webhook-row-wh-1')), false)
+  })
+})

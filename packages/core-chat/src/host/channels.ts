@@ -1,4 +1,5 @@
 import type { Context } from 'cordis'
+import { randomBytes } from 'node:crypto'
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { basename, extname, join } from 'node:path'
 import type { DatabaseSync } from 'node:sqlite'
@@ -43,10 +44,12 @@ import {
   type ChannelRunStatus,
   type ChannelSavedMessageView,
   type ChannelSearchHit,
+  type ChannelSenderType,
   type ChannelSidebarThreadItem,
   type ChannelSummary,
   type ChannelThreadPayload,
   type ChannelThreadSummary,
+  type ChannelWebhookView,
 } from '../shared/channel-types.ts'
 
 export const MAX_CHANNEL_HANDOFF_HOPS = 3
@@ -138,6 +141,64 @@ type RunRow = {
   error: string
   created_at: number
   finished_at: number
+}
+
+type WebhookRow = {
+  id: string
+  channel_id: string
+  workspace_id: string
+  name: string
+  token: string
+  enabled: number
+  auto_trigger_agent_id: string
+  created_by: string
+  last_used_at: number
+  created_at: number
+  updated_at: number
+}
+
+function generateWebhookToken(): string {
+  return `wh_${randomBytes(24).toString('base64url')}`
+}
+
+function webhookPathForToken(token: string): string {
+  return `/api/webhooks/channels/${encodeURIComponent(token)}`
+}
+
+/** 兼容 Slack `{ text }`、Discord `{ content, username }`、通用 `{ title, message }` 与原始 JSON 载荷。 */
+export function formatIncomingWebhookText(payload: {
+  text?: unknown
+  content?: unknown
+  message?: unknown
+  title?: unknown
+  rawBody?: unknown
+}): string {
+  const pickStr = (v: unknown): string => (typeof v === 'string' ? v.trim() : '')
+  const title = pickStr(payload.title)
+  const body = pickStr(payload.text) || pickStr(payload.content) || pickStr(payload.message)
+  let combined = ''
+  if (title && body) {
+    combined = `**${title}**\n\n${body}`
+  } else if (body) {
+    combined = body
+  } else if (title) {
+    combined = `**${title}**`
+  } else if (payload.rawBody && typeof payload.rawBody === 'object' && !Array.isArray(payload.rawBody)) {
+    const entries = Object.keys(payload.rawBody as Record<string, unknown>)
+    if (entries.length > 0) {
+      let jsonStr = ''
+      try {
+        jsonStr = JSON.stringify(payload.rawBody, null, 2)
+      } catch {
+        jsonStr = String(payload.rawBody)
+      }
+      if (jsonStr && jsonStr !== '{}') {
+        const clipped = jsonStr.length > 4000 ? `${jsonStr.slice(0, 4000)}\n…` : jsonStr
+        combined = `\`\`\`json\n${clipped}\n\`\`\``
+      }
+    }
+  }
+  return combined.length > 16_000 ? `${combined.slice(0, 15_990)}\n…（内容过长已截断）` : combined
 }
 
 type QueuedJob = {
@@ -1341,6 +1402,7 @@ export class ChannelService {
       this.queues.delete(key)
     }
     const db = this.db()
+    db.prepare(`DELETE FROM channel_webhooks WHERE channel_id = ?`).run(channelId)
     db.prepare(`DELETE FROM channel_thread_follows WHERE channel_id = ?`).run(channelId)
     db.prepare(`DELETE FROM channel_message_reactions WHERE channel_id = ?`).run(channelId)
     db.prepare(`DELETE FROM channel_saved_messages WHERE channel_id = ?`).run(channelId)
@@ -1519,6 +1581,14 @@ export class ChannelService {
     this.db()
       .prepare(`DELETE FROM channel_members WHERE channel_id = ? AND member_type = ? AND member_id = ?`)
       .run(channelId, memberType, cleanId)
+    if (memberType === 'agent') {
+      this.db()
+        .prepare(
+          `UPDATE channel_webhooks SET auto_trigger_agent_id = '', updated_at = ?
+           WHERE channel_id = ? AND auto_trigger_agent_id = ?`,
+        )
+        .run(Date.now(), channelId, cleanId)
+    }
     const members = this.listMembers(channelId, accountId)
     this.broadcastToChannel(channelId, row.workspace_id, 'channel/members', { channelId, members })
     return members
@@ -1723,20 +1793,23 @@ export class ChannelService {
       workspaceId ??
       ((this.db().prepare(`SELECT workspace_id FROM channels WHERE id = ?`).get(row.channel_id) as { workspace_id?: string } | undefined)
         ?.workspace_id || undefined)
+    const meta = safeJsonParse<ChannelMessageMeta>(row.meta_json, {})
     let senderName = ''
     let senderAvatar: string | undefined
     let senderMascot: SessionMascot | undefined
     if (row.sender_type === 'agent') {
-      const meta = this.agentMeta(row.sender_id)
-      senderName = meta.name
-      senderMascot = meta.mascot
+      const ameta = this.agentMeta(row.sender_id)
+      senderName = ameta.name
+      senderMascot = ameta.mascot
     } else if (row.sender_type === 'account') {
       senderName = this.accountLabel(row.sender_id, channelWorkspaceId)
       senderAvatar = this.accountAvatar(row.sender_id, channelWorkspaceId)
+    } else if (row.sender_type === 'webhook') {
+      senderName = this.webhookLabel(row.sender_id, meta.webhookName)
     } else if (row.sender_id) {
-      const meta = this.agentMeta(row.sender_id)
-      senderName = meta.name
-      senderMascot = meta.mascot
+      const ameta = this.agentMeta(row.sender_id)
+      senderName = ameta.name
+      senderMascot = ameta.mascot
     } else {
       senderName = '系统'
     }
@@ -1747,12 +1820,15 @@ export class ChannelService {
         lookup?.get(row.reply_to_id) ??
         (this.db().prepare(`SELECT * FROM channel_messages WHERE id = ?`).get(row.reply_to_id) as MessageRow | undefined)
       if (target && !target.ephemeral_to) {
+        const targetMeta = safeJsonParse<ChannelMessageMeta>(target.meta_json, {})
         const targetName =
           target.sender_type === 'agent'
             ? this.agentMeta(target.sender_id).name
             : target.sender_type === 'account'
               ? this.accountLabel(target.sender_id, channelWorkspaceId)
-              : '系统'
+              : target.sender_type === 'webhook'
+                ? this.webhookLabel(target.sender_id, targetMeta.webhookName)
+                : '系统'
         const targetDeleted = Number(target.deleted_at ?? 0) > 0
         replyPreview = {
           id: target.id,
@@ -1764,7 +1840,6 @@ export class ChannelService {
       }
     }
 
-    const meta = safeJsonParse<ChannelMessageMeta>(row.meta_json, {})
     let viaAgentId: string | undefined
     let viaAgentName: string | undefined
     let viaAgentMascot: SessionMascot | undefined
@@ -1848,7 +1923,9 @@ export class ChannelService {
           ? this.agentMeta(r.sender_id).name
           : r.sender_type === 'account'
             ? this.accountLabel(r.sender_id, workspaceId)
-            : '系统'
+            : r.sender_type === 'webhook'
+              ? this.webhookLabel(r.sender_id)
+              : '系统'
       participantNames.push(name)
     }
     return {
@@ -1951,12 +2028,15 @@ export class ChannelService {
     const viewerName = this.accountLabel(accountId, ch.workspace_id)
     const transcript = rows
       .map((r) => {
+        const rMeta = safeJsonParse<ChannelMessageMeta>(r.meta_json, {})
         const who =
           r.sender_type === 'agent'
             ? this.agentMeta(r.sender_id).name
             : r.sender_type === 'account'
               ? this.accountLabel(r.sender_id, ch.workspace_id)
-              : '系统'
+              : r.sender_type === 'webhook'
+                ? this.webhookLabel(r.sender_id, rMeta.webhookName)
+                : '系统'
         const threadTag = r.thread_root_id ? '[话题回复] ' : ''
         return `- ${threadTag}${who}: ${r.text.replace(/\s+/g, ' ').trim().slice(0, 260)}`
       })
@@ -1982,12 +2062,15 @@ export class ChannelService {
       /* fallback below */
     }
     const fallbackLines = rows.slice(-8).map((r) => {
+      const rMeta = safeJsonParse<ChannelMessageMeta>(r.meta_json, {})
       const who =
         r.sender_type === 'agent'
           ? this.agentMeta(r.sender_id).name
           : r.sender_type === 'account'
             ? this.accountLabel(r.sender_id, ch.workspace_id)
-            : '系统'
+            : r.sender_type === 'webhook'
+              ? this.webhookLabel(r.sender_id, rMeta.webhookName)
+              : '系统'
       return `- **${who}**：${r.text.replace(/\s+/g, ' ').trim().slice(0, 140) || '[附件]'}`
     })
     return {
@@ -1999,7 +2082,7 @@ export class ChannelService {
 
   private insertMessage(input: {
     channelId: string
-    senderType: 'account' | 'agent' | 'system'
+    senderType: ChannelSenderType
     senderId: string
     replyToId?: string
     threadRootId?: string
@@ -2444,6 +2527,257 @@ export class ChannelService {
     }
   }
 
+  private webhookLabel(webhookId: string, fallbackName?: string): string {
+    const cleanFallback = String(fallbackName ?? '').trim()
+    if (cleanFallback) return cleanFallback
+    if (webhookId) {
+      const row = this.db()
+        .prepare(`SELECT name FROM channel_webhooks WHERE id = ?`)
+        .get(webhookId) as { name?: string } | undefined
+      if (row?.name?.trim()) return row.name.trim()
+    }
+    return 'Webhook'
+  }
+
+  private toWebhookView(row: WebhookRow, channel: ChannelRow, viewerAccountId: string): ChannelWebhookView {
+    const canManage =
+      this.canManageChannel(channel, viewerAccountId) ||
+      (Boolean(viewerAccountId) && (viewerAccountId === 'local' || row.created_by === viewerAccountId))
+    const autoAgentId = String(row.auto_trigger_agent_id ?? '').trim()
+    return {
+      id: row.id,
+      channelId: row.channel_id,
+      name: row.name,
+      token: canManage ? row.token : '',
+      url: canManage ? webhookPathForToken(row.token) : '',
+      enabled: Number(row.enabled ?? 0) > 0,
+      ...(autoAgentId ? { autoTriggerAgentId: autoAgentId, autoTriggerAgentName: this.agentMeta(autoAgentId).name } : {}),
+      createdBy: row.created_by,
+      createdByName: this.accountLabel(row.created_by, channel.workspace_id),
+      canManage,
+      lastUsedAt: Number(row.last_used_at ?? 0),
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+    }
+  }
+
+  listWebhooks(channelId: string): ChannelWebhookView[] {
+    const { accountId } = this.currentActorIds()
+    const ch = this.requireChannelRow(channelId, accountId)
+    const rows = this.db()
+      .prepare(`SELECT * FROM channel_webhooks WHERE channel_id = ? ORDER BY created_at DESC`)
+      .all(channelId) as WebhookRow[]
+    return rows.map((r) => this.toWebhookView(r, ch, accountId))
+  }
+
+  createWebhook(
+    channelId: string,
+    input: { name: string; autoTriggerAgentId?: string },
+  ): ChannelWebhookView {
+    const { accountId } = this.currentActorIds()
+    const ch = this.requireChannelRow(channelId, accountId)
+    if (ch.kind === 'dm') throw new Error('私聊暂不支持创建 Webhook，请在群聊中配置')
+    const name = String(input.name ?? '').trim().slice(0, 48)
+    if (!name) throw new Error('Webhook 名称不能为空')
+    const autoTriggerAgentId = String(input.autoTriggerAgentId ?? '').trim()
+    if (autoTriggerAgentId) {
+      const exists = this.db()
+        .prepare(
+          `SELECT 1 FROM channel_members WHERE channel_id = ? AND member_type = 'agent' AND member_id = ? LIMIT 1`,
+        )
+        .get(channelId, autoTriggerAgentId)
+      if (!exists) throw new Error('自动唤醒的 Agent 不在当前群聊中')
+    }
+    const id = allocateRecordId()
+    const token = generateWebhookToken()
+    const now = Date.now()
+    this.db()
+      .prepare(
+        `INSERT INTO channel_webhooks
+          (id, channel_id, workspace_id, name, token, enabled, auto_trigger_agent_id, created_by, last_used_at, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, 1, ?, ?, 0, ?, ?)`,
+      )
+      .run(id, channelId, ch.workspace_id, name, token, autoTriggerAgentId, accountId, now, now)
+    const created = this.db().prepare(`SELECT * FROM channel_webhooks WHERE id = ?`).get(id) as WebhookRow
+    return this.toWebhookView(created, ch, accountId)
+  }
+
+  private requireEditableWebhook(channelId: string, webhookId: string): {
+    channel: ChannelRow
+    webhook: WebhookRow
+    accountId: string
+  } {
+    const { accountId } = this.currentActorIds()
+    const channel = this.requireChannelRow(channelId, accountId)
+    const webhook = this.db()
+      .prepare(`SELECT * FROM channel_webhooks WHERE id = ? AND channel_id = ?`)
+      .get(webhookId, channelId) as WebhookRow | undefined
+    if (!webhook) throw new Error('not found: 未找到对应的 Webhook')
+    const isCreator = accountId === 'local' || webhook.created_by === accountId
+    if (!isCreator && !this.canManageChannel(channel, accountId)) {
+      throw new Error('permission denied: 仅创建者或群管理员可管理该 Webhook')
+    }
+    return { channel, webhook, accountId }
+  }
+
+  updateWebhook(
+    channelId: string,
+    webhookId: string,
+    patch: { name?: string; enabled?: boolean; autoTriggerAgentId?: string },
+  ): ChannelWebhookView {
+    const { channel, webhook, accountId } = this.requireEditableWebhook(channelId, webhookId)
+    const nextName = patch.name !== undefined ? String(patch.name).trim().slice(0, 48) : webhook.name
+    if (!nextName) throw new Error('Webhook 名称不能为空')
+    const nextEnabled = patch.enabled !== undefined ? (patch.enabled ? 1 : 0) : webhook.enabled
+    let nextAgentId = webhook.auto_trigger_agent_id
+    if (patch.autoTriggerAgentId !== undefined) {
+      nextAgentId = String(patch.autoTriggerAgentId ?? '').trim()
+      if (nextAgentId) {
+        const exists = this.db()
+          .prepare(
+            `SELECT 1 FROM channel_members WHERE channel_id = ? AND member_type = 'agent' AND member_id = ? LIMIT 1`,
+          )
+          .get(channelId, nextAgentId)
+        if (!exists) throw new Error('自动唤醒的 Agent 不在当前群聊中')
+      }
+    }
+    const now = Date.now()
+    this.db()
+      .prepare(
+        `UPDATE channel_webhooks
+         SET name = ?, enabled = ?, auto_trigger_agent_id = ?, updated_at = ?
+         WHERE id = ? AND channel_id = ?`,
+      )
+      .run(nextName, nextEnabled, nextAgentId, now, webhookId, channelId)
+    const updated = this.db().prepare(`SELECT * FROM channel_webhooks WHERE id = ?`).get(webhookId) as WebhookRow
+    return this.toWebhookView(updated, channel, accountId)
+  }
+
+  rotateWebhookToken(channelId: string, webhookId: string): ChannelWebhookView {
+    const { channel, accountId } = this.requireEditableWebhook(channelId, webhookId)
+    const nextToken = generateWebhookToken()
+    const now = Date.now()
+    this.db()
+      .prepare(`UPDATE channel_webhooks SET token = ?, updated_at = ? WHERE id = ? AND channel_id = ?`)
+      .run(nextToken, now, webhookId, channelId)
+    const updated = this.db().prepare(`SELECT * FROM channel_webhooks WHERE id = ?`).get(webhookId) as WebhookRow
+    return this.toWebhookView(updated, channel, accountId)
+  }
+
+  deleteWebhook(channelId: string, webhookId: string): { ok: true; id: string } {
+    this.requireEditableWebhook(channelId, webhookId)
+    this.db().prepare(`DELETE FROM channel_webhooks WHERE id = ? AND channel_id = ?`).run(webhookId, channelId)
+    return { ok: true, id: webhookId }
+  }
+
+  testWebhook(channelId: string, webhookId: string): { message: ChannelMessageView; triggeredRunIds: string[] } {
+    const { webhook } = this.requireEditableWebhook(channelId, webhookId)
+    if (!Number(webhook.enabled)) throw new Error('该 Webhook 已停用，请先启用后再发送测试消息')
+    const result = this.receiveWebhookByToken(webhook.token, {
+      title: `${webhook.name} · 连通性测试`,
+      text: `这是一条来自 **${webhook.name}** 的测试推送，外部系统向该 Webhook URL 发送 \`POST\` 请求即可推送消息到此频道。`,
+    })
+    return { message: result.message, triggeredRunIds: result.triggeredRunIds }
+  }
+
+  receiveWebhookByToken(
+    rawToken: string,
+    payload: {
+      text?: unknown
+      content?: unknown
+      message?: unknown
+      title?: unknown
+      username?: unknown
+      senderName?: unknown
+      threadRootId?: unknown
+      rawBody?: unknown
+    },
+  ): { ok: true; message: ChannelMessageView; triggeredRunIds: string[] } {
+    const token = String(rawToken ?? '').trim()
+    if (!token) throw new Error('not found: 无效的 Webhook')
+    const webhook = this.db()
+      .prepare(`SELECT * FROM channel_webhooks WHERE token = ?`)
+      .get(token) as WebhookRow | undefined
+    if (!webhook) throw new Error('not found: 无效的 Webhook')
+    if (!Number(webhook.enabled)) throw new Error('permission denied: 该 Webhook 已停用')
+
+    const channel = this.db()
+      .prepare(`SELECT * FROM channels WHERE id = ?`)
+      .get(webhook.channel_id) as ChannelRow | undefined
+    if (!channel) throw new Error('not found: 对应聊天不存在或已解散')
+
+    const text = formatIncomingWebhookText(payload)
+    if (!text) throw new Error('消息内容不能为空（请传 text / content / message 字段）')
+
+    const overrideName =
+      (typeof payload.username === 'string' && payload.username.trim()) ||
+      (typeof payload.senderName === 'string' && payload.senderName.trim()) ||
+      ''
+    const displayName = (overrideName || webhook.name || 'Webhook').slice(0, 48)
+
+    const deliver = () => {
+      let threadRootId = typeof payload.threadRootId === 'string' ? payload.threadRootId.trim() : ''
+      if (threadRootId) {
+        const rootRow = this.db()
+          .prepare(`SELECT id, thread_root_id, ephemeral_to FROM channel_messages WHERE id = ? AND channel_id = ?`)
+          .get(threadRootId, channel.id) as { id?: string; thread_root_id?: string; ephemeral_to?: string } | undefined
+        if (!rootRow || rootRow.ephemeral_to) throw new Error('未找到对应的话题根消息')
+        threadRootId = rootRow.thread_root_id?.trim() || rootRow.id!
+      }
+
+      const now = Date.now()
+      this.db()
+        .prepare(`UPDATE channel_webhooks SET last_used_at = ?, updated_at = ? WHERE id = ?`)
+        .run(now, now, webhook.id)
+
+      const message = this.insertMessage({
+        channelId: channel.id,
+        senderType: 'webhook',
+        senderId: webhook.id,
+        threadRootId,
+        text,
+        mentions: [],
+        meta: {
+          kind: 'info',
+          webhookId: webhook.id,
+          webhookName: displayName,
+        },
+      })
+
+      const triggeredRunIds: string[] = []
+      const autoAgentId = String(webhook.auto_trigger_agent_id ?? '').trim()
+      if (autoAgentId) {
+        const agentInChannel = this.db()
+          .prepare(
+            `SELECT 1 FROM channel_members WHERE channel_id = ? AND member_type = 'agent' AND member_id = ? LIMIT 1`,
+          )
+          .get(channel.id, autoAgentId)
+        if (agentInChannel) {
+          const invokerId = webhook.created_by || channel.created_by || 'local'
+          const runId = this.enqueueAgentRun({
+            channelId: channel.id,
+            workspaceId: channel.workspace_id,
+            agentId: autoAgentId,
+            invokerId,
+            originMessageId: message.id,
+            ...(threadRootId ? { threadRootId } : {}),
+            senderName: `Webhook · ${displayName}`,
+            text,
+            hopCount: 0,
+            visitedAgents: new Set(),
+          })
+          if (runId) triggeredRunIds.push(runId)
+        }
+      }
+
+      return { ok: true as const, message, triggeredRunIds }
+    }
+
+    const withWs = () => (channel.workspace_id ? runWithRequestWorkspace(channel.workspace_id, deliver) : deliver())
+    const invokerAccount = webhook.created_by && webhook.created_by !== 'local' ? webhook.created_by : ''
+    return invokerAccount ? runWithAccount(invokerAccount, withWs) : withWs()
+  }
+
   sendMessage(
     channelId: string,
     input: {
@@ -2841,6 +3175,10 @@ export class ChannelService {
         const roleTag =
           job.agentOwnerId !== 'local' && row.sender_id === job.agentOwnerId ? '归属人' : '群成员'
         llmMessages.push({ role: 'user', content: `[${speaker} · ${roleTag}]: ${content}` })
+      } else if (row.sender_type === 'webhook') {
+        const wMeta = safeJsonParse<ChannelMessageMeta>(row.meta_json, {})
+        const speaker = this.webhookLabel(row.sender_id, wMeta.webhookName)
+        llmMessages.push({ role: 'user', content: `[Webhook · ${speaker}]: ${content}` })
       } else {
         const speaker = row.sender_type === 'agent' ? this.agentMeta(row.sender_id).name : '系统'
         llmMessages.push({ role: 'user', content: `[${speaker}]: ${content}` })
@@ -3640,6 +3978,119 @@ export function registerChannelRoutes(ctx: Context, resolveLlm: (sessionId?: str
       sendError(route, error)
     }
   })
+
+  // === Incoming Webhooks 管理（需登录） ===
+  ctx.http.route('GET', '/api/channels/:id/webhooks', (route) => {
+    try {
+      route.send(200, { webhooks: service.listWebhooks(route.params.id) })
+    } catch (error) {
+      sendError(route, error)
+    }
+  })
+
+  ctx.http.route('POST', '/api/channels/:id/webhooks', async (route) => {
+    try {
+      const body = (await route.json()) as { name?: string; autoTriggerAgentId?: string }
+      const webhook = service.createWebhook(route.params.id, {
+        name: body?.name ?? '',
+        autoTriggerAgentId: body?.autoTriggerAgentId,
+      })
+      route.send(200, { webhook })
+    } catch (error) {
+      sendError(route, error)
+    }
+  })
+
+  ctx.http.route('PATCH', '/api/channels/:id/webhooks/:webhookId', async (route) => {
+    try {
+      const body = (await route.json()) as { name?: string; enabled?: boolean; autoTriggerAgentId?: string }
+      const webhook = service.updateWebhook(route.params.id, route.params.webhookId, body ?? {})
+      route.send(200, { webhook })
+    } catch (error) {
+      sendError(route, error)
+    }
+  })
+
+  ctx.http.route('POST', '/api/channels/:id/webhooks/:webhookId/rotate', (route) => {
+    try {
+      const webhook = service.rotateWebhookToken(route.params.id, route.params.webhookId)
+      route.send(200, { webhook })
+    } catch (error) {
+      sendError(route, error)
+    }
+  })
+
+  ctx.http.route('POST', '/api/channels/:id/webhooks/:webhookId/test', (route) => {
+    try {
+      route.send(200, service.testWebhook(route.params.id, route.params.webhookId))
+    } catch (error) {
+      sendError(route, error)
+    }
+  })
+
+  ctx.http.route('DELETE', '/api/channels/:id/webhooks/:webhookId', (route) => {
+    try {
+      route.send(200, service.deleteWebhook(route.params.id, route.params.webhookId))
+    } catch (error) {
+      sendError(route, error)
+    }
+  })
+
+  // === 公开 Incoming Webhook 接收端（免登录，凭高熵密钥路由到对应频道） ===
+  ctx.http.route(
+    'POST',
+    '/api/webhooks/channels/:token',
+    async (route) => {
+      try {
+        const contentType = String(route.req?.headers?.['content-type'] ?? '').toLowerCase()
+        let payload: {
+          text?: unknown
+          content?: unknown
+          message?: unknown
+          title?: unknown
+          username?: unknown
+          senderName?: unknown
+          threadRootId?: unknown
+          rawBody?: unknown
+        }
+        if (contentType.includes('text/plain') || contentType.includes('text/markdown')) {
+          const buf = await route.bytes()
+          payload = { text: buf.toString('utf8') }
+        } else {
+          const buf = await route.bytes()
+          const rawText = buf.toString('utf8').trim()
+          if (!rawText) {
+            payload = {}
+          } else {
+            try {
+              const parsed = JSON.parse(rawText) as Record<string, unknown>
+              if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+                payload = {
+                  text: parsed.text,
+                  content: parsed.content,
+                  message: parsed.message,
+                  title: parsed.title,
+                  username: parsed.username,
+                  senderName: parsed.senderName,
+                  threadRootId: parsed.threadRootId,
+                  rawBody: parsed,
+                }
+              } else {
+                payload = { text: rawText }
+              }
+            } catch {
+              payload = { text: rawText }
+            }
+          }
+        }
+        const result = service.receiveWebhookByToken(route.params.token, payload)
+        route.send(200, result)
+      } catch (error) {
+        sendError(route, error)
+      }
+    },
+    { scope: 'public' },
+  )
 
   return service
 }
