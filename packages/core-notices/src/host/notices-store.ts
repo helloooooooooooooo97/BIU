@@ -74,7 +74,7 @@ function parseRow(raw: unknown): NoticeRow | null {
     sourceKey,
     ...(accountId ? { accountId } : {}),
     ...(workspaceId ? { workspaceId } : {}),
-    ...(Array.isArray(rec.content) ? { content: rec.content } : {}),
+    ...(rec.content && typeof rec.content === 'object' ? { content: rec.content } : {}),
     createdAt,
     updatedAt: Number(rec.updatedAt) || createdAt,
   }
@@ -207,6 +207,32 @@ export class NoticesStore {
     }
     if (n) this.flush()
     return n
+  }
+
+  /** 按 sourceKey + workspaceId 同步更新全部相关接收人的通知（用于审批被处理/撤回后同步状态）。 */
+  updateBySource(
+    sourceKey: string,
+    workspaceId: string,
+    updater: (prev: NoticeRow) => Partial<Pick<NoticeRow, 'title' | 'body' | 'content' | 'read'>>,
+  ): Array<{ accountId: string; workspaceId: string }> {
+    const key = sourceKey.trim()
+    const ws = workspaceId.trim()
+    if (!key) return []
+    const touched: Array<{ accountId: string; workspaceId: string }> = []
+    const now = Date.now()
+    for (const row of this.rows) {
+      if (row.sourceKey !== key) continue
+      if (ws && (row.workspaceId ?? '') !== ws) continue
+      const patch = updater(row)
+      if (patch.title !== undefined) row.title = patch.title
+      if (patch.body !== undefined) row.body = patch.body
+      if (patch.content !== undefined) row.content = patch.content
+      if (patch.read !== undefined) row.read = patch.read
+      row.updatedAt = now
+      touched.push({ accountId: row.accountId ?? '', workspaceId: row.workspaceId ?? '' })
+    }
+    if (touched.length) this.flush()
+    return touched
   }
 
   clear() {

@@ -245,3 +245,74 @@ export function applyBatchPermissions(payload: Record<string, unknown>): Promise
     body: JSON.stringify(payload),
   })
 }
+
+export type AccessRequestRole = 'viewer' | 'commenter' | 'editor'
+export type AccessRequestStatus = 'pending' | 'approved' | 'rejected' | 'cancelled'
+
+export type AccessRequestItem = {
+  id: string
+  workspaceId: string
+  collection: string
+  recordId: string
+  requesterId: string
+  requesterName: string
+  requesterEmail: string
+  requesterAvatar?: string
+  requesterMemberKind: 'member' | 'external' | 'guest'
+  requestedRole: AccessRequestRole
+  note: string
+  status: AccessRequestStatus
+  grantedRole?: AccessRequestRole
+  handledBy?: string
+  handledByName?: string
+  handledAt?: number
+  decisionNote?: string
+  createdAt: number
+  updatedAt: number
+}
+
+export function createAccessRequest(payload: {
+  collection: string
+  recordId: string
+  requestedRole: AccessRequestRole
+  note?: string
+}): Promise<{ submitted: boolean; updated?: boolean; request?: AccessRequestItem | null }> {
+  return readJson('/api/account/access-requests', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(payload),
+  })
+}
+
+export function fetchAccessRequests(params: {
+  scope?: 'inbox' | 'mine'
+  status?: AccessRequestStatus | 'all'
+  collection?: string
+  recordId?: string
+  limit?: number
+} = {}): Promise<{ items: AccessRequestItem[] }> {
+  const search = new URLSearchParams()
+  if (params.scope) search.set('scope', params.scope)
+  if (params.status) search.set('status', params.status)
+  if (params.collection) search.set('collection', params.collection)
+  if (params.recordId) search.set('recordId', params.recordId)
+  if (params.limit) search.set('limit', String(params.limit))
+  return readJson(`/api/account/access-requests?${search.toString()}`, undefined, { fresh: true })
+}
+
+export function decideAccessRequest(
+  id: string,
+  payload: { decision: 'approve' | 'reject'; grantedRole?: AccessRequestRole; decisionNote?: string },
+): Promise<{ request: AccessRequestItem }> {
+  return readJson(`/api/account/access-requests/${encodeURIComponent(id)}/decide`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(payload),
+  })
+}
+
+export function cancelAccessRequest(id: string): Promise<{ request: AccessRequestItem }> {
+  return readJson(`/api/account/access-requests/${encodeURIComponent(id)}/cancel`, {
+    method: 'POST',
+  })
+}

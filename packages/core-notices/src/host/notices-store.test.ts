@@ -59,3 +59,58 @@ test('notices service does not write on turn/end', async () => {
   assert.doesNotMatch(src, /turn\/end/)
   assert.doesNotMatch(src, /回合结束/)
 })
+
+test('object notice content persists to disk and updateBySource updates all approvers for a workspace', async () => {
+  const { mkdtempSync, rmSync } = await import('node:fs')
+  const { tmpdir } = await import('node:os')
+  const { join } = await import('node:path')
+  const { runWithAccount, runWithRequestWorkspace } = await import('@biu/host-plugin-loader/data-dir')
+  const dir = mkdtempSync(join(tmpdir(), 'biu-notices-ar-'))
+  const file = join(dir, 'notices.json')
+  try {
+    const store = new NoticesStore().open(file)
+    const payload = {
+      type: 'access-request',
+      requestId: 'areq_123',
+      collection: '/pages',
+      recordId: 'doc-1',
+      recordTitle: '架构文档',
+      requesterId: 'bob',
+      requesterName: 'Bob',
+      requesterEmail: 'bob@example.com',
+      requestedRole: 'editor',
+      note: '需要编辑',
+      status: 'pending',
+    }
+    store.push({
+      kind: 'approval',
+      sourceKey: 'access-request:areq_123',
+      title: 'Bob 申请权限',
+      accountId: 'ada',
+      workspaceId: 'ws-1',
+      content: payload,
+    })
+    store.push({
+      kind: 'approval',
+      sourceKey: 'access-request:areq_123',
+      title: 'Bob 申请权限',
+      accountId: 'cara',
+      workspaceId: 'ws-1',
+      content: payload,
+    })
+    const touched = store.updateBySource('access-request:areq_123', 'ws-1', (prev) => ({
+      read: true,
+      content: { ...(prev.content as Record<string, unknown>), status: 'approved', grantedRole: 'viewer' },
+    }))
+    assert.equal(touched.length, 2)
+
+    const reloaded = new NoticesStore().open(file)
+    const adaList = runWithAccount('ada', () => runWithRequestWorkspace('ws-1', () => reloaded.list()))
+    assert.equal(adaList.length, 1)
+    assert.equal(adaList[0]?.read, true)
+    assert.deepEqual((adaList[0]?.content as { status?: string; grantedRole?: string })?.status, 'approved')
+    assert.deepEqual((adaList[0]?.content as { grantedRole?: string })?.grantedRole, 'viewer')
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
+})

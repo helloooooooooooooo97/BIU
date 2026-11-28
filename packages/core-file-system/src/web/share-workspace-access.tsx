@@ -3,12 +3,16 @@ import { LinkIcon, LockClosedIcon, UserGroupIcon, XMarkIcon } from '@heroicons/r
 import {
   applyBatchPermissions,
   createGuestInvite,
+  decideAccessRequest,
+  fetchAccessRequests,
   fetchMemberViews,
   fetchRecordAccess,
   grantRecordAccess,
   patchRecordAccess,
   resolveMemberView,
   revokeRecordAccess,
+  type AccessRequestItem,
+  type AccessRequestRole,
 } from './authz-api.ts'
 import { WORKSPACE_MEMBERS_COLLECTION_PATH } from './database-path.ts'
 import { listCollection } from './db-client.ts'
@@ -172,6 +176,9 @@ export function WorkspaceAccess({
     ancestors: InheritedAncestor[]
   }>({ mode: 'custom', hasParent: false, ancestors: [] })
   const [inheritanceBusy, setInheritanceBusy] = useState(false)
+  const [pendingRequests, setPendingRequests] = useState<AccessRequestItem[]>([])
+  const [requestRoles, setRequestRoles] = useState<Record<string, AccessRequestRole>>({})
+  const [requestBusyId, setRequestBusyId] = useState('')
   const [error, setError] = useState('')
 
   async function load() {
@@ -205,6 +212,23 @@ export function WorkspaceAccess({
     setCanManage(data.canManage !== false)
     setPeople(data.people ?? [])
     setMemberViews(data.memberViews ?? [])
+    if (data.canManage !== false) {
+      void fetchAccessRequests({ scope: 'inbox', status: 'pending', collection, recordId })
+        .then((res) => {
+          const items = res.items ?? []
+          setPendingRequests(items)
+          setRequestRoles((prev) => {
+            const next = { ...prev }
+            for (const item of items) {
+              if (!next[item.id]) next[item.id] = item.requestedRole
+            }
+            return next
+          })
+        })
+        .catch(() => setPendingRequests([]))
+    } else {
+      setPendingRequests([])
+    }
     if (data.policy) {
       const nextPolicy = {
         allowExternalShare: data.policy.allowExternalShare !== false,
@@ -564,6 +588,125 @@ export function WorkspaceAccess({
       {statusNotice ? (
         <div style={{ fontSize: 12, color: 'var(--biu-color-emphasis)', marginTop: 4 }} data-testid="fsdb-share-status-notice">
           {statusNotice}
+        </div>
+      ) : null}
+      {canManage && pendingRequests.length > 0 ? (
+        <div
+          data-testid="fsdb-share-pending-requests"
+          style={{
+            display: 'grid',
+            gap: 8,
+            marginTop: 8,
+            padding: 10,
+            borderRadius: 8,
+            border: 'var(--biu-stroke-width) solid var(--biu-color-border)',
+            background: 'var(--biu-color-surface)',
+          }}
+        >
+          <div style={{ fontSize: 12, fontWeight: 600 }}>待审批申请（{pendingRequests.length}）</div>
+          {pendingRequests.map((req) => {
+            const chosenRole = requestRoles[req.id] ?? req.requestedRole
+            const busy = requestBusyId === req.id
+            const roleOpts = effectiveRoleOptions.filter(
+              (opt): opt is { value: AccessRequestRole; label: string; hint?: string } => opt.value !== 'manager',
+            )
+            return (
+              <div
+                key={req.id}
+                data-testid="fsdb-share-pending-request-row"
+                style={{ display: 'grid', gap: 6, fontSize: 12 }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
+                    {renderShareAvatar(req.requesterId || req.requesterName, req.requesterAvatar, { extraClass: 'is-sm', size: 22 })}
+                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      <strong>{req.requesterName}</strong> 申请{roleLabel(req.requestedRole)}
+                    </span>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
+                    <ShareSelect
+                      inline
+                      value={chosenRole}
+                      options={roleOpts}
+                      ariaLabel={`调整 ${req.requesterName} 的授予角色`}
+                      placement="bottom-end"
+                      minMenuWidth={170}
+                      onChange={(next) => {
+                        if (next === 'viewer' || next === 'commenter' || next === 'editor') {
+                          setRequestRoles((prev) => ({ ...prev, [req.id]: next }))
+                        }
+                      }}
+                    />
+                    <button
+                      type="button"
+                      disabled={busy}
+                      data-testid="fsdb-share-request-approve"
+                      onClick={async () => {
+                        setRequestBusyId(req.id)
+                        setError('')
+                        try {
+                          await decideAccessRequest(req.id, { decision: 'approve', grantedRole: chosenRole })
+                          setPendingRequests((prev) => prev.filter((item) => item.id !== req.id))
+                          setStatusNotice(`已同意 ${req.requesterName} 的权限申请`)
+                          emitFsdbEvent(FSDB_SHARES_CHANGE_EVENT)
+                          await load()
+                        } catch (err) {
+                          setError(err instanceof Error ? err.message : '审批失败')
+                        } finally {
+                          setRequestBusyId('')
+                        }
+                      }}
+                      style={{
+                        height: 24,
+                        padding: '0 8px',
+                        borderRadius: 6,
+                        border: 'none',
+                        background: 'var(--biu-color-emphasis)',
+                        color: '#fff',
+                        fontSize: 11,
+                        cursor: busy ? 'wait' : 'pointer',
+                      }}
+                    >
+                      同意
+                    </button>
+                    <button
+                      type="button"
+                      disabled={busy}
+                      data-testid="fsdb-share-request-reject"
+                      onClick={async () => {
+                        setRequestBusyId(req.id)
+                        setError('')
+                        try {
+                          await decideAccessRequest(req.id, { decision: 'reject' })
+                          setPendingRequests((prev) => prev.filter((item) => item.id !== req.id))
+                          setStatusNotice(`已拒绝 ${req.requesterName} 的权限申请`)
+                        } catch (err) {
+                          setError(err instanceof Error ? err.message : '审批失败')
+                        } finally {
+                          setRequestBusyId('')
+                        }
+                      }}
+                      style={{
+                        height: 24,
+                        padding: '0 8px',
+                        borderRadius: 6,
+                        border: 'var(--biu-stroke-width) solid var(--biu-color-border)',
+                        background: 'transparent',
+                        color: 'inherit',
+                        fontSize: 11,
+                        cursor: busy ? 'wait' : 'pointer',
+                      }}
+                    >
+                      拒绝
+                    </button>
+                  </div>
+                </div>
+                {req.note ? (
+                  <div style={{ color: 'var(--biu-color-text-muted)', paddingLeft: 28 }}>留言：{req.note}</div>
+                ) : null}
+              </div>
+            )
+          })}
         </div>
       ) : null}
       {canManage ? (
