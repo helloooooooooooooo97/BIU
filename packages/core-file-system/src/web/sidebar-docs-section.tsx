@@ -7,7 +7,6 @@ import {
   UserGroupIcon,
   UserIcon,
   UsersIcon,
-  ViewColumnsIcon,
 } from '@heroicons/react/16/solid'
 import { onAppEvents } from '@biu/biu-ui/app-events'
 import { ChatCount } from '@biu/biu-ui/chat-count'
@@ -20,7 +19,7 @@ import {
 } from '@biu/biu-ui/sidebar-filter-menu'
 import { FSDB_CHANGE_EVENT, parseFsdbChange, type DbRecord } from '@biu/type-file-system'
 import { useSidebarCollapseStore } from '@biu/web-session-view'
-import { SidebarRow, SidebarRowMain, type SidebarRowMenuItem } from '@biu/web-session-view/sidebar-row'
+import { SidebarRow, SidebarRowMain } from '@biu/web-session-view/sidebar-row'
 import { TrashGlyph } from '@biu/web-session-view/trash-glyph'
 import { PAGES_COLLECTION_PATH } from '../paths.ts'
 import { invalidateListReads, listCollection, readJson } from './db-client.ts'
@@ -200,13 +199,13 @@ export const SidebarDocsSection = memo(function SidebarDocsSection({
   }, [docPrefs.groupBy, visibleDocs])
 
   const openDoc = useCallback(
-    (row: DbRecord, opts?: { newTab?: boolean }) => {
+    (row: DbRecord) => {
       rememberRecords(PAGES_COLLECTION_PATH, [
         { id: row.id, label: recordPreviewLabel(row), emoji: recordPreviewEmoji(row) },
       ])
       setActiveDocId(row.id)
       popoverClose?.()
-      showRecordInInspector(PAGES_COLLECTION_PATH, row.id, undefined, opts)
+      showRecordInInspector(PAGES_COLLECTION_PATH, row.id)
     },
     [popoverClose],
   )
@@ -293,14 +292,6 @@ export const SidebarDocsSection = memo(function SidebarDocsSection({
       ) : (
         <RecordMark record={row} tableIcon="document" />
       )
-      const menuItems: SidebarRowMenuItem[] = [
-        {
-          id: 'open-inspector-tab',
-          label: '在右侧新标签打开',
-          icon: <ViewColumnsIcon className="size-4 shrink-0" />,
-          onSelect: () => openDoc(row, { newTab: true }),
-        },
-      ]
 
       return (
         <div key={row.id} className="min-w-0" data-testid={`sidebar-doc-node-${row.id}`}>
@@ -377,7 +368,6 @@ export const SidebarDocsSection = memo(function SidebarDocsSection({
             starOn={starred}
             starLabel={starred ? `取消收藏 ${label}` : `收藏 ${label}`}
             starIcon={<StarIcon className="size-4 shrink-0" />}
-            menuItems={menuItems}
             onDelete={() => void deleteDoc(row)}
             deleteLabel={`删除 ${label}`}
             deleteIcon={<TrashGlyph />}

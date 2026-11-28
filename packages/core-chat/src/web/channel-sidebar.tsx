@@ -303,9 +303,9 @@ export const ChannelSidebarSections = memo(function ChannelSidebarSections({
                     <AiAvatar seed={ch.peerAccountId || ch.id} size={20} className="shrink-0 rounded-full" />
                   )
                 ) : ch.kind === 'announcement' ? (
-                  <MegaphoneIcon className="size-3.5 opacity-80" aria-hidden />
+                  <MegaphoneIcon className="size-4 opacity-80" aria-hidden />
                 ) : ch.kind === 'forum' ? (
-                  <ChatBubbleLeftRightIcon className="size-3.5 opacity-80" aria-hidden />
+                  <ChatBubbleLeftRightIcon className="size-4 opacity-80" aria-hidden />
                 ) : (
                   <HashtagIcon className="size-4 opacity-80" aria-hidden />
                 )}
@@ -424,12 +424,12 @@ export const ChannelSidebarSections = memo(function ChannelSidebarSections({
                         <AiAvatar seed={ch.peerAccountId || ch.id} size={18} className="shrink-0 rounded-full" />
                       )
                     ) : ch.kind === 'announcement' ? (
-                      <MegaphoneIcon className="size-3.5" data-testid={`sidebar-channel-icon-announcement-${ch.id}`} />
+                      <MegaphoneIcon className="size-4 shrink-0" data-testid={`sidebar-channel-icon-announcement-${ch.id}`} />
                     ) : ch.kind === 'forum' ? (
-                      <ChatBubbleLeftRightIcon className="size-3.5" data-testid={`sidebar-channel-icon-forum-${ch.id}`} />
+                      <ChatBubbleLeftRightIcon className="size-4 shrink-0" data-testid={`sidebar-channel-icon-forum-${ch.id}`} />
                     ) : (
                       <HashtagIcon
-                        className="size-3.5"
+                        className="size-4 shrink-0"
                         data-testid={`sidebar-channel-icon-channel-${ch.id}`}
                         data-share-scope={ch.shareScope ?? computeChannelShareScope(ch.accessMode, ch.memberCount, ch.kind)}
                       />
@@ -622,7 +622,7 @@ export const ChannelSidebarSections = memo(function ChannelSidebarSections({
                                   >
                                     <span className="grid size-6 shrink-0 place-items-center" aria-hidden>
                                       <span className="sidebar-rail-icon">
-                                        <ChatBubbleBottomCenterTextIcon className="size-3.5 opacity-75" />
+                                        <ChatBubbleBottomCenterTextIcon className="size-4 shrink-0 opacity-75" />
                                       </span>
                                     </span>
                                     <span className="sidebar-label min-w-0 flex-1 truncate text-[13px]">
