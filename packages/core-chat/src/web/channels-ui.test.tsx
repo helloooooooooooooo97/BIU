@@ -629,11 +629,12 @@ test('ChannelStage allows agent owner to toggle contextMode and manually sync co
   )
 
   await waitFor(() => {
-    assert.ok(view.getByTestId('channel-msg-sync-m-ag'))
+    assert.ok(view.getByTestId('channel-msg-more-m-ag'))
   })
 
-  // 归属人点击单条消息上的「同步到 1v1」
-  fireEvent.click(view.getByTestId('channel-msg-sync-m-ag'))
+  // 归属人通过消息「更多」菜单点击「同步到 1v1」
+  fireEvent.click(view.getByTestId('channel-msg-more-m-ag'))
+  fireEvent.click(await waitFor(() => view.getByTestId('channel-msg-sync-m-ag')))
   await waitFor(() => {
     assert.deepEqual(syncedPayload, { agentId: 'ag-mine', messageId: 'm-ag' })
   })
@@ -894,7 +895,8 @@ test('ChannelSidebarSections displays unread badges and online dot, and ChannelS
     assert.ok(stage.container.textContent?.includes('更早的一条历史消息'))
   })
 
-  fireEvent.click(stage.getByTestId('channel-msg-edit-m-2'))
+  fireEvent.click(stage.getByTestId('channel-msg-more-m-2'))
+  fireEvent.click(await waitFor(() => stage.getByTestId('channel-msg-edit-m-2')))
   const editorBox = stage.getByTestId('channel-msg-editor-m-2').querySelector('textarea')!
   fireEvent.change(editorBox, { target: { value: '编辑后的内容' } })
   fireEvent.click(stage.getByTestId('channel-msg-edit-save-m-2'))
@@ -903,7 +905,8 @@ test('ChannelSidebarSections displays unread badges and online dot, and ChannelS
     assert.ok(stage.getByTestId('channel-msg-edited-m-2'))
   })
 
-  fireEvent.click(stage.getByTestId('channel-msg-recall-m-2'))
+  fireEvent.click(stage.getByTestId('channel-msg-more-m-2'))
+  fireEvent.click(await waitFor(() => stage.getByTestId('channel-msg-recall-m-2')))
   await waitFor(() => {
     assert.equal(recalledId, 'm-2')
     assert.ok(stage.getByTestId('channel-msg-recalled-m-2'))
@@ -1040,9 +1043,11 @@ test('ChannelStage supports emoji reactions, pin/save, in-channel search, and ch
     assert.ok(stage.getByTestId('channel-msg-reaction-m-1-👍'))
   })
 
-  // 2. 置顶与收藏消息
-  fireEvent.click(stage.getByTestId('channel-msg-pin-m-1'))
-  fireEvent.click(stage.getByTestId('channel-msg-save-m-1'))
+  // 2. 通过「更多」菜单置顶与收藏消息
+  fireEvent.click(stage.getByTestId('channel-msg-more-m-1'))
+  fireEvent.click(await waitFor(() => stage.getByTestId('channel-msg-pin-m-1')))
+  fireEvent.click(stage.getByTestId('channel-msg-more-m-1'))
+  fireEvent.click(await waitFor(() => stage.getByTestId('channel-msg-save-m-1')))
   await waitFor(() => {
     assert.equal(pinnedToggled, true)
     assert.equal(savedToggled, true)
@@ -1063,7 +1068,7 @@ test('ChannelStage supports emoji reactions, pin/save, in-channel search, and ch
   })
 })
 
-test('ChannelStage supports Threads drawer, AI summary modal, and saving message to BIU page', async () => {
+test('ChannelStage supports Breadcrumb Threads, sidebar expandable sub-threads, AI summary modal, and saving message to BIU page', async () => {
   let threadSentBody: Record<string, unknown> | null = null
   let createdPageBody: Record<string, unknown> | null = null
   const now = Date.now()
@@ -1100,6 +1105,39 @@ test('ChannelStage supports Threads drawer, AI summary modal, and saving message
 
   const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = new URL(String(input), 'http://test.local')
+    if (url.pathname === '/api/channels' && (!init?.method || init.method === 'GET')) {
+      return new Response(
+        JSON.stringify({
+          channels: [
+            {
+              id: 'ch-p2',
+              workspaceId: 'ws-1',
+              kind: 'channel',
+              dmKey: '',
+              name: '架构群',
+              topic: '',
+              accessMode: 'private',
+              createdBy: 'acc-alice',
+              createdAt: now - 5000,
+              updatedAt: now,
+              memberCount: 2,
+              agentCount: 0,
+              lastMessageAt: now,
+              lastMessageText: rootMsg.text,
+              threads: [
+                {
+                  rootId: 'm-root',
+                  title: '讨论一下数据库分库方案',
+                  replyCount: 1,
+                  lastReplyAt: now,
+                },
+              ],
+            },
+          ],
+        }),
+        { status: 200 },
+      )
+    }
     if (url.pathname === '/api/channels/ch-p2' && (!init?.method || init.method === 'GET')) {
       return new Response(
         JSON.stringify({
@@ -1118,6 +1156,14 @@ test('ChannelStage supports Threads drawer, AI summary modal, and saving message
             agentCount: 0,
             lastMessageAt: now,
             lastMessageText: rootMsg.text,
+            threads: [
+              {
+                rootId: 'm-root',
+                title: '讨论一下数据库分库方案',
+                replyCount: 1,
+                lastReplyAt: now,
+              },
+            ],
           },
           members: [
             { channelId: 'ch-p2', memberType: 'account', memberId: 'acc-alice', role: 'owner', addedBy: 'acc-alice', addedAt: 1, name: 'Alice', isOwn: true },
@@ -1172,27 +1218,59 @@ test('ChannelStage supports Threads drawer, AI summary modal, and saving message
   })
   vi.stubGlobal('fetch', fetchMock)
 
+  // 0. 左侧侧边栏支持在有子讨论串的聊天项下展开/收起子讨论串
+  const sidebar = render(
+    <MemoryRouter initialEntries={['/channels/ch-p2']}>
+      <ChannelSidebarSections routeChannelId="ch-p2" />
+    </MemoryRouter>,
+  )
+  const toggleBtn = await waitFor(() => sidebar.getByTestId('sidebar-channel-threads-toggle-ch-p2'))
+  fireEvent.click(toggleBtn)
+  const threadLink = await waitFor(() => sidebar.getByTestId('sidebar-thread-m-root'))
+  assert.equal(threadLink.getAttribute('href'), '/channels/ch-p2?thread=m-root')
+  assert.ok(threadLink.textContent?.includes('讨论一下数据库分库方案'))
+  sidebar.unmount()
+
   const stage = render(
     <MemoryRouter initialEntries={['/channels/ch-p2']}>
       <ChannelStage channelId="ch-p2" />
     </MemoryRouter>,
   )
 
-  // 1. 点击「1 条回复」打开右侧讨论串面板并发送串内回复
+  // 1. 点击「1 条回复」在同一主画布切入二级面包屑讨论串（不再开第 4 栏），并复用主编辑器发送串内回复
   const threadBar = await waitFor(() => stage.getByTestId('channel-thread-bar-m-root'))
   fireEvent.click(threadBar)
-  await waitFor(() => assert.ok(stage.getByTestId('channel-thread-reply-m-r1')))
+  await waitFor(() => {
+    assert.ok(stage.getByTestId('channel-breadcrumb-parent'))
+    assert.ok(stage.getByTestId('channel-thread-crumb').textContent?.includes('讨论一下数据库分库方案'))
+    assert.ok(stage.getByTestId('channel-thread-reply-m-r1'))
+  })
 
-  fireEvent.change(stage.getByTestId('channel-thread-input'), { target: { value: '同意这个方案' } })
-  fireEvent.click(stage.getByTestId('channel-thread-send'))
+  // 复用主 Tiptap ChannelComposer 插入 @97 并发送，自动带上 threadRootId
+  fireEvent.click(stage.getByTestId('channel-mention-btn'))
+  const menu = await waitFor(() => stage.getByTestId('channel-mention-menu'))
+  const opt97 = [...menu.querySelectorAll('[role="option"]')].find((el) => el.textContent?.includes('@97'))
+  assert.ok(opt97)
+  fireEvent.mouseDown(opt97!)
+  const sendBtn = stage.getByTestId('channel-composer-send') as HTMLButtonElement
+  await waitFor(() => assert.equal(sendBtn.disabled, false))
+  fireEvent.click(sendBtn)
   await waitFor(() => {
     assert.equal(threadSentBody?.threadRootId, 'm-root')
-    assert.equal(threadSentBody?.text, '同意这个方案')
+    assert.equal(threadSentBody?.text, '@97')
     assert.ok(stage.getByTestId('channel-thread-reply-m-r2'))
   })
 
-  // 2. 点击「✨ 总结」弹出 AI 聊天要点总结，并一键存为 BIU 页面
-  fireEvent.click(stage.getByTestId('channel-summarize-btn'))
+  // 点击父级面包屑返回主聊天流
+  fireEvent.click(stage.getByTestId('channel-breadcrumb-parent'))
+  await waitFor(() => {
+    assert.equal(stage.queryByTestId('channel-thread-crumb'), null)
+    assert.ok(stage.getByTestId('channel-thread-bar-m-root'))
+  })
+
+  // 2. 通过顶栏「更多」菜单点击「AI 总结要点」，并一键存为 BIU 页面
+  fireEvent.click(stage.getByTestId('channel-more-menu-btn'))
+  fireEvent.click(await waitFor(() => stage.getByTestId('channel-summarize-btn')))
   await waitFor(() => {
     assert.ok(stage.getByTestId('channel-summary-modal').textContent?.includes('按租户分片'))
   })
