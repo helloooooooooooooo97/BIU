@@ -285,6 +285,16 @@ export function pickInspectCard(ref: PickRef) {
       jump: key === 'path' && Boolean(inspectPathTarget(value)),
     })
   }
+  if (ref.cells?.length) {
+    fields.push({
+      key: 'cells',
+      label: '单元格',
+      value: `${ref.cells.length} 格`,
+      glyph: 'tag',
+      stack: false,
+      jump: false,
+    })
+  }
   return {
     kind: canonicalPickKind(ref.kind) || ref.kind,
     title,

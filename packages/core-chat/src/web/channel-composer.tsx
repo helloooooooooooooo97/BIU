@@ -23,7 +23,16 @@ import { EditorContent, useEditor } from '@tiptap/react'
 import { AiAvatar } from '@biu/biu-ui/ai-avatar'
 import { resolveAssetUrl } from '@biu/biu-ui/workspace-transport'
 import { fetchMentionItems } from '@biu/core-editor/mention'
-import { pickKey, textPickFromPlain, usePickState, type PickService } from '@biu/core-pick/web'
+import {
+  consumePlainPasteIntent,
+  isPlainPasteHotkey,
+  markPlainPasteIntent,
+  pickKey,
+  readPickClipboard,
+  textPickFromPlain,
+  usePickState,
+  type PickService,
+} from '@biu/core-pick/web'
 import { SidebarMascot, resolveSessionMascot } from '@biu/public-mascot'
 import { focusComposerEditor, isComposerFocusPending } from '@biu/web-app-shell/chat-overlay'
 import type {
@@ -387,6 +396,7 @@ export const ChannelComposer = memo(
           'data-testid': 'channel-composer-input',
         },
         handlePaste(_view, event) {
+          const plainOnly = consumePlainPasteIntent()
           const files = collectClipboardFiles(event.clipboardData)
           if (files.length > 0) {
             event.preventDefault()
@@ -394,6 +404,17 @@ export const ChannelComposer = memo(
             return true
           }
           const raw = event.clipboardData?.getData('text/plain') ?? ''
+          if (plainOnly) return false
+          const copiedPicks = readPickClipboard(event.clipboardData, raw)
+          if (copiedPicks?.length) {
+            event.preventDefault()
+            if (editorRef.current) {
+              insertPickChips(editorRef.current, copiedPicks)
+            } else if (live.current.pick) {
+              live.current.pick.addMany(copiedPicks)
+            }
+            return true
+          }
           if (raw.trim().length < COMPOSER_PASTE_PICK_CHARS) return false
           const ref = textPickFromPlain(live.current.route, raw)
           if (!ref) return false
@@ -415,6 +436,10 @@ export const ChannelComposer = memo(
           return false
         },
         handleKeyDown(_view, event) {
+          if (isPlainPasteHotkey(event)) {
+            markPlainPasteIntent()
+            return false
+          }
           const trigger = live.current.mentionTrigger
           const options = live.current.allMentionOptions
           if (trigger !== null && options.length > 0) {

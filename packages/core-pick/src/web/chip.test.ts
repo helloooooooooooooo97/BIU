@@ -190,3 +190,32 @@ test('path jump opens the record in the inspector', () => {
   assert.match(src, /revealInspectPath\(item\.value\)/)
   assert.match(src, /在检查器打开/)
 })
+
+test('range pick ref roundtrips cells through formatPicks, parsePicks, attrs, and inspect card', async () => {
+  const { formatPicks, parsePicks, pickChipAttrs, pickRefFromAttrs, chipLabel } = await import('./types.ts')
+  const rangeRef = {
+    kind: 'page',
+    id: 'range:abc123',
+    label: '页面 · 3 行 × 2 列',
+    title: '页面 · 3 行 × 2 列',
+    path: '/pages',
+    route: '/database/pages',
+    text: 'A\t进行中\nB\t已完成\nC\t待开始',
+    cells: [
+      { path: '/pages/p1', id: 'p1', title: 'A', field: 'title', label: '标题', type: 'string', text: 'A' },
+      { path: '/pages/p1', id: 'p1', title: 'A', field: 'status', label: '状态', type: 'select', text: '进行中' },
+    ],
+  }
+  assert.equal(chipLabel(rangeRef), '页面 · 3 行 × 2 列')
+  const serialized = formatPicks([rangeRef])
+  const parsed = parsePicks(serialized)
+  assert.equal(parsed.refs.length, 1)
+  assert.deepEqual(parsed.refs[0]?.cells, rangeRef.cells)
+
+  const fromAttrs = pickRefFromAttrs(pickChipAttrs(rangeRef))
+  assert.deepEqual(fromAttrs?.cells, rangeRef.cells)
+
+  const card = pickInspectCard(rangeRef)
+  assert.equal(card.title, '页面 · 3 行 × 2 列')
+  assert.equal(card.fields.find((item) => item.key === 'cells')?.value, '2 格')
+})
