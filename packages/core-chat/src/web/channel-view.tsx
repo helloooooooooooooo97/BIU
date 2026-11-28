@@ -9,6 +9,7 @@ import {
   BoltIcon,
   BookmarkIcon,
   BookmarkSquareIcon,
+  ChatBubbleBottomCenterTextIcon,
   ChatBubbleLeftRightIcon,
   CheckIcon,
   ChevronDoubleLeftIcon,
@@ -25,7 +26,6 @@ import {
   MagnifyingGlassIcon,
   MegaphoneIcon,
   PencilSquareIcon,
-  RectangleStackIcon,
   ShieldCheckIcon,
   SparklesIcon,
   Square2StackIcon,
@@ -913,7 +913,7 @@ export const ChannelStage = memo(function ChannelStage({
                   ) : isAnnouncement ? (
                     <MegaphoneIcon className="size-3.5 shrink-0 text-(--biu-color-icon)" aria-hidden />
                   ) : isForum ? (
-                    <RectangleStackIcon className="size-3.5 shrink-0 text-(--biu-color-icon)" aria-hidden />
+                    <ChatBubbleLeftRightIcon className="size-3.5 shrink-0 text-(--biu-color-icon)" aria-hidden />
                   ) : effectiveShareScope === 'personal' ? (
                     <LockClosedIcon className="size-3.5 shrink-0 text-(--biu-color-icon)" aria-hidden />
                   ) : effectiveShareScope === 'shared' ? (
@@ -930,7 +930,7 @@ export const ChannelStage = memo(function ChannelStage({
                   className="inline-flex min-w-0 items-center gap-1.5 px-1 text-[13.5px] font-semibold text-(--biu-color-text)"
                   data-testid="channel-thread-crumb"
                 >
-                  <ChatBubbleLeftRightIcon className="size-3.5 shrink-0 text-(--biu-color-icon)" aria-hidden />
+                  <ChatBubbleBottomCenterTextIcon className="size-3.5 shrink-0 text-(--biu-color-icon)" aria-hidden />
                   <span className="truncate">{threadCrumbTitle}</span>
                   {activeForumPostStatus ? <ForumStatusBadge status={activeForumPostStatus} /> : null}
                   <span className="shrink-0 text-[11.5px] font-normal text-(--biu-color-text-subtle) tabular-nums">
@@ -1008,7 +1008,7 @@ export const ChannelStage = memo(function ChannelStage({
                   ) : isAnnouncement ? (
                     <MegaphoneIcon className="size-3.5 shrink-0 text-(--biu-color-icon)" aria-hidden />
                   ) : isForum ? (
-                    <RectangleStackIcon className="size-3.5 shrink-0 text-(--biu-color-icon)" aria-hidden />
+                    <ChatBubbleLeftRightIcon className="size-3.5 shrink-0 text-(--biu-color-icon)" aria-hidden />
                   ) : effectiveShareScope === 'personal' ? (
                     <LockClosedIcon className="size-3.5 shrink-0 text-(--biu-color-icon)" aria-hidden />
                   ) : effectiveShareScope === 'shared' ? (

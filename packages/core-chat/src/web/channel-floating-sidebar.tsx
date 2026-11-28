@@ -8,6 +8,7 @@ import {
   BoltIcon,
   BookmarkIcon,
   ChatBubbleLeftEllipsisIcon,
+  ChatBubbleLeftRightIcon,
   CheckIcon,
   Cog6ToothIcon,
   DocumentDuplicateIcon,
@@ -18,7 +19,6 @@ import {
   MegaphoneIcon,
   PaperAirplaneIcon,
   PlusIcon,
-  RectangleStackIcon,
   ArrowPathIcon,
   SparklesIcon,
   StarIcon,
@@ -1542,7 +1542,7 @@ export const ChannelFloatingSidebar = memo(function ChannelFloatingSidebar({
                       [
                         { id: 'channel', label: '群聊', Icon: HashtagIcon },
                         { id: 'announcement', label: '公告', Icon: MegaphoneIcon },
-                        { id: 'forum', label: '论坛', Icon: RectangleStackIcon },
+                        { id: 'forum', label: '论坛', Icon: ChatBubbleLeftRightIcon },
                       ] as const
                     ).map(({ id, label, Icon }) => {
                       const active = (channel.kind || 'channel') === id
