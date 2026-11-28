@@ -223,6 +223,7 @@ export const ChannelFloatingSidebar = memo(function ChannelFloatingSidebar({
   const [pinned, setPinned] = useState<boolean>(readInitialPinned)
   const [hovered, setHovered] = useState(false)
   const [internalTab, setInternalTab] = useState<ChannelFloatingTab>('roster')
+  const [summaryUnreadOnly, setSummaryUnreadOnly] = useState(false)
   const [copiedSummary, setCopiedSummary] = useState(false)
   const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
@@ -251,6 +252,10 @@ export const ChannelFloatingSidebar = memo(function ChannelFloatingSidebar({
   }, [])
 
   useEffect(() => () => clearCloseTimer(), [clearCloseTimer])
+
+  useEffect(() => {
+    setSummaryUnreadOnly(false)
+  }, [channelId])
 
   // 打开管理视图时拉取空间成员列表
   useEffect(() => {
@@ -320,11 +325,10 @@ export const ChannelFloatingSidebar = memo(function ChannelFloatingSidebar({
         onChangeTab?.(tab)
         if (tab === 'pins') onOpenPins?.()
         else if (tab === 'saved') onOpenSaved?.()
-        else if (tab === 'summary') onSummarize?.(false)
         else if (tab === 'search') onToggleSearch?.()
       }
     },
-    [clearCloseTimer, onChangeTab, onCloseAgentCard, onOpenPins, onOpenSaved, onSummarize, onToggleSearch],
+    [clearCloseTimer, onChangeTab, onCloseAgentCard, onOpenPins, onOpenSaved, onToggleSearch],
   )
 
   const openManageInPlace = useCallback(
@@ -967,40 +971,61 @@ export const ChannelFloatingSidebar = memo(function ChannelFloatingSidebar({
             </div>
           ) : null}
 
-          {/* === Tab 5: 原地 AI 总结 === */}
+          {/* === Tab 5: 原地 AI 总结（切换 Tab 不自动调用，点击按钮后按所选范围生成） === */}
           {currentTab === 'summary' ? (
             <div className="flex min-h-0 flex-1 flex-col gap-2 px-2.5 pt-1 pb-2.5" data-testid="channel-summary-modal">
               <div className="flex items-center justify-between gap-2">
                 <div className="inline-flex rounded-[8px] bg-(--biu-color-bg-muted)/70 p-0.5">
                   <button
                     type="button"
+                    data-testid="channel-summary-scope-recent"
                     disabled={summaryState?.loading}
                     className={`h-6 cursor-pointer rounded-[6px] border-0 px-2 text-[11px] transition-colors disabled:opacity-50 ${
-                      (summaryState?.scopeLabel ?? '近期消息') === '近期消息'
+                      !summaryUnreadOnly
                         ? 'bg-(--biu-color-bg-elevated) font-medium text-(--biu-color-text) shadow-xs'
                         : 'bg-transparent text-(--biu-color-text-muted) hover:text-(--biu-color-text)'
                     }`}
-                    onClick={() => onSummarize?.(false)}
+                    onClick={() => setSummaryUnreadOnly(false)}
                   >
                     近期消息
                   </button>
                   <button
                     type="button"
+                    data-testid="channel-summary-scope-unread"
                     disabled={summaryState?.loading}
                     className={`h-6 cursor-pointer rounded-[6px] border-0 px-2 text-[11px] transition-colors disabled:opacity-50 ${
-                      summaryState?.scopeLabel === '未读消息'
+                      summaryUnreadOnly
                         ? 'bg-(--biu-color-bg-elevated) font-medium text-(--biu-color-text) shadow-xs'
                         : 'bg-transparent text-(--biu-color-text-muted) hover:text-(--biu-color-text)'
                     }`}
-                    onClick={() => onSummarize?.(true)}
+                    onClick={() => setSummaryUnreadOnly(true)}
                   >
                     仅未读
                   </button>
                 </div>
-                {summaryState?.messageCount ? (
-                  <span className="text-[11px] text-(--biu-color-text-subtle) tabular-nums">
-                    {summaryState.messageCount} 条
-                  </span>
+                {summaryState?.summary && !summaryState.loading ? (
+                  <div className="flex items-center gap-1.5">
+                    {summaryState.messageCount ? (
+                      <span className="text-[11px] text-(--biu-color-text-subtle) tabular-nums">
+                        {summaryState.messageCount} 条
+                      </span>
+                    ) : null}
+                    <button
+                      type="button"
+                      data-testid="channel-summary-generate"
+                      className="inline-flex h-6 cursor-pointer items-center gap-1 rounded-[7px] border-0 bg-(--biu-color-bg-muted)/75 px-2 text-[11px] font-medium text-(--biu-color-text-muted) transition-colors hover:bg-(--biu-color-bg-popover-hover) hover:text-(--biu-color-text)"
+                      onClick={() => onSummarize?.(summaryUnreadOnly)}
+                    >
+                      <SparklesIcon className="size-3 shrink-0" />
+                      <span>
+                        {(summaryState.scopeLabel === '未读消息') !== summaryUnreadOnly
+                          ? summaryUnreadOnly
+                            ? '总结未读'
+                            : '总结近期'
+                          : '重新生成'}
+                      </span>
+                    </button>
+                  </div>
                 ) : null}
               </div>
 
@@ -1011,12 +1036,42 @@ export const ChannelFloatingSidebar = memo(function ChannelFloatingSidebar({
                     <span>正在提炼聊天要点…</span>
                   </div>
                 ) : summaryState?.error ? (
-                  <div className="text-[12px] text-(--biu-color-danger)">{summaryState.error}</div>
+                  <div className="flex flex-col items-center gap-2.5 py-6 text-center">
+                    <div className="text-[12px] text-(--biu-color-danger)">{summaryState.error}</div>
+                    <button
+                      type="button"
+                      data-testid="channel-summary-generate"
+                      className="inline-flex h-7 cursor-pointer items-center gap-1.5 rounded-full border-0 bg-(--biu-color-bg-elevated) px-3 text-[11.5px] font-medium text-(--biu-color-text) shadow-xs transition-opacity hover:opacity-90"
+                      onClick={() => onSummarize?.(summaryUnreadOnly)}
+                    >
+                      <SparklesIcon className="size-3.5 shrink-0" />
+                      <span>重试生成</span>
+                    </button>
+                  </div>
                 ) : summaryState?.summary ? (
                   <MarkdownBody text={summaryState.summary} />
                 ) : (
-                  <div className="py-8 text-center text-[12px] text-(--biu-color-text-subtle)">
-                    点击上方按钮生成聊天要点总结
+                  <div className="flex flex-col items-center justify-center gap-2.5 py-8 text-center">
+                    <span className="inline-flex size-8 items-center justify-center rounded-full bg-(--biu-color-bg-elevated)/80 text-(--biu-color-text-muted) shadow-xs">
+                      <SparklesIcon className="size-4" />
+                    </span>
+                    <div className="space-y-0.5">
+                      <div className="text-[12.5px] font-medium text-(--biu-color-text)">
+                        提炼{summaryUnreadOnly ? '未读消息' : '近期消息'}要点
+                      </div>
+                      <div className="text-[11px] text-(--biu-color-text-subtle)">
+                        整理核心结论与待办，按需手动触发
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      data-testid="channel-summary-generate"
+                      className="mt-0.5 inline-flex h-7 cursor-pointer items-center gap-1.5 rounded-full border-0 bg-(--biu-color-text) px-3.5 text-[11.5px] font-medium text-(--biu-color-bg) transition-opacity hover:opacity-90"
+                      onClick={() => onSummarize?.(summaryUnreadOnly)}
+                    >
+                      <SparklesIcon className="size-3.5 shrink-0" />
+                      <span>生成总结</span>
+                    </button>
                   </div>
                 )}
               </div>
