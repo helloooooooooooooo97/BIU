@@ -91,20 +91,11 @@ export interface SidebarSection {
 }
 
 /**
- * 两板块并存：收藏 / 项目，自上而下。
- * - 收藏区：所有 pinned 会话（直接携带，不嵌套分组）；无则省去该 section。
- * - 项目区：按绑定 folder path 分组（未绑定归「未分组」，无未分组会话时不展示该组）。
+ * 代理区：按绑定 folder path 分组（未绑定归「未分组」，无未分组会话时不展示该组）；
+ * 收藏的代理在各自组内置顶排序，不再重复拆出独立的「收藏」分区。
  */
 export function buildSidebarSections(sessions: SessionListItem[]): SidebarSection[] {
-  const sections: SidebarSection[] = []
-
-  const pinned = sessions.filter((item) => item.pinned).sort(compareSessionRows)
-  if (pinned.length) {
-    sections.push({ kind: 'pinned', label: '收藏', sessions: pinned })
-  }
-
-  sections.push({ kind: 'project', label: '代理', groups: groupSessionsByProject(sessions) })
-  return sections
+  return [{ kind: 'project', label: '代理', groups: groupSessionsByProject(sessions) }]
 }
 
 export function folderNameFromPath(path: string) {

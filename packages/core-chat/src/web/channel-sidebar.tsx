@@ -18,8 +18,10 @@ import {
   MagnifyingGlassIcon,
   MegaphoneIcon,
   PlusIcon,
+  StarIcon,
   TrashIcon,
   UserGroupIcon,
+  UserIcon,
   XMarkIcon,
 } from '@heroicons/react/16/solid'
 import { Button } from '@biu/biu-ui'
@@ -372,14 +374,14 @@ export const ChannelSidebarSections = memo(function ChannelSidebarSections({
     if (channelPrefs.groupBy === 'none') return null
     if (channelPrefs.groupBy === 'kind') {
       const dms = visibleChannels.filter((ch) => ch.kind === 'dm')
-      const rooms = visibleChannels.filter((ch) => normalizeChannelKind(ch.kind) === 'channel')
       const announcements = visibleChannels.filter((ch) => ch.kind === 'announcement')
+      const rooms = visibleChannels.filter((ch) => normalizeChannelKind(ch.kind) === 'channel')
       const forums = visibleChannels.filter((ch) => ch.kind === 'forum')
       return [
-        ...(dms.length ? [{ key: 'kind:dm', label: '私聊', rows: dms }] : []),
-        ...(rooms.length ? [{ key: 'kind:channel', label: '群聊', rows: rooms }] : []),
-        ...(announcements.length ? [{ key: 'kind:announcement', label: '公告', rows: announcements }] : []),
-        ...(forums.length ? [{ key: 'kind:forum', label: '论坛', rows: forums }] : []),
+        { key: 'kind:dm', label: '私聊', rows: dms },
+        { key: 'kind:announcement', label: '公告', rows: announcements },
+        { key: 'kind:channel', label: '群聊', rows: rooms },
+        { key: 'kind:forum', label: '帖子', rows: forums },
       ]
     }
     const now = Date.now()
@@ -456,12 +458,6 @@ export const ChannelSidebarSections = memo(function ChannelSidebarSections({
                       ]
                     : []),
                   {
-                    id: 'pin',
-                    label: ch.pinned ? '取消置顶' : '置顶聊天',
-                    icon: <BookmarkIcon className="size-4 shrink-0" />,
-                    onSelect: () => void updateChannelPreferences(ch.id, { pinned: !ch.pinned }),
-                  },
-                  {
                     id: 'mute',
                     label: ch.muted ? '取消免打扰' : '消息免打扰',
                     icon: ch.muted ? (
@@ -503,6 +499,7 @@ export const ChannelSidebarSections = memo(function ChannelSidebarSections({
                   <div key={ch.id} className="min-w-0">
                     <SidebarRow
                       active={active}
+                      pinned={Boolean(ch.pinned)}
                       attrs={{
                         'data-biu-kind': 'channel',
                         'data-biu-id': ch.id,
@@ -557,13 +554,6 @@ export const ChannelSidebarSections = memo(function ChannelSidebarSections({
                             >
                               {ch.name}
                             </span>
-                            {ch.pinned ? (
-                              <BookmarkIcon
-                                className="size-3 shrink-0 text-(--biu-color-text-subtle)"
-                                title="已置顶"
-                                data-testid={`sidebar-channel-pinned-${ch.id}`}
-                              />
-                            ) : null}
                             {ch.muted ? (
                               <BellSlashIcon
                                 className="size-3 shrink-0 text-(--biu-color-text-subtle)"
@@ -599,6 +589,10 @@ export const ChannelSidebarSections = memo(function ChannelSidebarSections({
                           </Link>
                         </SidebarRowMain>
                       }
+                      onStar={() => void updateChannelPreferences(ch.id, { pinned: !ch.pinned })}
+                      starOn={Boolean(ch.pinned)}
+                      starLabel={ch.pinned ? `取消收藏 ${ch.name}` : `收藏 ${ch.name}`}
+                      starIcon={<StarIcon className="size-4 shrink-0" />}
                       menuItems={channelMenuItems}
                       moreLabel={`${ch.name} 更多操作`}
                     />
@@ -715,9 +709,9 @@ export const ChannelSidebarSections = memo(function ChannelSidebarSections({
                 options: [
                   { value: 'all', label: '全部' },
                   { value: 'dm', label: '仅私聊' },
-                  { value: 'channel', label: '仅群聊' },
                   { value: 'announcement', label: '仅公告' },
-                  { value: 'forum', label: '仅论坛' },
+                  { value: 'channel', label: '仅群聊' },
+                  { value: 'forum', label: '仅帖子' },
                 ],
                 onChange: (value) => patchChannelPrefs({ kind: value }),
               },
@@ -729,7 +723,7 @@ export const ChannelSidebarSections = memo(function ChannelSidebarSections({
                 options: [
                   { value: 'all', label: '全部' },
                   { value: 'unread', label: '仅未读' },
-                  { value: 'pinned', label: '仅置顶' },
+                  { value: 'pinned', label: '仅收藏' },
                 ],
                 onChange: (value) => patchChannelPrefs({ status: value }),
               },
@@ -762,7 +756,7 @@ export const ChannelSidebarSections = memo(function ChannelSidebarSections({
         </div>
 
         <SidebarFold open={!channelsCollapsed}>
-          {visibleChannels.length > 0 ? (
+          {visibleChannels.length > 0 || channelPrefs.groupBy === 'kind' ? (
             <div className="sidebar-section-rows flex min-w-0 flex-col pt-0.5">
               {channelGroups
                 ? channelGroups.map((group) => {
@@ -791,7 +785,7 @@ export const ChannelSidebarSections = memo(function ChannelSidebarSections({
                                   {isTime ? (
                                     <ClockIcon className="size-4 shrink-0" />
                                   ) : group.key === 'kind:dm' ? (
-                                    <ChatBubbleOvalLeftIcon className="size-4 shrink-0" />
+                                    <UserIcon className="size-4 shrink-0" />
                                   ) : group.key === 'kind:announcement' ? (
                                     <MegaphoneIcon className="size-4 shrink-0" />
                                   ) : group.key === 'kind:forum' ? (
@@ -811,9 +805,11 @@ export const ChannelSidebarSections = memo(function ChannelSidebarSections({
                           </div>
                           <ChatCount count={group.rows.length} />
                         </div>
-                        <SidebarFold open={!collapsed} className="sidebar-session-list min-w-0">
-                          {group.rows.map(renderChannelItem)}
-                        </SidebarFold>
+                        {group.rows.length > 0 ? (
+                          <SidebarFold open={!collapsed} className="sidebar-session-list min-w-0">
+                            {group.rows.map(renderChannelItem)}
+                          </SidebarFold>
+                        ) : null}
                       </div>
                     )
                   })
