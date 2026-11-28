@@ -341,6 +341,8 @@ export type ChatSidebarProps = {
   iconRail?: boolean
   /** 置于「代理」上方的 Slack 风格群聊与成员私聊分区（由 core-chat 槽位注入）。 */
   channelsHeader?: ReactNode
+  /** 置于「项目」下方的文档树形分区（由 core-file-system 槽位注入）。 */
+  docsFooter?: ReactNode
 }
 
 /**
@@ -355,6 +357,7 @@ export const ChatSidebar = memo(function ChatSidebar({
   popoverClose,
   iconRail = false,
   channelsHeader,
+  docsFooter,
 }: ChatSidebarProps) {
   const navigate = useNavigate()
   const sessions = useSessionView((state) => state.sessions)
@@ -626,6 +629,7 @@ export const ChatSidebar = memo(function ChatSidebar({
               </section>
             )
           })}
+          {docsFooter}
         </div>
         )}
       </div>

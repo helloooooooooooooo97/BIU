@@ -41,6 +41,7 @@ import { parseSharePath } from '../share-snapshot.ts'
 import { DatabaseInspectorBrowse, DatabaseInspectorTab, bindInspectorSnapshot, collectionTabIcon } from './inspector-database.tsx'
 import { applyDatabaseChannelPayload } from './inspector-db-route.ts'
 import { InspectorFollowToggle } from './inspector-follow.tsx'
+import { SidebarDocsSection } from './sidebar-docs-section.tsx'
 import { DatabaseUiService, getDatabaseUi } from './database-ui.ts'
 import { invalidateListCacheForFsdbChange } from './browser-list-cache.ts'
 import { invalidateListReads } from './db-client.ts'
@@ -500,6 +501,10 @@ export function apply(ctx: Context) {
   slots.place('header-tools', InspectorFollowToggle, {
     key: 'inspector-follow',
     order: 11,
+  })
+  slots.place('chat-sidebar-docs', SidebarDocsSection, {
+    key: 'fsdb-docs-sidebar',
+    order: 1,
   })
   let stopped = false
   let readyTimer = 0
