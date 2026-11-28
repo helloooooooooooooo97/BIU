@@ -16,7 +16,7 @@ import {
   RecordMark,
   recordPreviewMascot,
 } from './record-mark.tsx'
-import { AccessIcon, accessText, accessTone } from './share-scope-label.tsx'
+import { AccessIcon, accessText, accessTone, ScopeIcon, scopeText, scopeTone } from './share-scope-label.tsx'
 import {
   normalizeRecordEmoji,
   recordPreviewEmoji,
@@ -234,6 +234,25 @@ export function RecordOpenControls({
   )
 }
 
+export function TitleScopeIcon({ scope, hasExternal = false }: { scope: unknown; hasExternal?: boolean }) {
+  const raw = typeof scope === 'string' ? scope.trim() : ''
+  if (!raw) return null
+  const text = scopeText(raw)
+  const tone = scopeTone(raw)
+  const tip = hasExternal ? `分享范围：${text}（已对外公开或邀请外部访客）` : `分享范围：${text}`
+  return (
+    <span
+      className={`fsdb-title-scope is-${tone}`}
+      data-testid="fsdb-title-scope-icon"
+      data-scope={tone}
+      data-dock-tip={tip}
+      aria-label={tip}
+    >
+      <ScopeIcon scope={text} />
+    </span>
+  )
+}
+
 export function TitleRoleIcon({ role }: { role: unknown }) {
   const raw = typeof role === 'string' ? role.trim() : ''
   if (!raw) return null
@@ -248,6 +267,18 @@ export function TitleRoleIcon({ role }: { role: unknown }) {
       aria-label={`我的权限：${text}`}
     >
       <AccessIcon role={text} />
+    </span>
+  )
+}
+
+export function TitleMetaIcons({ row }: { row: DbRecord }) {
+  const hasScope = typeof row.shareScope === 'string' && row.shareScope.trim().length > 0
+  const hasRole = typeof row.shareRole === 'string' && row.shareRole.trim().length > 0
+  if (!hasScope && !hasRole) return null
+  return (
+    <span className="fsdb-title-badges">
+      <TitleScopeIcon scope={row.shareScope} hasExternal={Boolean((row as { hasExternal?: unknown }).hasExternal)} />
+      <TitleRoleIcon role={row.shareRole} />
     </span>
   )
 }
@@ -318,7 +349,7 @@ export function RecordTitle({
           <span className="fsdb-record-mark is-sm" data-icon={idleTableIconKind(tableIcon)} aria-hidden />
         )}
         <span className="fsdb-title-text">{label}</span>
-        <TitleRoleIcon role={row.shareRole} />
+        <TitleMetaIcons row={row} />
       </span>
     )
   }
@@ -357,7 +388,7 @@ export function RecordTitle({
           <RecordMark record={row} tableIcon={typeIcon} />
         )}
         <span className="fsdb-title-text">{toolsLive && Title ? <Title record={row} label={label} /> : label}</span>
-        <TitleRoleIcon role={row.shareRole} />
+        <TitleMetaIcons row={row} />
       </span>
       {toolsLive || (tree && kidCount > 0) ? (
         <span className="tasks-row-tools-slot">

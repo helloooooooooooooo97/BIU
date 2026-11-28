@@ -77,6 +77,65 @@ test('RecordTitle renders permission icon in armed mode and omits it when row ha
     />,
   )
   assert.equal(screen.queryByTestId('fsdb-title-role-icon'), null)
+  assert.equal(screen.queryByTestId('fsdb-title-scope-icon'), null)
+})
+
+for (const [shareScope, expectedTone, expectedText] of [
+  ['私人', 'personal', '私人'],
+  ['空间', 'workspace', '空间'],
+  ['共享', 'shared', '共享'],
+] as const) {
+  test(`RecordTitle renders ${expectedTone} share scope icon alongside permission icon`, () => {
+    const { container } = render(
+      <RecordTitle
+        row={{ id: 'r-scope', title: '共享文档', shareScope, shareRole: '管理' }}
+        label="共享文档"
+        treeOn={false}
+        collapsed
+        onToggleCollapsed={noop}
+        pick={{}}
+        onOpenSplit={noop}
+        onOpenRow={noop}
+        onWriteEmoji={noop}
+      />,
+    )
+
+    const scopeBadge = screen.getByTestId('fsdb-title-scope-icon')
+    const roleBadge = screen.getByTestId('fsdb-title-role-icon')
+    assert.equal(scopeBadge.getAttribute('data-scope'), expectedTone)
+    assert.equal(scopeBadge.getAttribute('aria-label'), `分享范围：${expectedText}`)
+    assert.equal(scopeBadge.getAttribute('data-dock-tip'), `分享范围：${expectedText}`)
+    assert.ok(scopeBadge.querySelector('svg'))
+    const badges = container.querySelector('.fsdb-title-badges')
+    assert.ok(badges)
+    assert.deepEqual([...badges.children], [scopeBadge, roleBadge])
+  })
+}
+
+test('RecordTitle renders share scope icon in armed mode with external hint and defines scope ink tones', () => {
+  render(
+    <RecordTitle
+      row={{ id: 'r-ext', title: '公开说明', shareScope: '空间', shareRole: '编辑', hasExternal: true }}
+      label="公开说明"
+      treeOn={false}
+      collapsed
+      onToggleCollapsed={noop}
+      pick={{}}
+      onOpenSplit={noop}
+      onOpenRow={noop}
+      onWriteEmoji={noop}
+      toolsArmed
+    />,
+  )
+
+  const scopeBadge = screen.getByTestId('fsdb-title-scope-icon')
+  assert.equal(scopeBadge.getAttribute('data-scope'), 'workspace')
+  assert.equal(scopeBadge.getAttribute('aria-label'), '分享范围：空间（已对外公开或邀请外部访客）')
+
+  const css = readFileSync(resolve(import.meta.dirname, './fsdb-style.ts'), 'utf8')
+  assert.match(css, /\.fsdb-title-scope\.is-personal\{--biu-tag:var\(--biu-color-ink-gray\)\}/)
+  assert.match(css, /\.fsdb-title-scope\.is-workspace\{--biu-tag:var\(--biu-color-ink-green\)\}/)
+  assert.match(css, /\.fsdb-title-scope\.is-shared\{--biu-tag:var\(--biu-color-ink-blue\)\}/)
 })
 
 test('RecordTitle marks active MCP, Skill, and Plugin rows in both fast-paint and armed modes', () => {

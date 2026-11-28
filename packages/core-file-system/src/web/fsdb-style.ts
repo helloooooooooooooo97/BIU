@@ -478,7 +478,11 @@ const CSS = `
 .fsdb-page .fsdb-title-host{position:relative;display:flex;align-items:center;gap:6px;min-width:0;width:100%;max-width:100%;min-height:22px;flex:1;overflow:hidden}
 .fsdb-page .fsdb-title-host.has-tree-count{padding-right:24px}
 .fsdb-page .tasks-table tr:hover td:has(.tasks-row-tools-slot) .fsdb-title-host:not(:focus-within){padding-right:50px}
-.fsdb-page .fsdb-title-role{--biu-tag:var(--biu-color-ink-gray);flex:none;display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;color:var(--biu-tag);opacity:.88}
+.fsdb-page .fsdb-title-badges{flex:none;display:inline-flex;align-items:center;gap:2px}
+.fsdb-page .fsdb-title-scope,.fsdb-page .fsdb-title-role{--biu-tag:var(--biu-color-ink-gray);flex:none;display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;color:var(--biu-tag);opacity:.88}
+.fsdb-page .fsdb-title-scope.is-personal{--biu-tag:var(--biu-color-ink-gray)}
+.fsdb-page .fsdb-title-scope.is-workspace{--biu-tag:var(--biu-color-ink-green)}
+.fsdb-page .fsdb-title-scope.is-shared{--biu-tag:var(--biu-color-ink-blue)}
 .fsdb-page .fsdb-title-role.is-manage{--biu-tag:var(--biu-color-ink-purple)}
 .fsdb-page .fsdb-title-role.is-edit{--biu-tag:var(--biu-color-ink-green)}
 .fsdb-page .fsdb-title-role.is-comment{--biu-tag:var(--biu-color-ink-blue)}
