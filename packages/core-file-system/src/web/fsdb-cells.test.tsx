@@ -190,7 +190,7 @@ test('fieldDraftValue preserves Unix ms timestamp for datetime fields so CellDat
   assert.equal(fieldDraftValue({ type: 'datetime' }, '2026-11-20 10:57:14'), '2026-11-20 10:57:14')
 })
 
-test('ActionCell renders tactile keycap action button with semantic icon tone and hover wash', () => {
+test('ActionCell renders borderless rounded pill button with richer tag tint background', () => {
   let ran = false
   const { container } = render(
     <ActionCell field={{ type: 'action', label: '添加', action: 'add-child' }} fieldKey="add" onRun={() => { ran = true }} />,
@@ -203,9 +203,8 @@ test('ActionCell renders tactile keycap action button with semantic icon tone an
   btn.click()
   assert.equal(ran, true)
   const css = readFileSync(resolve(import.meta.dirname, './fsdb-style.ts'), 'utf8')
-  assert.match(css, /\.fsdb-action-btn\{[^}]*background:var\(--biu-action-bg/)
-  assert.match(css, /\.fsdb-action-btn\{[^}]*border-radius:var\(--biu-radius-md/)
-  assert.match(css, /\.fsdb-action-btn\{[^}]*color:var\(--biu-color-text\)/)
-  assert.match(css, /\.fsdb-action-btn svg\{[^}]*color-mix\(in srgb,var\(--biu-tag\)/)
-  assert.match(css, /\.fsdb-action-btn:hover:not\(:disabled\)\{[^}]*var\(--biu-action-hover-bg-mix/)
+  assert.match(css, /\.fsdb-action-btn\{[^}]*border:0/)
+  assert.match(css, /\.fsdb-action-btn\{[^}]*border-radius:var\(--biu-radius-full\)/)
+  assert.match(css, /\.fsdb-action-btn\{[^}]*var\(--biu-action-bg-mix/)
+  assert.match(css, /\.fsdb-action-btn:hover:not\(:disabled\)\{[^}]*var\(--biu-action-bg-hover-mix/)
 })
