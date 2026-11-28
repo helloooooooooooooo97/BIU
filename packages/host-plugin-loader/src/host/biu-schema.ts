@@ -1,6 +1,6 @@
 type DatabaseSync = import('node:sqlite').DatabaseSync
 
-export const LATEST_BIU_SCHEMA = 65
+export const LATEST_BIU_SCHEMA = 66
 
 export const CREATE_CORE_SQL = `
 CREATE TABLE IF NOT EXISTS pages (
@@ -621,7 +621,33 @@ CREATE UNIQUE INDEX IF NOT EXISTS access_requests_pending_uniq
   WHERE status = 'pending';
 `
 
-const CREATE_LATEST_SQL = `${CREATE_CORE_SQL}\n${CREATE_EDITOR_SQL}\n${CREATE_CHANNELS_SQL}\n${CREATE_ACCESS_REQUESTS_SQL}`
+export const CREATE_PAGE_REVISIONS_SQL = `
+CREATE TABLE IF NOT EXISTS page_revisions (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  record_id TEXT NOT NULL,
+  version INTEGER NOT NULL,
+  op TEXT NOT NULL DEFAULT 'fields',
+  actor_kind TEXT NOT NULL DEFAULT 'user',
+  actor_id TEXT NOT NULL DEFAULT '',
+  actor_name TEXT NOT NULL DEFAULT '',
+  session_id TEXT NOT NULL DEFAULT '',
+  title TEXT NOT NULL DEFAULT '',
+  body TEXT NOT NULL DEFAULT '',
+  fields_json TEXT NOT NULL DEFAULT '{}',
+  changes_json TEXT NOT NULL DEFAULT '[]',
+  added_lines INTEGER NOT NULL DEFAULT 0,
+  removed_lines INTEGER NOT NULL DEFAULT 0,
+  summary TEXT NOT NULL DEFAULT '',
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS page_revisions_record_version
+  ON page_revisions(record_id, version DESC);
+CREATE INDEX IF NOT EXISTS page_revisions_record_updated
+  ON page_revisions(record_id, updated_at DESC);
+`
+
+const CREATE_LATEST_SQL = `${CREATE_CORE_SQL}\n${CREATE_EDITOR_SQL}\n${CREATE_CHANNELS_SQL}\n${CREATE_ACCESS_REQUESTS_SQL}\n${CREATE_PAGE_REVISIONS_SQL}`
 
 function hasTable(db: DatabaseSync, name: string) {
   return tableNames(db).includes(name)

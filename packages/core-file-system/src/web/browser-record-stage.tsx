@@ -113,6 +113,7 @@ export type BrowserRecordStageProps = {
   visibleColumns: string[]
   setVisibleColumns: (next: string[]) => void
   renderVisibleColumnsFlyout: () => ReactNode
+  onOpenHistory?: () => void
 }
 
 export const BrowserRecordStage = memo(function BrowserRecordStage(props: BrowserRecordStageProps) {
@@ -201,6 +202,7 @@ export const BrowserRecordStage = memo(function BrowserRecordStage(props: Browse
     visibleColumns,
     setVisibleColumns,
     renderVisibleColumnsFlyout,
+    onOpenHistory,
   } = props
 
   if (!detailId) {
@@ -398,6 +400,7 @@ export const BrowserRecordStage = memo(function BrowserRecordStage(props: Browse
             ? () => onRequestDeleteRecord(selected)
             : undefined
         }
+        onHistory={onOpenHistory}
         onOpenRecord={(recordId, collection) => onOpenRecord?.(recordId, activeViewId, collection)}
         onPrev={() => void stepViewRecord(-1)}
         onNext={() => void stepViewRecord(1)}
