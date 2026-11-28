@@ -53,6 +53,7 @@ import type {
   ChannelSummary,
 } from '../shared/channel-types.ts'
 import { ChannelComposer, type ChannelComposerHandle } from './channel-composer.tsx'
+import { ChannelFloatingSidebar } from './channel-floating-sidebar.tsx'
 import { MarkdownBody } from './markdown.tsx'
 import {
   addChannelMember,
@@ -70,6 +71,7 @@ import {
   loadSavedChannelMessages,
   markChannelRead,
   openChannelRunTrace,
+  openOrCreateDm,
   recallChannelMessage,
   removeChannelMember,
   renameChannel,
@@ -1814,6 +1816,43 @@ export const ChannelStage = memo(function ChannelStage({
             </div>
           </div>
         </div>
+
+        {/* 聊天窗内部右侧悬浮边栏：收起为极简头像轨，悬停展开成员与快捷入口，支持图钉置顶固定 */}
+        {members.length > 0 ? (
+          <ChannelFloatingSidebar
+            channel={channel}
+            isDm={isDm}
+            members={members}
+            activities={activities}
+            myAccountId={myAccountId}
+            canManageMembers={Boolean(detail?.canManageMembers)}
+            pinnedMessageCount={mainMessages.filter((m) => m.pinnedAt && !m.deletedAt).length}
+            resolveAvatar={resolveAvatar}
+            isOnline={isOnline}
+            onMention={(mention) => composerRef.current?.insertMention(mention)}
+            onAgentClick={handleAgentClick}
+            onOpenDm={(targetAccountId) => {
+              void openOrCreateDm(targetAccountId)
+                .then((res) => navigate(channelAppPath(res.channel.id)))
+                .catch((err) => setError(err instanceof Error ? err.message : String(err)))
+            }}
+            onOpenManageMembers={() => setMembersModalOpen(true)}
+            onOpenPins={openPinsModal}
+            onOpenSaved={openSavedModal}
+            onSummarize={() => handleSummarize(false)}
+            onToggleSearch={() => setSearchOpen((v) => !v)}
+            onToggleChannelPinned={() => {
+              void updateChannelPreferences(channelId, { pinned: !channel?.pinned }).catch((err) =>
+                setError(err instanceof Error ? err.message : String(err)),
+              )
+            }}
+            onToggleChannelMuted={() => {
+              void updateChannelPreferences(channelId, { muted: !channel?.muted }).catch((err) =>
+                setError(err instanceof Error ? err.message : String(err)),
+              )
+            }}
+          />
+        ) : null}
       </div>
 
       {/* 单条消息「⋯ 更多」浮动菜单（Portal 渲染，避免被 .chat-user-card overflow:hidden 裁切） */}
