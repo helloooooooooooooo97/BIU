@@ -304,10 +304,6 @@ export const ChannelSidebarSections = memo(function ChannelSidebarSections({
                   <MegaphoneIcon className="size-3.5 opacity-80" aria-hidden />
                 ) : ch.kind === 'forum' ? (
                   <ChatBubbleLeftRightIcon className="size-3.5 opacity-80" aria-hidden />
-                ) : (ch.shareScope ?? computeChannelShareScope(ch.accessMode, ch.memberCount, ch.kind)) === 'personal' ? (
-                  <LockClosedIcon className="size-3.5 opacity-80" aria-hidden />
-                ) : (ch.shareScope ?? computeChannelShareScope(ch.accessMode, ch.memberCount, ch.kind)) === 'shared' ? (
-                  <UserGroupIcon className="size-3.5 opacity-80" aria-hidden />
                 ) : (
                   <HashtagIcon className="size-4 opacity-80" aria-hidden />
                 )}
@@ -429,12 +425,12 @@ export const ChannelSidebarSections = memo(function ChannelSidebarSections({
                       <MegaphoneIcon className="size-3.5" data-testid={`sidebar-channel-icon-announcement-${ch.id}`} />
                     ) : ch.kind === 'forum' ? (
                       <ChatBubbleLeftRightIcon className="size-3.5" data-testid={`sidebar-channel-icon-forum-${ch.id}`} />
-                    ) : (ch.shareScope ?? computeChannelShareScope(ch.accessMode, ch.memberCount, ch.kind)) === 'personal' ? (
-                      <LockClosedIcon className="size-3.5" data-testid={`sidebar-channel-icon-personal-${ch.id}`} />
-                    ) : (ch.shareScope ?? computeChannelShareScope(ch.accessMode, ch.memberCount, ch.kind)) === 'shared' ? (
-                      <UserGroupIcon className="size-3.5" data-testid={`sidebar-channel-icon-shared-${ch.id}`} />
                     ) : (
-                      <HashtagIcon className="size-3.5" data-testid={`sidebar-channel-icon-workspace-${ch.id}`} />
+                      <HashtagIcon
+                        className="size-3.5"
+                        data-testid={`sidebar-channel-icon-channel-${ch.id}`}
+                        data-share-scope={ch.shareScope ?? computeChannelShareScope(ch.accessMode, ch.memberCount, ch.kind)}
+                      />
                     )}
                     {peerOnline ? (
                       <span
@@ -801,7 +797,7 @@ export const ChannelSidebarSections = memo(function ChannelSidebarSections({
                                   ) : group.key === 'kind:forum' ? (
                                     <ChatBubbleLeftRightIcon className="size-4 shrink-0" />
                                   ) : (
-                                    <UserGroupIcon className="size-4 shrink-0" />
+                                    <HashtagIcon className="size-4 shrink-0" />
                                   )}
                                 </span>
                                 <span className="sidebar-group-fold-chevron">
