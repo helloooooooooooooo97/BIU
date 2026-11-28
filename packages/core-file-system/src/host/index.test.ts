@@ -3201,12 +3201,18 @@ test('reinstalling a builtin plugin does not claim another workspace record', as
   try {
     await ctx.plugin(AccountBridge)
     const ada = collab.register('', Date.now(), 'secret1', 'repack-ada@example.com')
+    const adminId = 'acc_super'
+    assert.equal(collab.isSuperAdmin(adminId), true)
     const home = collab.createWorkspace(ada.id, '先建的空间')
-    const local = collab.createWorkspace(ada.id, '本机空间')
+    const local = collab.createWorkspace(adminId, '本机空间')
     collab.setActive(ada.id, home.id)
     runWithAccount(ada.id, () => collab.attach(home.id, '/plugins', 'page-sandbox'))
-    collab.setActive(ada.id, local.id)
-    await runWithAccount(ada.id, () => db.action('/plugins/page-sandbox', 'pack'))
+    collab.setActive(adminId, local.id)
+    await assert.rejects(
+      () => runWithAccount(ada.id, () => db.action('/plugins/page-sandbox', 'pack')),
+      /INSUFFICIENT_PERMISSION/,
+    )
+    await runWithAccount(adminId, () => db.action('/plugins/page-sandbox', 'pack'))
     assert.deepEqual(packed, ['page-sandbox'])
     assert.equal(collab.recordIds(local.id, '/plugins').has('page-sandbox'), false)
     assert.equal(collab.recordIds(home.id, '/plugins').has('page-sandbox'), true)
@@ -3216,18 +3222,20 @@ test('reinstalling a builtin plugin does not claim another workspace record', as
   }
 })
 
-test('a member sandbox is private until the owner shares it', async () => {
+test('a member sandbox is private until the owner shares it, and start/pack/uninstall enforce read/update/delete', async () => {
   const previous = process.env.BIU_ONLINE
   process.env.BIU_ONLINE = '1'
   const ctx = new Context()
   const db = new DatabaseService(ctx)
-  const rows = new Map<string, { id: string; title: string; sandbox: boolean }>()
+  const rows = new Map<string, { id: string; title: string; sandbox: boolean; installed?: boolean; running?: boolean }>()
+  const started: string[] = []
+  const uninstalled: string[] = []
   db.register({
     id: 'plugins',
     path: '/plugins',
     schema: {
       labelField: 'title',
-      fields: { ...REQUIRED_RECORD_FIELDS, title: { type: 'string' }, sandbox: { type: 'boolean' } },
+      fields: { ...REQUIRED_RECORD_FIELDS, title: { type: 'string' }, sandbox: { type: 'boolean' }, installed: { type: 'boolean' }, running: { type: 'boolean' } },
     },
     list: () => [...rows.values()],
     get: (id) => rows.get(id) ?? null,
@@ -3238,14 +3246,45 @@ test('a member sandbox is private until the owner shares it', async () => {
         allowMissing: true,
         requiredAction: 'resource:read',
         run: async (id) => {
-          rows.set(id, { id, title: id, sandbox: true })
+          const prev = rows.get(id)
+          rows.set(id, { id, title: id, sandbox: true, installed: prev?.installed ?? true, running: prev?.running ?? false })
+        },
+      },
+      {
+        id: 'start',
+        label: '运行',
+        requiredAction: 'resource:read',
+        run: async (id) => {
+          started.push(id)
+          const prev = rows.get(id)
+          if (prev) rows.set(id, { ...prev, running: true })
+          return rows.get(id)
+        },
+      },
+      {
+        id: 'stop',
+        label: '停止',
+        requiredAction: 'resource:read',
+        run: async (id) => {
+          const prev = rows.get(id)
+          if (prev) rows.set(id, { ...prev, running: false })
+          return rows.get(id)
         },
       },
       {
         id: 'pack',
         label: '安装',
-        requiredAction: 'resource:read',
+        requiredAction: 'resource:update',
         run: async (id) => rows.get(id),
+      },
+      {
+        id: 'uninstall',
+        label: '卸载',
+        requiredAction: 'resource:delete',
+        run: async (id) => {
+          uninstalled.push(id)
+          return rows.get(id)
+        },
       },
     ],
   })
@@ -3265,6 +3304,7 @@ test('a member sandbox is private until the owner shares it', async () => {
     const bob = collab.register('', Date.now(), 'secret1', 'private-bob@example.com')
     const cara = collab.register('', Date.now(), 'secret1', 'private-cara@example.com')
     const workspace = collab.createWorkspace(ada.id, 'Plugins')
+    const otherWorkspace = collab.createWorkspace(bob.id, 'Other Plugins')
     collab.addMemberByEmail(ada.id, workspace.id, bob.email)
     collab.addMemberByEmail(ada.id, workspace.id, cara.email)
     collab.updateMemberRole(ada.id, workspace.id, cara.id, 'viewer')
@@ -3280,7 +3320,17 @@ test('a member sandbox is private until the owner shares it', async () => {
     assert.deepEqual(adaList.items[0]?.updatedBy, [{ kind: 'user', name: ada.name, accountId: ada.id }])
     const bobList = await runWithAccount(bob.id, () => db.list('/plugins'))
     assert.deepEqual(bobList.items.map((row) => row.id), [])
+    // 未分享前，bob 不能启动、打包、覆写沙箱或卸载 ada 的私人插件
+    await assert.rejects(() => runWithAccount(bob.id, () => db.action('/plugins/ada-plug', 'start')), /unknown record/)
     await assert.rejects(() => runWithAccount(bob.id, () => db.action('/plugins/ada-plug', 'pack')), /unknown record/)
+    await assert.rejects(() => runWithAccount(bob.id, () => db.action('/plugins/ada-plug', 'sandbox')), /unknown record/)
+    await assert.rejects(() => runWithAccount(bob.id, () => db.action('/plugins/ada-plug', 'uninstall')), /unknown record/)
+    // 跨空间也不能劫持同名插件
+    collab.setActive(bob.id, otherWorkspace.id)
+    await assert.rejects(() => runWithAccount(bob.id, () => db.action('/plugins/ada-plug', 'sandbox')), /unknown record/)
+    await assert.rejects(() => runWithAccount(bob.id, () => db.action('/plugins/ada-plug', 'start')), /unknown record/)
+    collab.setActive(bob.id, workspace.id)
+    // 授予 viewer 后：bob 可以查看并个人 start/stop，但不能 pack / sandbox / uninstall
     collab.authorization.grant(
       ada.id,
       { type: 'record', workspaceId: workspace.id, collection: '/plugins', recordId: 'ada-plug' },
@@ -3291,13 +3341,40 @@ test('a member sandbox is private until the owner shares it', async () => {
     )
     const shared = await runWithAccount(bob.id, () => db.list('/plugins'))
     assert.deepEqual(shared.items.map((row) => row.id), ['ada-plug'])
+    await runWithAccount(bob.id, () => db.action('/plugins/ada-plug', 'start'))
+    await runWithAccount(bob.id, () => db.action('/plugins/ada-plug', 'stop'))
+    assert.deepEqual(started, ['ada-plug'])
+    await assert.rejects(() => runWithAccount(bob.id, () => db.action('/plugins/ada-plug', 'pack')), /unknown record/)
+    await assert.rejects(() => runWithAccount(bob.id, () => db.action('/plugins/ada-plug', 'sandbox')), /unknown record/)
+    await assert.rejects(() => runWithAccount(bob.id, () => db.action('/plugins/ada-plug', 'uninstall')), /unknown record/)
+    // 升为 editor 后：bob 可以 pack / sandbox，但仍不能 uninstall
+    collab.authorization.grant(
+      ada.id,
+      { type: 'record', workspaceId: workspace.id, collection: '/plugins', recordId: 'ada-plug' },
+      'account',
+      bob.id,
+      'editor',
+      Date.now(),
+    )
     await runWithAccount(bob.id, () => db.action('/plugins/ada-plug', 'pack'))
+    await assert.rejects(() => runWithAccount(bob.id, () => db.action('/plugins/ada-plug', 'uninstall')), /unknown record/)
     const edited = asCollection(await runWithAccount(ada.id, () => db.list('/plugins')))
     assert.deepEqual(edited.items[0]?.createdBy, { kind: 'user', name: ada.name, accountId: ada.id })
     assert.deepEqual(edited.items[0]?.updatedBy, [
       { kind: 'user', name: ada.name, accountId: ada.id },
       { kind: 'user', name: bob.name, accountId: bob.id },
     ])
+    // 升为 manager 后：bob 可以 uninstall
+    collab.authorization.grant(
+      ada.id,
+      { type: 'record', workspaceId: workspace.id, collection: '/plugins', recordId: 'ada-plug' },
+      'account',
+      bob.id,
+      'manager',
+      Date.now(),
+    )
+    await runWithAccount(bob.id, () => db.action('/plugins/ada-plug', 'uninstall'))
+    assert.deepEqual(uninstalled, ['ada-plug'])
     const caraList = await runWithAccount(cara.id, () => db.list('/plugins'))
     assert.deepEqual(caraList.items.map((row) => row.id), ['cara-plug'])
     await runWithAccount(ada.id, () => db.action('/plugins/ada-open', 'sandbox', { scope: 'shared' }))

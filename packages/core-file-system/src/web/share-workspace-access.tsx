@@ -94,6 +94,9 @@ export function WorkspaceAccess({
   >(null)
   const [memberPickerOpen, setMemberPickerOpen] = useState(false)
   const isAgentCollection = collection === '/agents'
+  const isPluginCollection = collection === '/plugins'
+  const isMcpCollection = collection === '/mcp'
+  const isSkillCollection = collection === '/skills'
   const [policy, setPolicy] = useState<{
     allowExternalShare: boolean
     allowAgentEditShare: boolean
@@ -107,8 +110,34 @@ export function WorkspaceAccess({
       ? [{ value: 'editor' as ShareRole, label: '可编辑', hint: '可重命名与调整配置，但不能直接对话' }]
       : []),
   ]
-  const effectiveRoleOptions = isAgentCollection ? agentRoleOptions : ROLE_OPTIONS
-  const effectiveExternalRoleOptions = isAgentCollection ? agentRoleOptions : ROLE_OPTIONS
+  const pluginRoleOptions: ReadonlyArray<{ value: ShareRole; label: string; hint: string }> = [
+    { value: 'viewer', label: '可查看', hint: '查看介绍并独立运行或停止（不影响他人）' },
+    { value: 'commenter', label: '可评论', hint: '查看、批注并独立运行或停止' },
+    { value: 'editor', label: '可编辑', hint: '修改介绍、源码并重新安装（影响所有使用者）' },
+    { value: 'manager', label: '可管理', hint: '分享、权限管理与卸载删除（停止全员运行）' },
+  ]
+  const mcpRoleOptions: ReadonlyArray<{ value: ShareRole; label: string; hint: string }> = [
+    { value: 'viewer', label: '可查看', hint: '查看并独立启用或停用（不影响他人）' },
+    { value: 'commenter', label: '可评论', hint: '查看、批注并独立启用或停用' },
+    { value: 'editor', label: '可编辑', hint: '修改连接配置与工具过滤（影响所有使用者）' },
+    { value: 'manager', label: '可管理', hint: '分享、权限管理与删除（断开全员连接）' },
+  ]
+  const skillRoleOptions: ReadonlyArray<{ value: ShareRole; label: string; hint: string }> = [
+    { value: 'viewer', label: '可查看', hint: '查看并独立启用或停用（不影响他人）' },
+    { value: 'commenter', label: '可评论', hint: '查看、批注并独立启用或停用' },
+    { value: 'editor', label: '可编辑', hint: '修改正文、说明与附件（影响所有使用者）' },
+    { value: 'manager', label: '可管理', hint: '分享、权限管理与删除（影响所有使用者）' },
+  ]
+  const effectiveRoleOptions = isAgentCollection
+    ? agentRoleOptions
+    : isPluginCollection
+      ? pluginRoleOptions
+      : isMcpCollection
+        ? mcpRoleOptions
+        : isSkillCollection
+          ? skillRoleOptions
+          : ROLE_OPTIONS
+  const effectiveExternalRoleOptions = effectiveRoleOptions
   const effectiveMemberDefaultRoleOptions = isAgentCollection
     ? [
         { value: 'viewer' as const, label: '可查看', hint: '查看聊天记录，可 Fork 为自己的代理' },
@@ -116,7 +145,22 @@ export function WorkspaceAccess({
           ? [{ value: 'editor' as const, label: '可编辑', hint: '可重命名与调整配置，但不能直接对话' }]
           : []),
       ]
-    : MEMBER_DEFAULT_ROLE_OPTIONS
+    : isPluginCollection
+      ? [
+          { value: 'viewer' as const, label: '可查看', hint: '空间成员默认可查看，并独立运行/停止（不影响他人）' },
+          { value: 'editor' as const, label: '可编辑', hint: '空间成员默认可编辑介绍、源码并重装（影响所有使用者）' },
+        ]
+      : isMcpCollection
+        ? [
+            { value: 'viewer' as const, label: '可查看', hint: '空间成员默认可查看，并独立启用/停用（不影响他人）' },
+            { value: 'editor' as const, label: '可编辑', hint: '空间成员默认可编辑连接配置与工具过滤（影响所有使用者）' },
+          ]
+        : isSkillCollection
+          ? [
+              { value: 'viewer' as const, label: '可查看', hint: '空间成员默认可查看，并独立启用/停用（不影响他人）' },
+              { value: 'editor' as const, label: '可编辑', hint: '空间成员默认可编辑正文与附件（影响所有使用者）' },
+            ]
+          : MEMBER_DEFAULT_ROLE_OPTIONS
   const [role, setRole] = useState<ShareRole>(isAgentCollection ? 'viewer' : 'editor')
   const [externalRole, setExternalRole] = useState<ShareRole>(isAgentCollection ? 'viewer' : 'editor')
   const [guestUrl, setGuestUrl] = useState('')
@@ -491,6 +535,30 @@ export function WorkspaceAccess({
           data-testid="fsdb-share-agent-roles-hint"
         >
           代理权限：<strong>可查看</strong>可查看记录并 Fork 为自己的代理；<strong>可编辑</strong>可改名与调整配置，仅创建者本人可直接对话与操作。
+        </div>
+      ) : null}
+      {isPluginCollection ? (
+        <div
+          style={{ fontSize: 12, color: 'var(--biu-color-text-muted)', marginTop: 4, lineHeight: 1.5 }}
+          data-testid="fsdb-share-plugin-roles-hint"
+        >
+          插件权限：<strong>可查看</strong>可在自己账号下独立运行或停止（不影响他人）；<strong>可编辑</strong>可修改介绍、源码并重新安装（重装会影响所有运行中的成员）；<strong>可管理</strong>可卸载或删除插件（会停止所有成员的运行）。
+        </div>
+      ) : null}
+      {isMcpCollection ? (
+        <div
+          style={{ fontSize: 12, color: 'var(--biu-color-text-muted)', marginTop: 4, lineHeight: 1.5 }}
+          data-testid="fsdb-share-mcp-roles-hint"
+        >
+          MCP 权限：<strong>可查看</strong>可在自己账号下独立启用或停用（不影响他人）；<strong>可编辑</strong>可修改连接配置与工具过滤（会影响所有使用者）；<strong>可管理</strong>可删除该服务器（会断开所有人的连接）。
+        </div>
+      ) : null}
+      {isSkillCollection ? (
+        <div
+          style={{ fontSize: 12, color: 'var(--biu-color-text-muted)', marginTop: 4, lineHeight: 1.5 }}
+          data-testid="fsdb-share-skill-roles-hint"
+        >
+          技能权限：<strong>可查看</strong>可在自己账号下独立启用或停用（不影响他人）；<strong>可编辑</strong>可修改技能正文与附件（会影响所有使用者）；<strong>可管理</strong>可删除该技能（影响所有使用者）。
         </div>
       ) : null}
       {statusNotice ? (

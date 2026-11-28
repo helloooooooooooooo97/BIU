@@ -133,10 +133,10 @@ test('pluginsCollection lists installed plugins and sandboxes in one table', asy
   })
   assert.equal(spec.actions?.find((item) => item.id === 'start')?.requiredAction, 'resource:read')
   assert.equal(spec.actions?.find((item) => item.id === 'stop')?.requiredAction, 'resource:read')
-  assert.equal(spec.actions?.find((item) => item.id === 'pack')?.requiredAction, 'resource:read')
+  assert.equal(spec.actions?.find((item) => item.id === 'pack')?.requiredAction, 'resource:update')
   assert.equal(spec.actions?.find((item) => item.id === 'sandbox')?.requiredAction, 'resource:read')
   assert.deepEqual(spec.actions?.find((item) => item.id === 'uninstall')?.when, { installed: true, canManagePackage: true })
-  assert.equal(spec.actions?.find((item) => item.id === 'uninstall')?.requiredAction, 'resource:read')
+  assert.equal(spec.actions?.find((item) => item.id === 'uninstall')?.requiredAction, 'resource:delete')
   assert.equal(spec.actions?.find((item) => item.id === 'sandbox')?.for, 'agent')
   assert.deepEqual(
     (spec.actions?.find((item) => item.id === 'sandbox')?.parameters as { properties?: { scope?: { enum?: string[] } } } | undefined)
