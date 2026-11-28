@@ -113,6 +113,36 @@ export interface ChannelMessageReplyPreview {
   text: string
 }
 
+export interface ChannelReactionSummary {
+  emoji: string
+  count: number
+  reactedByMe: boolean
+  accountIds: string[]
+  accountNames: string[]
+}
+
+export interface ChannelSearchHit {
+  id: string
+  channelId: string
+  channelName: string
+  channelKind: ChannelKind
+  seq: number
+  senderType: ChannelSenderType
+  senderId: string
+  senderName: string
+  senderAvatar?: string
+  senderMascot?: SessionMascot
+  text: string
+  createdAt: number
+}
+
+export interface ChannelSavedMessageView {
+  channelId: string
+  channelName: string
+  savedAt: number
+  message: ChannelMessageView
+}
+
 export interface ChannelMessageView {
   id: string
   channelId: string
@@ -127,6 +157,11 @@ export interface ChannelMessageView {
   text: string
   mentions: ChannelMention[]
   attachments?: ChannelAttachment[]
+  reactions?: ChannelReactionSummary[]
+  pinnedAt?: number
+  pinnedBy?: string
+  pinnedByName?: string
+  savedByMe?: boolean
   traceId: string
   ephemeralTo: string
   meta?: ChannelMessageMeta

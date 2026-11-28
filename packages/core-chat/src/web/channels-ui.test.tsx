@@ -888,3 +888,156 @@ test('ChannelSidebarSections displays unread badges and online dot, and ChannelS
     assert.ok(stage.getByTestId('channel-msg-recalled-m-2'))
   })
 })
+
+test('ChannelStage supports emoji reactions, pin/save, in-channel search, and channel preferences', async () => {
+  let reactedEmoji: string | null = null
+  let pinnedToggled = false
+  let savedToggled = false
+  let prefPatched: Record<string, unknown> | null = null
+  const now = Date.now()
+  const baseMsg = {
+    id: 'm-1',
+    channelId: 'ch-p1',
+    seq: 1,
+    senderType: 'account',
+    senderId: 'acc-97',
+    senderName: '97',
+    replyToId: '',
+    text: '发布脚本已更新完成',
+    mentions: [],
+    traceId: '',
+    ephemeralTo: '',
+    createdAt: now,
+  }
+  const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = new URL(String(input), 'http://test.local')
+    if (url.pathname === '/api/channels/ch-p1' && (!init?.method || init.method === 'GET')) {
+      return new Response(
+        JSON.stringify({
+          channel: {
+            id: 'ch-p1',
+            workspaceId: 'ws-1',
+            kind: 'channel',
+            dmKey: '',
+            name: '发布群',
+            topic: '',
+            accessMode: 'private',
+            createdBy: 'acc-97',
+            createdAt: now,
+            updatedAt: now,
+            memberCount: 2,
+            agentCount: 0,
+            lastMessageAt: now,
+            lastMessageText: baseMsg.text,
+            pinned: false,
+            muted: false,
+          },
+          members: [
+            { channelId: 'ch-p1', memberType: 'account', memberId: 'acc-97', role: 'owner', addedBy: 'acc-97', addedAt: 1, name: '97', isOwn: false },
+            { channelId: 'ch-p1', memberType: 'account', memberId: 'acc-alice', role: 'member', addedBy: 'acc-97', addedAt: 1, name: 'Alice', isOwn: true },
+          ],
+          messages: [baseMsg],
+          activities: [],
+          myAccountId: 'acc-alice',
+          canManageMembers: false,
+        }),
+        { status: 200 },
+      )
+    }
+    if (url.pathname === '/api/channels/ch-p1/messages/m-1/reactions' && init?.method === 'POST') {
+      const body = JSON.parse(String(init.body ?? '{}')) as { emoji?: string }
+      reactedEmoji = body.emoji ?? null
+      return new Response(
+        JSON.stringify({
+          channelId: 'ch-p1',
+          messageId: 'm-1',
+          reactions: [{ emoji: reactedEmoji, count: 1, reactedByMe: true, accountIds: ['acc-alice'], accountNames: ['Alice'] }],
+        }),
+        { status: 200 },
+      )
+    }
+    if (url.pathname === '/api/channels/ch-p1/messages/m-1/pin' && init?.method === 'POST') {
+      pinnedToggled = true
+      return new Response(JSON.stringify({ message: { ...baseMsg, pinnedAt: now, pinnedBy: 'acc-alice', pinnedByName: 'Alice' } }), { status: 200 })
+    }
+    if (url.pathname === '/api/channels/ch-p1/messages/m-1/save' && init?.method === 'POST') {
+      savedToggled = true
+      return new Response(JSON.stringify({ ok: true, saved: true, messageId: 'm-1' }), { status: 200 })
+    }
+    if (url.pathname === '/api/channels/search') {
+      return new Response(
+        JSON.stringify({
+          hits: [{ ...baseMsg, channelName: '发布群', channelKind: 'channel' }],
+        }),
+        { status: 200 },
+      )
+    }
+    if (url.pathname === '/api/channels/ch-p1/preferences' && init?.method === 'PATCH') {
+      prefPatched = JSON.parse(String(init.body ?? '{}')) as Record<string, unknown>
+      return new Response(
+        JSON.stringify({
+          channel: {
+            id: 'ch-p1',
+            workspaceId: 'ws-1',
+            kind: 'channel',
+            dmKey: '',
+            name: '发布群',
+            topic: '',
+            accessMode: 'private',
+            createdBy: 'acc-97',
+            createdAt: now,
+            updatedAt: now,
+            memberCount: 2,
+            agentCount: 0,
+            lastMessageAt: now,
+            lastMessageText: baseMsg.text,
+            pinned: Boolean(prefPatched?.pinned),
+            muted: Boolean(prefPatched?.muted),
+          },
+        }),
+        { status: 200 },
+      )
+    }
+    return new Response(JSON.stringify({ items: [] }), { status: 200 })
+  })
+  vi.stubGlobal('fetch', fetchMock)
+
+  const stage = render(
+    <MemoryRouter initialEntries={['/channels/ch-p1']}>
+      <ChannelStage channelId="ch-p1" />
+    </MemoryRouter>,
+  )
+
+  await waitFor(() => assert.ok(stage.getByTestId('channel-msg-react-m-1')))
+
+  // 1. 添加表情回应 👍
+  fireEvent.click(stage.getByTestId('channel-msg-react-m-1'))
+  const picker = await waitFor(() => stage.getByTestId('channel-msg-react-picker-m-1'))
+  fireEvent.click(picker.querySelector('button')!)
+  await waitFor(() => {
+    assert.equal(reactedEmoji, '👍')
+    assert.ok(stage.getByTestId('channel-msg-reaction-m-1-👍'))
+  })
+
+  // 2. 置顶与收藏消息
+  fireEvent.click(stage.getByTestId('channel-msg-pin-m-1'))
+  fireEvent.click(stage.getByTestId('channel-msg-save-m-1'))
+  await waitFor(() => {
+    assert.equal(pinnedToggled, true)
+    assert.equal(savedToggled, true)
+    assert.ok(stage.getByTestId('channel-msg-pinned-badge-m-1'))
+  })
+
+  // 3. 群内搜索
+  fireEvent.click(stage.getByTestId('channel-search-toggle'))
+  fireEvent.change(stage.getByTestId('channel-search-input'), { target: { value: '发布脚本' } })
+  await waitFor(() => assert.ok(stage.getByTestId('channel-search-hit-m-1')))
+
+  // 4. 偏好设置（置顶聊天）与非群主可见退群按钮
+  fireEvent.click(stage.getByTestId('channel-manage-members'))
+  await waitFor(() => assert.ok(stage.getByTestId('channel-leave-btn')))
+  fireEvent.click(stage.getByTestId('channel-pref-pin'))
+  await waitFor(() => {
+    assert.deepEqual(prefPatched, { pinned: true })
+  })
+})

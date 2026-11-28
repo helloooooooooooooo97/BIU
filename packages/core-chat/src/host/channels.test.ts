@@ -1014,4 +1014,89 @@ describe('Slack-style Group Channels: RBAC, Mention Dispatch, Per-Invoker Queue,
       rmSync(dir, { recursive: true, force: true })
     }
   })
+
+  it('supports emoji reactions, pin/save messages, cross-channel search, preferences (pin/mute), typing broadcast, and leaving channels', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'biu-channels-p1-'))
+    const db = openAndMigrateBiu(join(dir, 'biu.sqlite'))
+    const store = new CollabStore(db)
+    const alice = store.register('Alice', Date.now(), 'pass123456', 'alice@example.com')
+    const bob = store.register('Bob', Date.now(), 'pass123456', 'bob@example.com')
+    const ws = store.createWorkspace(alice.id, 'P1 WS')
+    store.addMemberByEmail(alice.id, ws.id, 'bob@example.com')
+
+    const broadcasts: Array<{ type: string; payload: unknown }> = []
+    const fakeCtx = {
+      get: (key: string) => (key === 'account' ? { store } : undefined),
+      account: { store },
+      sessions: { peekSummary: () => null },
+      tools: { schemas: () => [], invoke: async () => ({ ok: true }) },
+      http: {
+        broadcast: (type: string, payload: unknown) => broadcasts.push({ type, payload }),
+        broadcastAccount: (_acc: string, type: string, payload: unknown) => broadcasts.push({ type, payload }),
+      },
+      effect: () => undefined,
+    } as unknown as Context
+
+    const svc = new ChannelService(
+      fakeCtx,
+      () => ({ chat: async () => ({ content: 'ok', toolCalls: [] }) }),
+      { db },
+    )
+    const asUser = <T>(acc: string, fn: () => T) => runWithAccount(acc, () => runWithRequestWorkspace(ws.id, fn))
+
+    try {
+      const ch = asUser(alice.id, () => svc.createChannel({ name: '发布群', memberAccountIds: [bob.id] }))
+      const chId = ch.channel.id
+      const ch2 = asUser(alice.id, () => svc.createChannel({ name: '私密群' })) // Bob 不在内
+
+      const m1 = asUser(alice.id, () => svc.sendMessage(chId, { text: '版本 v2.1 上线检查清单' })).message
+      asUser(alice.id, () => svc.sendMessage(ch2.channel.id, { text: '版本 v2.1 内部机密密码' }))
+
+      // 1. Emoji Reactions 累加与切换
+      const r1 = asUser(alice.id, () => svc.toggleReaction(chId, m1.id, '👍'))
+      assert.equal(r1.reactions.length, 1)
+      assert.equal(r1.reactions[0]!.count, 1)
+      const r2 = asUser(bob.id, () => svc.toggleReaction(chId, m1.id, '👍'))
+      assert.equal(r2.reactions[0]!.count, 2)
+      assert.equal(r2.reactions[0]!.reactedByMe, true)
+      const r3 = asUser(bob.id, () => svc.toggleReaction(chId, m1.id, '👍'))
+      assert.equal(r3.reactions[0]!.count, 1)
+
+      // 2. 置顶消息与个人收藏
+      const pinned = asUser(bob.id, () => svc.togglePinMessage(chId, m1.id))
+      assert.ok((pinned.pinnedAt ?? 0) > 0)
+      assert.equal(asUser(alice.id, () => svc.listPinnedMessages(chId)).length, 1)
+
+      const saved = asUser(bob.id, () => svc.toggleSaveMessage(chId, m1.id))
+      assert.equal(saved.saved, true)
+      assert.equal(asUser(bob.id, () => svc.listSavedMessages()).length, 1)
+      assert.equal(asUser(alice.id, () => svc.listSavedMessages()).length, 0)
+
+      // 3. 跨聊天搜索（权限隔离：Bob 搜不到不在其中的私密群消息）
+      const bobHits = asUser(bob.id, () => svc.searchMessages({ q: 'v2.1' }))
+      assert.equal(bobHits.length, 1)
+      assert.equal(bobHits[0]!.channelId, chId)
+      const aliceHits = asUser(alice.id, () => svc.searchMessages({ q: 'v2.1' }))
+      assert.equal(aliceHits.length, 2)
+
+      // 4. 偏好设置（置顶聊天、免打扰）与正在输入广播
+      const pref = asUser(bob.id, () => svc.updatePreferences(chId, { pinned: true, muted: true }))
+      assert.equal(pref.pinned, true)
+      assert.equal(pref.muted, true)
+
+      broadcasts.length = 0
+      asUser(alice.id, () => svc.notifyTyping(chId))
+      assert.ok(broadcasts.some((b) => b.type === 'channel/typing'))
+
+      // 5. 退群：群主不能退群，普通成员 Bob 可以主动退群
+      assert.throws(() => asUser(alice.id, () => svc.leaveChannel(chId)), /群主不能直接退群/)
+      const left = asUser(bob.id, () => svc.leaveChannel(chId))
+      assert.equal(left.ok, true)
+      assert.equal(asUser(bob.id, () => svc.listChannels()).some((c) => c.id === chId), false)
+    } finally {
+      svc.dispose()
+      db.close()
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
 })

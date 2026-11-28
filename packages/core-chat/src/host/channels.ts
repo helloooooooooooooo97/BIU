@@ -35,9 +35,12 @@ import {
   type ChannelMention,
   type ChannelMessageMeta,
   type ChannelMessageView,
+  type ChannelReactionSummary,
   type ChannelRunDetail,
   type ChannelRunEvent,
   type ChannelRunStatus,
+  type ChannelSavedMessageView,
+  type ChannelSearchHit,
   type ChannelSummary,
 } from '../shared/channel-types.ts'
 
@@ -109,6 +112,8 @@ type MessageRow = {
   trace_id: string
   ephemeral_to: string
   meta_json: string
+  pinned_at?: number
+  pinned_by?: string
   edited_at?: number
   deleted_at?: number
   created_at: number
@@ -558,6 +563,8 @@ export class ChannelService {
         `ALTER TABLE channel_members ADD COLUMN muted INTEGER NOT NULL DEFAULT 0`,
         `ALTER TABLE channel_members ADD COLUMN pinned INTEGER NOT NULL DEFAULT 0`,
         `ALTER TABLE channel_messages ADD COLUMN attachments_json TEXT NOT NULL DEFAULT '[]'`,
+        `ALTER TABLE channel_messages ADD COLUMN pinned_at INTEGER NOT NULL DEFAULT 0`,
+        `ALTER TABLE channel_messages ADD COLUMN pinned_by TEXT NOT NULL DEFAULT ''`,
         `ALTER TABLE channel_messages ADD COLUMN edited_at INTEGER NOT NULL DEFAULT 0`,
         `ALTER TABLE channel_messages ADD COLUMN deleted_at INTEGER NOT NULL DEFAULT 0`,
       ]
@@ -1210,6 +1217,8 @@ export class ChannelService {
       this.queues.delete(key)
     }
     const db = this.db()
+    db.prepare(`DELETE FROM channel_message_reactions WHERE channel_id = ?`).run(channelId)
+    db.prepare(`DELETE FROM channel_saved_messages WHERE channel_id = ?`).run(channelId)
     db.prepare(`DELETE FROM channel_agent_runs WHERE channel_id = ?`).run(channelId)
     db.prepare(`DELETE FROM channel_messages WHERE channel_id = ?`).run(channelId)
     db.prepare(`DELETE FROM channel_members WHERE channel_id = ?`).run(channelId)
@@ -1492,7 +1501,51 @@ export class ChannelService {
     const byId = new Map<string, MessageRow>()
     for (const r of sliced) byId.set(r.id, r)
     return {
-      messages: sliced.map((row) => this.hydrateMessage(row, byId, ch.workspace_id)),
+      messages: sliced.map((row) => this.hydrateMessage(row, byId, ch.workspace_id, viewerAccountId)),
+      hasMore,
+    }
+  }
+
+  listMessagesAround(
+    channelId: string,
+    targetMessageId: string,
+    viewerAccountId = this.currentActorIds().accountId,
+    limit = 60,
+  ): { messages: ChannelMessageView[]; hasMore: boolean } {
+    const ch = this.requireChannelRow(channelId, viewerAccountId)
+    const db = this.db()
+    const target = db
+      .prepare(`SELECT seq FROM channel_messages WHERE id = ? AND channel_id = ?`)
+      .get(targetMessageId, channelId) as { seq?: number } | undefined
+    if (!target || typeof target.seq !== 'number') {
+      return this.listMessagesPage(channelId, viewerAccountId, limit)
+    }
+    const half = Math.max(10, Math.floor(limit / 2))
+    const before = (
+      db
+        .prepare(
+          `SELECT * FROM channel_messages
+           WHERE channel_id = ? AND (ephemeral_to = '' OR ephemeral_to = ?) AND seq <= ?
+           ORDER BY seq DESC LIMIT ?`,
+        )
+        .all(channelId, viewerAccountId, target.seq, half + 1) as MessageRow[]
+    )
+    const hasMore = before.length > half
+    const beforeSliced = (hasMore ? before.slice(0, half) : before).reverse()
+    const after = (
+      db
+        .prepare(
+          `SELECT * FROM channel_messages
+           WHERE channel_id = ? AND (ephemeral_to = '' OR ephemeral_to = ?) AND seq > ?
+           ORDER BY seq ASC LIMIT ?`,
+        )
+        .all(channelId, viewerAccountId, target.seq, half) as MessageRow[]
+    )
+    const combined = [...beforeSliced, ...after]
+    const byId = new Map<string, MessageRow>()
+    for (const r of combined) byId.set(r.id, r)
+    return {
+      messages: combined.map((row) => this.hydrateMessage(row, byId, ch.workspace_id, viewerAccountId)),
       hasMore,
     }
   }
@@ -1501,7 +1554,42 @@ export class ChannelService {
     return this.listMessagesPage(channelId, viewerAccountId, limit, beforeSeq).messages
   }
 
-  private hydrateMessage(row: MessageRow, lookup?: Map<string, MessageRow>, workspaceId?: string): ChannelMessageView {
+  private reactionsForMessage(messageId: string, viewerAccountId: string, workspaceId?: string): ChannelReactionSummary[] {
+    const rows = this.db()
+      .prepare(
+        `SELECT emoji, account_id FROM channel_message_reactions
+         WHERE message_id = ?
+         ORDER BY created_at ASC`,
+      )
+      .all(messageId) as Array<{ emoji: string; account_id: string }>
+    if (rows.length === 0) return []
+    const grouped = new Map<string, { accountIds: string[]; accountNames: string[] }>()
+    for (const r of rows) {
+      let bucket = grouped.get(r.emoji)
+      if (!bucket) {
+        bucket = { accountIds: [], accountNames: [] }
+        grouped.set(r.emoji, bucket)
+      }
+      if (!bucket.accountIds.includes(r.account_id)) {
+        bucket.accountIds.push(r.account_id)
+        bucket.accountNames.push(this.accountLabel(r.account_id, workspaceId))
+      }
+    }
+    return [...grouped.entries()].map(([emoji, bucket]) => ({
+      emoji,
+      count: bucket.accountIds.length,
+      reactedByMe: bucket.accountIds.includes(viewerAccountId),
+      accountIds: bucket.accountIds,
+      accountNames: bucket.accountNames,
+    }))
+  }
+
+  private hydrateMessage(
+    row: MessageRow,
+    lookup?: Map<string, MessageRow>,
+    workspaceId?: string,
+    viewerAccountId = this.currentActorIds().accountId,
+  ): ChannelMessageView {
     const channelWorkspaceId =
       workspaceId ??
       ((this.db().prepare(`SELECT workspace_id FROM channels WHERE id = ?`).get(row.channel_id) as { workspace_id?: string } | undefined)
@@ -1551,6 +1639,15 @@ export class ChannelService {
     const attachments = safeJsonParse<ChannelAttachment[]>(row.attachments_json, [])
     const editedAt = Number(row.edited_at ?? 0)
     const deletedAt = Number(row.deleted_at ?? 0)
+    const pinnedAt = Number(row.pinned_at ?? 0)
+    const pinnedBy = String(row.pinned_by ?? '').trim()
+    const reactions = deletedAt === 0 && !row.ephemeral_to ? this.reactionsForMessage(row.id, viewerAccountId, channelWorkspaceId) : []
+    const savedRow =
+      deletedAt === 0 && !row.ephemeral_to
+        ? (this.db()
+            .prepare(`SELECT 1 FROM channel_saved_messages WHERE account_id = ? AND message_id = ? LIMIT 1`)
+            .get(viewerAccountId, row.id) as { 1?: number } | undefined)
+        : undefined
     return {
       id: row.id,
       channelId: row.channel_id,
@@ -1565,6 +1662,9 @@ export class ChannelService {
       text: deletedAt > 0 ? '' : row.text,
       mentions: safeJsonParse<ChannelMention[]>(row.mentions_json, []),
       ...(deletedAt === 0 && attachments.length ? { attachments } : {}),
+      ...(reactions.length ? { reactions } : {}),
+      ...(pinnedAt > 0 ? { pinnedAt, ...(pinnedBy ? { pinnedBy, pinnedByName: this.accountLabel(pinnedBy, channelWorkspaceId) } : {}) } : {}),
+      ...(savedRow ? { savedByMe: true } : {}),
       traceId: row.trace_id,
       ephemeralTo: row.ephemeral_to,
       ...(Object.keys(meta).length ? { meta } : {}),
@@ -1675,12 +1775,252 @@ export class ChannelService {
     }
     const now = Date.now()
     db.prepare(
-      `UPDATE channel_messages SET text = '', attachments_json = '[]', deleted_at = ? WHERE id = ?`,
+      `UPDATE channel_messages SET text = '', attachments_json = '[]', pinned_at = 0, pinned_by = '', deleted_at = ? WHERE id = ?`,
     ).run(now, messageId)
+    db.prepare(`DELETE FROM channel_message_reactions WHERE message_id = ?`).run(messageId)
+    db.prepare(`DELETE FROM channel_saved_messages WHERE message_id = ?`).run(messageId)
     const updatedRow = db.prepare(`SELECT * FROM channel_messages WHERE id = ?`).get(messageId) as MessageRow
-    const view = this.hydrateMessage(updatedRow, undefined, ch.workspace_id)
+    const view = this.hydrateMessage(updatedRow, undefined, ch.workspace_id, accountId)
     this.broadcastToChannel(channelId, ch.workspace_id, 'channel/message-updated', { message: view })
     return view
+  }
+
+  toggleReaction(
+    channelId: string,
+    messageId: string,
+    emoji: string,
+  ): { channelId: string; messageId: string; reactions: ChannelReactionSummary[] } {
+    const { accountId } = this.currentActorIds()
+    const ch = this.requireChannelRow(channelId, accountId)
+    const cleanEmoji = String(emoji ?? '').trim().slice(0, 16)
+    if (!cleanEmoji) throw new Error('表情不能为空')
+    const db = this.db()
+    const msg = db
+      .prepare(`SELECT id, ephemeral_to, deleted_at FROM channel_messages WHERE id = ? AND channel_id = ?`)
+      .get(messageId, channelId) as { id?: string; ephemeral_to?: string; deleted_at?: number } | undefined
+    if (!msg || msg.ephemeral_to || Number(msg.deleted_at ?? 0) > 0) throw new Error('无法对该消息添加表情回应')
+    const existing = db
+      .prepare(`SELECT 1 FROM channel_message_reactions WHERE message_id = ? AND account_id = ? AND emoji = ?`)
+      .get(messageId, accountId, cleanEmoji)
+    if (existing) {
+      db.prepare(`DELETE FROM channel_message_reactions WHERE message_id = ? AND account_id = ? AND emoji = ?`).run(
+        messageId,
+        accountId,
+        cleanEmoji,
+      )
+    } else {
+      db.prepare(
+        `INSERT INTO channel_message_reactions (channel_id, message_id, account_id, emoji, created_at)
+         VALUES (?, ?, ?, ?, ?)`,
+      ).run(channelId, messageId, accountId, cleanEmoji, Date.now())
+    }
+    const reactions = this.reactionsForMessage(messageId, accountId, ch.workspace_id)
+    this.broadcastToChannel(channelId, ch.workspace_id, 'channel/reactions', {
+      channelId,
+      messageId,
+      reactions,
+    })
+    return { channelId, messageId, reactions }
+  }
+
+  togglePinMessage(channelId: string, messageId: string): ChannelMessageView {
+    const { accountId } = this.currentActorIds()
+    const ch = this.requireChannelRow(channelId, accountId)
+    const db = this.db()
+    const row = db
+      .prepare(`SELECT * FROM channel_messages WHERE id = ? AND channel_id = ?`)
+      .get(messageId, channelId) as MessageRow | undefined
+    if (!row || row.ephemeral_to || Number(row.deleted_at ?? 0) > 0) throw new Error('未找到可置顶的消息')
+    const isPinned = Number(row.pinned_at ?? 0) > 0
+    if (isPinned) {
+      db.prepare(`UPDATE channel_messages SET pinned_at = 0, pinned_by = '' WHERE id = ?`).run(messageId)
+    } else {
+      db.prepare(`UPDATE channel_messages SET pinned_at = ?, pinned_by = ? WHERE id = ?`).run(Date.now(), accountId, messageId)
+    }
+    const updatedRow = db.prepare(`SELECT * FROM channel_messages WHERE id = ?`).get(messageId) as MessageRow
+    const view = this.hydrateMessage(updatedRow, undefined, ch.workspace_id, accountId)
+    this.broadcastToChannel(channelId, ch.workspace_id, 'channel/message-updated', { message: view })
+    return view
+  }
+
+  listPinnedMessages(channelId: string): ChannelMessageView[] {
+    const { accountId } = this.currentActorIds()
+    const ch = this.requireChannelRow(channelId, accountId)
+    const rows = this.db()
+      .prepare(
+        `SELECT * FROM channel_messages
+         WHERE channel_id = ? AND ephemeral_to = '' AND deleted_at = 0 AND pinned_at > 0
+         ORDER BY pinned_at DESC LIMIT 50`,
+      )
+      .all(channelId) as MessageRow[]
+    return rows.map((r) => this.hydrateMessage(r, undefined, ch.workspace_id, accountId))
+  }
+
+  toggleSaveMessage(channelId: string, messageId: string): { ok: true; saved: boolean; messageId: string } {
+    const { accountId } = this.currentActorIds()
+    this.requireChannelRow(channelId, accountId)
+    const db = this.db()
+    const msg = db
+      .prepare(`SELECT id, ephemeral_to, deleted_at FROM channel_messages WHERE id = ? AND channel_id = ?`)
+      .get(messageId, channelId) as { id?: string; ephemeral_to?: string; deleted_at?: number } | undefined
+    if (!msg || msg.ephemeral_to || Number(msg.deleted_at ?? 0) > 0) throw new Error('未找到可收藏的消息')
+    const existing = db
+      .prepare(`SELECT 1 FROM channel_saved_messages WHERE account_id = ? AND message_id = ?`)
+      .get(accountId, messageId)
+    if (existing) {
+      db.prepare(`DELETE FROM channel_saved_messages WHERE account_id = ? AND message_id = ?`).run(accountId, messageId)
+      return { ok: true, saved: false, messageId }
+    }
+    db.prepare(
+      `INSERT INTO channel_saved_messages (account_id, channel_id, message_id, created_at)
+       VALUES (?, ?, ?, ?)`,
+    ).run(accountId, channelId, messageId, Date.now())
+    return { ok: true, saved: true, messageId }
+  }
+
+  listSavedMessages(): ChannelSavedMessageView[] {
+    const { accountId, workspaceId } = this.currentActorIds()
+    const db = this.db()
+    const rows = db
+      .prepare(
+        `SELECT s.channel_id, s.created_at AS saved_at, m.*
+         FROM channel_saved_messages s
+         JOIN channel_messages m ON m.id = s.message_id
+         JOIN channels c ON c.id = s.channel_id
+         WHERE s.account_id = ? AND c.workspace_id = ? AND m.deleted_at = 0 AND m.ephemeral_to = ''
+         ORDER BY s.created_at DESC
+         LIMIT 100`,
+      )
+      .all(accountId, workspaceId) as Array<MessageRow & { saved_at: number }>
+    const out: ChannelSavedMessageView[] = []
+    for (const r of rows) {
+      const ch = db.prepare(`SELECT * FROM channels WHERE id = ?`).get(r.channel_id) as ChannelRow | undefined
+      if (!ch || !this.canReadChannel(ch, accountId)) continue
+      const summary = this.toSummary(ch, accountId)
+      out.push({
+        channelId: ch.id,
+        channelName: summary.name,
+        savedAt: r.saved_at,
+        message: this.hydrateMessage(r, undefined, ch.workspace_id, accountId),
+      })
+    }
+    return out
+  }
+
+  searchMessages(opts: { q: string; channelId?: string; senderId?: string; limit?: number }): ChannelSearchHit[] {
+    const { accountId, workspaceId } = this.currentActorIds()
+    const q = String(opts.q ?? '').trim()
+    if (!q) return []
+    const safeLimit = Math.min(50, Math.max(1, Number(opts.limit ?? 20)))
+    const db = this.db()
+    const readableChannels = (
+      opts.channelId
+        ? [this.requireChannelRow(opts.channelId, accountId)]
+        : (db.prepare(`SELECT * FROM channels WHERE workspace_id = ?`).all(workspaceId) as ChannelRow[]).filter((c) =>
+            this.canReadChannel(c, accountId),
+          )
+    )
+    if (readableChannels.length === 0) return []
+    const chMap = new Map(readableChannels.map((c) => [c.id, this.toSummary(c, accountId)]))
+    const placeholders = readableChannels.map(() => '?').join(',')
+    const pattern = `%${q.replace(/[%_\\]/g, '\\$&')}%`
+    const params: Array<string | number> = [...readableChannels.map((c) => c.id), pattern, pattern]
+    let senderClause = ''
+    if (opts.senderId?.trim()) {
+      senderClause = ' AND sender_id = ?'
+      params.push(opts.senderId.trim())
+    }
+    params.push(safeLimit)
+    const rows = db
+      .prepare(
+        `SELECT * FROM channel_messages
+         WHERE channel_id IN (${placeholders})
+           AND ephemeral_to = ''
+           AND deleted_at = 0
+           AND (text LIKE ? ESCAPE '\\' OR attachments_json LIKE ? ESCAPE '\\')
+           ${senderClause}
+         ORDER BY created_at DESC, seq DESC
+         LIMIT ?`,
+      )
+      .all(...params) as MessageRow[]
+    return rows.map((r) => {
+      const ch = chMap.get(r.channel_id)
+      const view = this.hydrateMessage(r, undefined, ch?.workspaceId, accountId)
+      return {
+        id: view.id,
+        channelId: view.channelId,
+        channelName: ch?.name ?? '',
+        channelKind: ch?.kind ?? 'channel',
+        seq: view.seq,
+        senderType: view.senderType,
+        senderId: view.senderId,
+        senderName: view.senderName,
+        ...(view.senderAvatar ? { senderAvatar: view.senderAvatar } : {}),
+        ...(view.senderMascot ? { senderMascot: view.senderMascot } : {}),
+        text: view.text || (view.attachments?.length ? `[附件] ${view.attachments[0]!.name}` : ''),
+        createdAt: view.createdAt,
+      }
+    })
+  }
+
+  updatePreferences(channelId: string, patch: { muted?: boolean; pinned?: boolean }): ChannelSummary {
+    const { accountId } = this.currentActorIds()
+    const row = this.requireChannelRow(channelId, accountId)
+    const db = this.db()
+    if (!this.isChannelMember(channelId, accountId)) {
+      db.prepare(
+        `INSERT OR IGNORE INTO channel_members (channel_id, member_type, member_id, role, added_by, added_at)
+         VALUES (?, 'account', ?, 'member', ?, ?)`,
+      ).run(channelId, accountId, accountId, Date.now())
+    }
+    if (typeof patch.muted === 'boolean') {
+      db.prepare(
+        `UPDATE channel_members SET muted = ? WHERE channel_id = ? AND member_type = 'account' AND member_id = ?`,
+      ).run(patch.muted ? 1 : 0, channelId, accountId)
+    }
+    if (typeof patch.pinned === 'boolean') {
+      db.prepare(
+        `UPDATE channel_members SET pinned = ? WHERE channel_id = ? AND member_type = 'account' AND member_id = ?`,
+      ).run(patch.pinned ? 1 : 0, channelId, accountId)
+    }
+    const summary = this.toSummary(row, accountId)
+    this.broadcastToAccounts([accountId], row.workspace_id, 'channel/updated', { channel: summary })
+    return summary
+  }
+
+  leaveChannel(channelId: string): { ok: true; channelId: string } {
+    const { accountId } = this.currentActorIds()
+    const row = this.requireChannelRow(channelId, accountId)
+    if (row.kind === 'dm') throw new Error('私聊不支持退出，请直接删除对话')
+    if (row.created_by === accountId && accountId !== 'local') {
+      throw new Error('群主不能直接退群，请先解散聊天')
+    }
+    this.db()
+      .prepare(`DELETE FROM channel_members WHERE channel_id = ? AND member_type = 'account' AND member_id = ?`)
+      .run(channelId, accountId)
+    const members = this.listMembers(channelId, accountId, row.workspace_id)
+    this.broadcastToChannel(channelId, row.workspace_id, 'channel/members', { channelId, members })
+    if (row.access_mode === 'private') {
+      this.broadcastToAccounts([accountId], row.workspace_id, 'channel/deleted', { id: channelId })
+    }
+    return { ok: true, channelId }
+  }
+
+  notifyTyping(channelId: string): { ok: true } {
+    const { accountId } = this.currentActorIds()
+    const row = this.requireChannelRow(channelId, accountId)
+    const others = this.channelHumanAccountIds(channelId, row.workspace_id, row.access_mode === 'workspace').filter(
+      (id) => id !== accountId,
+    )
+    if (others.length > 0) {
+      this.broadcastToAccounts(others, row.workspace_id, 'channel/typing', {
+        channelId,
+        accountId,
+        accountName: this.accountLabel(accountId, row.workspace_id),
+        ts: Date.now(),
+      })
+    }
+    return { ok: true }
   }
 
   private updateApprovalMessageStatus(channelId: string, approvalId: string, status: 'allowed' | 'denied', targetAccountId: string) {
@@ -2524,6 +2864,33 @@ export function registerChannelRoutes(ctx: Context, resolveLlm: (sessionId?: str
     }
   })
 
+  ctx.http.route('GET', '/api/channels/search', (route) => {
+    try {
+      const q = String(route.query?.get('q') ?? '').trim()
+      const channelId = String(route.query?.get('channelId') ?? '').trim() || undefined
+      const senderId = String(route.query?.get('senderId') ?? '').trim() || undefined
+      const limit = Number(route.query?.get('limit') ?? 20)
+      route.send(200, {
+        hits: service.searchMessages({
+          q,
+          channelId,
+          senderId,
+          limit: Number.isFinite(limit) ? limit : 20,
+        }),
+      })
+    } catch (error) {
+      sendError(route, error)
+    }
+  })
+
+  ctx.http.route('GET', '/api/channels/saved', (route) => {
+    try {
+      route.send(200, { items: service.listSavedMessages() })
+    } catch (error) {
+      sendError(route, error)
+    }
+  })
+
   ctx.http.route('GET', '/api/channels/:id', (route) => {
     try {
       const limit = Number(route.query?.get('limit') ?? 100)
@@ -2622,6 +2989,39 @@ export function registerChannelRoutes(ctx: Context, resolveLlm: (sessionId?: str
     }
   })
 
+  ctx.http.route('PATCH', '/api/channels/:id/preferences', async (route) => {
+    try {
+      const body = (await route.json()) as { muted?: boolean; pinned?: boolean }
+      route.send(200, { channel: service.updatePreferences(route.params.id, body ?? {}) })
+    } catch (error) {
+      sendError(route, error)
+    }
+  })
+
+  ctx.http.route('POST', '/api/channels/:id/leave', (route) => {
+    try {
+      route.send(200, service.leaveChannel(route.params.id))
+    } catch (error) {
+      sendError(route, error)
+    }
+  })
+
+  ctx.http.route('POST', '/api/channels/:id/typing', (route) => {
+    try {
+      route.send(200, service.notifyTyping(route.params.id))
+    } catch (error) {
+      sendError(route, error)
+    }
+  })
+
+  ctx.http.route('GET', '/api/channels/:id/pins', (route) => {
+    try {
+      route.send(200, { messages: service.listPinnedMessages(route.params.id) })
+    } catch (error) {
+      sendError(route, error)
+    }
+  })
+
   ctx.http.route('POST', '/api/channels/:id/uploads', async (route) => {
     try {
       const name = String(route.query?.get('name') ?? '').trim() || 'attachment.bin'
@@ -2659,6 +3059,11 @@ export function registerChannelRoutes(ctx: Context, resolveLlm: (sessionId?: str
   ctx.http.route('GET', '/api/channels/:id/messages', (route) => {
     try {
       const limit = Number(route.query?.get('limit') ?? 100)
+      const aroundMsgId = String(route.query?.get('aroundMsgId') ?? '').trim()
+      if (aroundMsgId) {
+        const page = service.listMessagesAround(route.params.id, aroundMsgId, undefined, Number.isFinite(limit) ? limit : 60)
+        return route.send(200, { messages: page.messages, hasMore: page.hasMore })
+      }
       const beforeRaw = route.query?.get('beforeSeq')
       const beforeSeq = beforeRaw != null && beforeRaw !== '' && Number.isFinite(Number(beforeRaw)) ? Number(beforeRaw) : undefined
       const page = service.listMessagesPage(route.params.id, undefined, Number.isFinite(limit) ? limit : 100, beforeSeq)
@@ -2701,6 +3106,31 @@ export function registerChannelRoutes(ctx: Context, resolveLlm: (sessionId?: str
     try {
       const message = service.recallMessage(route.params.id, route.params.msgId)
       route.send(200, { message })
+    } catch (error) {
+      sendError(route, error)
+    }
+  })
+
+  ctx.http.route('POST', '/api/channels/:id/messages/:msgId/reactions', async (route) => {
+    try {
+      const body = (await route.json()) as { emoji?: string }
+      route.send(200, service.toggleReaction(route.params.id, route.params.msgId, body?.emoji ?? ''))
+    } catch (error) {
+      sendError(route, error)
+    }
+  })
+
+  ctx.http.route('POST', '/api/channels/:id/messages/:msgId/pin', (route) => {
+    try {
+      route.send(200, { message: service.togglePinMessage(route.params.id, route.params.msgId) })
+    } catch (error) {
+      sendError(route, error)
+    }
+  })
+
+  ctx.http.route('POST', '/api/channels/:id/messages/:msgId/save', (route) => {
+    try {
+      route.send(200, service.toggleSaveMessage(route.params.id, route.params.msgId))
     } catch (error) {
       sendError(route, error)
     }

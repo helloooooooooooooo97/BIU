@@ -2,6 +2,8 @@ import { memo, useCallback, useEffect, useMemo, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { Link, useNavigate } from 'react-router-dom'
 import {
+  BellSlashIcon,
+  BookmarkIcon,
   HashtagIcon,
   LockClosedIcon,
   MagnifyingGlassIcon,
@@ -319,6 +321,20 @@ export const ChannelSidebarSections = memo(function ChannelSidebarSections({
                         >
                           {ch.name}
                         </span>
+                        {ch.pinned ? (
+                          <BookmarkIcon
+                            className="size-3 shrink-0 text-(--biu-color-text-subtle)"
+                            title="已置顶"
+                            data-testid={`sidebar-channel-pinned-${ch.id}`}
+                          />
+                        ) : null}
+                        {ch.muted ? (
+                          <BellSlashIcon
+                            className="size-3 shrink-0 text-(--biu-color-text-subtle)"
+                            title="已免打扰"
+                            data-testid={`sidebar-channel-muted-${ch.id}`}
+                          />
+                        ) : null}
                         {mentions > 0 ? (
                           <span
                             className="shrink-0 rounded-full bg-rose-500 px-1.5 py-0.5 text-[10px] leading-none font-semibold text-white tabular-nums"
