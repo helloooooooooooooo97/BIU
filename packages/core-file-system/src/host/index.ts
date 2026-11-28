@@ -2469,12 +2469,19 @@ export class DatabaseService extends Service implements Database {
     const builtinPlugin = this.builtinPlugin(spec, parts[1]!, record)
     if (pluginAuthor) {
       await this.requirePath(spec.path, 'resource:read')
+      if (!builtinPlugin && this.access.isRecordTakenByOtherWorkspace(spec.path, record.id)) {
+        throw new Error(`unknown record: ${spec.path}/${record.id}`)
+      }
       if (loaded && !builtinPlugin) {
         const owner = this.access.recordOwner(spec.path, record.id)
         if (!owner) this.stampPluginCreateScope(record.id, args)
-        else this.assertLiveRecord(spec, record.id, 'resource:read', record)
+        else this.assertLiveRecord(spec, record.id, 'resource:update', record)
+      } else if (loaded && builtinPlugin) {
+        this.assertLiveRecord(spec, record.id, 'resource:update', record)
       }
-    } else if (!personalLoad && (loaded || !action.allowMissing)) {
+    } else if (personalLoad) {
+      this.assertLiveRecord(spec, record.id, 'resource:read', record)
+    } else if (loaded || !action.allowMissing) {
       this.assertLiveRecord(spec, record.id, (action.requiredAction ?? 'resource:update') as PermissionAction, record)
     } else {
       await this.requirePath(spec.path, (action.requiredAction ?? 'resource:update') as PermissionAction)

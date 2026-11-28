@@ -156,6 +156,81 @@ test('online members cannot pack or uninstall a builtin plugin', async () => {
   }
 })
 
+test('online workspaces cannot overwrite, pack, open, close, or uninstall a plugin owned by another workspace', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'plugin-cross-ws-acl-'))
+  const previous = process.env.BIU_ONLINE
+  try {
+    const ctx = new Context()
+    stubHub(ctx)
+    ;(ctx as unknown as { get(name: string): unknown }).get = (name: string) =>
+      name === 'account'
+        ? {
+            store: {
+              isMember: () => true,
+              isSuperAdmin: () => false,
+              isRecordTakenByOtherWorkspace: (ws: string, collection: string, id: string) =>
+                collection === '/plugins' && id === 'ws-a-plug' && ws !== 'ws-a',
+              setPluginLoad: () => {},
+              pluginLoadsFor: () => [],
+              loadedPluginIds: () => [],
+              forgetPluginLoads: () => {},
+              recordPluginPackage: () => {},
+              removePluginPackage: () => {},
+            },
+          }
+        : undefined
+    const store = new PluginStoreService(ctx, join(dir, '.plugin'), join(dir, 'store.json'), join(dir, '.plugin-dev')).open()
+    process.env.BIU_ONLINE = '1'
+    await runWithAccount('ada', () =>
+      runWithRequestWorkspace('ws-a', () =>
+        store.initSandbox({
+          id: 'ws-a-plug',
+          name: 'Workspace A Plugin',
+          blurb: 'A',
+          headless: true,
+          webJs: 'export function mount() {}\n',
+        }),
+      ),
+    )
+    await runWithAccount('ada', () => runWithRequestWorkspace('ws-a', () => store.pack('ws-a-plug')))
+    await assert.rejects(
+      () =>
+        runWithAccount('bob', () =>
+          runWithRequestWorkspace('ws-b', () =>
+            store.initSandbox({
+              id: 'ws-a-plug',
+              name: 'Hijack',
+              blurb: 'B',
+              headless: true,
+              webJs: 'export function mount() { throw new Error("hijacked") }\n',
+            }),
+          ),
+        ),
+      /其他空间占用/,
+    )
+    await assert.rejects(
+      () => runWithAccount('bob', () => runWithRequestWorkspace('ws-b', () => store.pack('ws-a-plug'))),
+      /其他空间占用/,
+    )
+    await assert.rejects(
+      () => runWithAccount('bob', () => runWithRequestWorkspace('ws-b', () => store.openPlugin('ws-a-plug'))),
+      /其他空间占用/,
+    )
+    await assert.rejects(
+      () => runWithAccount('bob', () => runWithRequestWorkspace('ws-b', () => store.close('ws-a-plug'))),
+      /其他空间占用/,
+    )
+    await assert.rejects(
+      () => runWithAccount('bob', () => runWithRequestWorkspace('ws-b', () => store.uninstall('ws-a-plug'))),
+      /其他空间占用/,
+    )
+  } finally {
+    if (previous === undefined) delete process.env.BIU_ONLINE
+    else process.env.BIU_ONLINE = previous
+    await rm(dir, { recursive: true, force: true })
+  }
+})
+
 test('online members can pack pure web plugins without instance install permission', async () => {
   const dir = await mkdtemp(join(tmpdir(), 'plugin-pack-member-'))
   const previous = process.env.BIU_ONLINE

@@ -393,6 +393,16 @@ export class PluginStoreService extends Service {
     if (!this.viewerIsSuperAdmin()) throw new Error('只有超级管理员可以更改内置插件')
   }
 
+  /** 云端多工作区下禁止修改或覆写已被其他空间占用的非内置插件 ID。 */
+  private assertNotTakenByOtherWorkspace(id: string) {
+    if (!rbacEnforced() || this.isBuiltin(id)) return
+    const workspaceId = currentRequestWorkspaceId().trim()
+    if (!workspaceId) return
+    if (this.accountStore()?.isRecordTakenByOtherWorkspace?.(workspaceId, '/plugins', id)) {
+      throw new Error(`该插件 ID 已被其他空间占用：${id}`)
+    }
+  }
+
   /** 在 .plugin-dev/<id>/ 开沙箱，不写入已安装目录。线上任何空间成员都能开。 */
   async initSandbox(input: PluginCreateInput) {
     const id = String(input.id ?? '').trim()
@@ -401,6 +411,7 @@ export class PluginStoreService extends Service {
         if (!this.viewerIsSuperAdmin()) throw new Error('只有超级管理员可以更改内置插件')
       } else {
         this.requireWorkspaceMember()
+        this.assertNotTakenByOtherWorkspace(id)
       }
     }
     const name = String(input.name ?? '').trim()
@@ -442,7 +453,10 @@ export class PluginStoreService extends Service {
 
   /** 把沙箱 bundle 进 .plugin/<id>/。 */
   async pack(id: string) {
-    if (rbacEnforced()) this.requireBuiltinManager(id)
+    if (rbacEnforced()) {
+      this.requireBuiltinManager(id)
+      this.assertNotTakenByOtherWorkspace(id)
+    }
     if (!isSafeId(id)) throw new Error(`invalid plugin id: ${id}`)
     const sandbox = this.sandboxPath(id)
     if (!existsSync(join(sandbox, 'manifest.json'))) throw new Error(`sandbox not found: ${sandbox}`)
@@ -654,6 +668,7 @@ export class PluginStoreService extends Service {
 
   async openPlugin(id: string) {
     if (!isSafeId(id)) throw new Error(`invalid plugin id: ${id}`)
+    this.assertNotTakenByOtherWorkspace(id)
     const accountId = currentAccountId()
     const workspaceId = currentRequestWorkspaceId()
     const account = this.accountStore()
@@ -691,6 +706,7 @@ export class PluginStoreService extends Service {
   /** 关闭：停运行，.plugin 代码留着。线上只停当前这个人。 */
   async close(id: string) {
     if (!isSafeId(id)) throw new Error(`invalid plugin id: ${id}`)
+    this.assertNotTakenByOtherWorkspace(id)
     const accountId = currentAccountId()
     const workspaceId = currentRequestWorkspaceId()
     const account = this.accountStore()
@@ -711,7 +727,10 @@ export class PluginStoreService extends Service {
 
   /** 卸载：停运行，只删 .plugin/<id>/，不动 .plugin-dev。有人在用也可以卸。 */
   async uninstall(id: string) {
-    if (rbacEnforced()) this.requireBuiltinManager(id)
+    if (rbacEnforced()) {
+      this.requireBuiltinManager(id)
+      this.assertNotTakenByOtherWorkspace(id)
+    }
     if (!isSafeId(id)) throw new Error(`invalid plugin id: ${id}`)
     await this.hub().drop(id)
     this.setEnabled(id, false)

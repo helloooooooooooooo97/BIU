@@ -65,6 +65,7 @@ export type WorkspaceFiles = {
     maxCount?: number,
   ): Array<{ collection: string; recordId: string; parentCollection: string; parentRecordId: string }>
   collectionRecordOwners?(workspaceId: string, collection: string): Map<string, string>
+  isRecordTakenByOtherWorkspace?(workspaceId: string, collection: string, recordId: string): boolean
   isMember?(accountId: string, workspaceId: string): boolean
   members?(accountId: string, workspaceId: string): Array<{ id: string; member_kind?: string }>
   isSuperAdmin?(accountId?: string | null): boolean
@@ -220,6 +221,13 @@ export class DatabaseAccessPolicy {
       this.ownerCache.set(key, map)
     }
     return map.get(id) ?? ''
+  }
+
+  isRecordTakenByOtherWorkspace(collection: string, id: string): boolean {
+    const store = this.host.collabStore()
+    const workspaceId = this.resolveWorkspaceId()
+    if (!store?.isRecordTakenByOtherWorkspace || !workspaceId) return false
+    return store.isRecordTakenByOtherWorkspace(workspaceId, collection, id)
   }
 
   /**
@@ -475,7 +483,7 @@ export class DatabaseAccessPolicy {
   ) {
     if (isBuiltinPluginRecord(spec, id, record)) {
       if (action === 'resource:read' || action === 'resource:list') return
-      if (this.host.collabStore()?.isSuperAdmin?.(currentAccountId())) return
+      if (this.host.deviceWorkspace() || this.host.collabStore()?.isSuperAdmin?.(currentAccountId())) return
       throw new Error('permission denied: INSUFFICIENT_PERMISSION')
     }
     if (this.host.tags.isDeleted(spec.path, id)) throw new Error(`unknown record: ${spec.path}/${id}`)
