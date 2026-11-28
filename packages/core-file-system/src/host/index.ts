@@ -1975,7 +1975,7 @@ export class DatabaseService extends Service implements Database {
       if (!schema.fields.tag.writable || schema.fields.tag.computed) throw new Error(`field not writable: tag`)
       raw.tag = coerceTagPatch(
         raw.tag,
-        normalizeSchemaValue(this.tags.recordTag(spec.path, id) ?? this.decorateRecord(spec, current).tag),
+        normalizeSchemaValue(this.tags.recordTag(spec.path, current.id) ?? this.decorateRecord(spec, current).tag),
         (tagId) => this.tags.get(tagId),
       )
     }
