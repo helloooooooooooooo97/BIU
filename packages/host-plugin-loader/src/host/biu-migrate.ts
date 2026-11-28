@@ -3,7 +3,7 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, statSync } from 'node
 import { basename, dirname, join } from 'node:path'
 import { openPooledSqlite, sharedSqlitePoolStats, closeAllSharedSqliteConnections } from './sqlite-pool.ts'
 import { assertSqliteVersion, getSchemaVersion, isEmptyDatabase, quoteSqlitePath, setSchemaVersion } from './sqlite-open.ts'
-import { CREATE_ACCESS_REQUESTS_SQL, CREATE_CORE_SQL, LATEST_BIU_SCHEMA, createLatestSchema, dropLegacyEditorColumns, ensureChannelsSchema, ensurePagesPerfIndexes, rebuildPageBlockCollectionKeys, tableColumnNames, tableNames } from './biu-schema.ts'
+import { CREATE_ACCESS_REQUESTS_SQL, CREATE_CORE_SQL, CREATE_PAGE_REVISIONS_SQL, LATEST_BIU_SCHEMA, createLatestSchema, dropLegacyEditorColumns, ensureChannelsSchema, ensurePagesPerfIndexes, rebuildPageBlockCollectionKeys, tableColumnNames, tableNames } from './biu-schema.ts'
 import { copyLegacyBodies, rebuildContentRefs } from './editor-content.ts'
 import { parseFrontmatterBody } from './gc-assets.ts'
 
@@ -2126,6 +2126,9 @@ export const BIU_MIGRATIONS: Migration[] = [
   } },
   { version: 65, module: 'host-account', name: 'access_requests', up(db) {
     db.exec(CREATE_ACCESS_REQUESTS_SQL)
+  } },
+  { version: 66, module: 'core-file-system', name: 'page_revisions', up(db) {
+    db.exec(CREATE_PAGE_REVISIONS_SQL)
   } },
 ]
 

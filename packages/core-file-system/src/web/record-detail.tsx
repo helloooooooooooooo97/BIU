@@ -2,7 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState, type ReactNode, type Disp
 import { createPortal } from 'react-dom'
 import type { CollectionChrome, FsDetailPane } from '@biu/type-file-system/ui'
 import type { CollectionSchema, DbRecord, FieldSpec } from '@biu/type-file-system'
-import { ChevronDownIcon, ChevronLeftIcon, ChevronUpIcon, HashtagIcon, ShareIcon } from '@heroicons/react/16/solid'
+import { ChevronDownIcon, ChevronLeftIcon, ChevronUpIcon, ClockIcon, HashtagIcon, ShareIcon } from '@heroicons/react/16/solid'
 import { AnchorMenu, RecordEmojiBoard } from '@biu/biu-ui'
 import { TrashGlyph } from '@biu/web-session-view/trash-glyph'
 import { contentFieldKey, fieldHasValue, formatField, resolveFieldType } from './fields.ts'
@@ -148,6 +148,7 @@ function RecordPaneMenu({
   Tools,
   onDelete,
   deleteLabel,
+  onHistory,
   share,
   shareLabel,
 }: {
@@ -155,6 +156,7 @@ function RecordPaneMenu({
   Tools?: CollectionChrome['DetailTools']
   onDelete?: () => void
   deleteLabel: string
+  onHistory?: () => void
   share?: ReactNode
   shareLabel?: string
 }) {
@@ -165,6 +167,21 @@ function RecordPaneMenu({
   }
   return (
     <>
+      {onHistory ? (
+        <button
+          type="button"
+          role="menuitem"
+          className="fsdb-detail-more-item"
+          data-testid="fsdb-detail-history"
+          onClick={() => {
+            close()
+            onHistory()
+          }}
+        >
+          <ClockIcon aria-hidden />
+          历史记录
+        </button>
+      ) : null}
       {onDelete ? (
         <button
           type="button"
@@ -299,6 +316,7 @@ export function RecordDetail({
   collectionPath,
   recordKind = 'record',
   onDelete,
+  onHistory,
   readOnly = false,
   inspectorPaneId,
   visibleColumns,
@@ -330,6 +348,7 @@ export function RecordDetail({
   collectionPath?: string
   recordKind?: string
   onDelete?: () => void
+  onHistory?: () => void
   readOnly?: boolean
   inspectorPaneId?: string
   visibleColumns?: string[]
@@ -405,6 +424,7 @@ export function RecordDetail({
       Tools={readOnly ? undefined : chrome?.DetailTools}
       onDelete={!readOnly && onDelete ? onDelete : undefined}
       deleteLabel={deleteLabel}
+      onHistory={onHistory}
       share={share}
       shareLabel={shareLabel}
     />

@@ -252,6 +252,7 @@ import {
 const SchemaFieldEditor = lazy(() => import('./schema-field.tsx').then((m) => ({ default: m.SchemaFieldEditor })))
 const VisibleColumnsFlyout = lazy(() => import('./column-order-menu.tsx').then((m) => ({ default: m.VisibleColumnsFlyout })))
 const LazySharePanel = lazy(() => import('./share-popover.tsx').then((m) => ({ default: m.SharePanel })))
+const LazyPageHistoryDialog = lazy(() => import('./page-history-dialog.tsx').then((m) => ({ default: m.PageHistoryDialog })))
 
 function DataSidebarPublisher(props: DataSidebarLive) {
   useLayoutEffect(() => {
@@ -3968,6 +3969,11 @@ export function CollectionBrowser({
     [listChromeLock],
   )
 
+  const [historyOpen, setHistoryOpen] = useState(false)
+  useEffect(() => {
+    setHistoryOpen(false)
+  }, [collectionPath, detailId])
+
   const hideAccessRules = isDataOverview
   const listHeaderLock = [
     Number(nested),
@@ -4027,6 +4033,7 @@ export function CollectionBrowser({
           onCrumbTarget={onCrumbTarget}
           onToggleLayout={() => toggleMenu('layout')}
           onCloseLayout={() => setLayoutOpen(false)}
+          onOpenHistory={detailId && collectionPath === PAGES_COLLECTION_PATH ? () => setHistoryOpen(true) : undefined}
         />
       ),
     [listHeaderLock],
@@ -4225,6 +4232,7 @@ export function CollectionBrowser({
           visibleColumns={columnKeys.length ? columnKeys : schemaDefaultKeys}
           setVisibleColumns={setVisibleColumns}
           renderVisibleColumnsFlyout={renderVisibleColumnsFlyout}
+          onOpenHistory={detailId && collectionPath === PAGES_COLLECTION_PATH ? () => setHistoryOpen(true) : undefined}
         />
         </div>
         </div>
@@ -4312,6 +4320,20 @@ export function CollectionBrowser({
           }
           onHide={(colKey) => toggleColumn(colKey)}
         />
+      ) : null}
+      {historyOpen && detailId && collectionPath === PAGES_COLLECTION_PATH ? (
+        <Suspense fallback={null}>
+          <LazyPageHistoryDialog
+            recordId={detailId}
+            pageTitle={String(detailRow?.title ?? selected?.title ?? '')}
+            readOnly={normalizeAuthzRole(selected?.shareRole) === 'viewer' && !localData}
+            onClose={() => setHistoryOpen(false)}
+            onRestored={() => {
+              refreshOpenDetail()
+              window.dispatchEvent(new Event(FSDB_CHANGE_EVENT))
+            }}
+          />
+        </Suspense>
       ) : null}
       {renderCellPop()}
       <DockHoverTip />

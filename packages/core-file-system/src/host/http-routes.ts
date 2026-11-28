@@ -296,6 +296,28 @@ export function registerDatabaseHttpRoutes(
       route.send(400, { error: String(error) })
     }
   })
+  ctx.http.route('GET', '/api/db/pages/:id/revisions', async (route) => {
+    await send(route, () =>
+      db.listPageRevisions(decodeURIComponent(String(route.params.id ?? '')), {
+        limit: route.query.get('limit') ? Number(route.query.get('limit')) : undefined,
+        offset: route.query.get('offset') ? Number(route.query.get('offset')) : undefined,
+      }),
+    )
+  })
+  ctx.http.route('GET', '/api/db/pages/:id/revisions/:revId', async (route) => {
+    await send(route, () => {
+      const revId = Number(route.params.revId)
+      if (!Number.isInteger(revId) || revId <= 0) throw new Error('invalid revision id')
+      return db.getPageRevision(decodeURIComponent(String(route.params.id ?? '')), revId)
+    })
+  })
+  ctx.http.route('POST', '/api/db/pages/:id/revisions/:revId/restore', async (route) => {
+    await send(route, () => {
+      const revId = Number(route.params.revId)
+      if (!Number.isInteger(revId) || revId <= 0) throw new Error('invalid revision id')
+      return db.restorePageRevision(decodeURIComponent(String(route.params.id ?? '')), revId)
+    })
+  })
   ctx.http.route('POST', '/api/db/batch-update', async (route) => {
     try {
       const body = (await route.json()) as {

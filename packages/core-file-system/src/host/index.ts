@@ -82,11 +82,18 @@ import {
 } from './access-policy.ts'
 import {
   applyRecordPersonOverlay,
+  resolveCurrentPerson,
   resolveNamedPerson,
   stampRecordActor,
   touchRecordActor,
   type ActorOverlayHost,
 } from './actor-overlay.ts'
+import {
+  PageRevisionStore,
+  type PageRevisionActor,
+  type PageRevisionFieldChange,
+  type PageRevisionOp,
+} from './page-revisions-store.ts'
 import {
   executeEditAsset,
   executeEditContent,
@@ -510,6 +517,7 @@ export class DatabaseService extends Service implements Database {
   private contentWrites = new Map<string, Promise<void>>()
   tags = new TagStore()
   shares = new SharesStore()
+  revisions = new PageRevisionStore()
   assets = new FileSystemAssets()
   viewCatalog?: { viewsFor(collectionPath: string, accountId?: string): SharedViewDef[]; remove?(id: string, accountId?: string): unknown }
   recordViews = new RecordViewsStore()
@@ -2030,6 +2038,7 @@ export class DatabaseService extends Service implements Database {
       ? { type: 'record' as const, workspaceId: actor.workspaceId, collection: spec.path, recordId: parentRecordId }
       : null
     if (moving && resource) authorization!.validateMove(actor!, resource, parent)
+    const beforePageFields = spec.path === PAGES_COLLECTION_PATH ? this.snapshotPageFields(spec, current) : null
     let record = Object.keys(patch).length && spec.update ? await spec.update(parts[1]!, patch) : current
     if (moving && resource) authorization!.move(actor!, resource, parent)
     const viewOnly = !bannerPatch.present && Object.keys(patch).length > 0 &&
@@ -2071,6 +2080,21 @@ export class DatabaseService extends Service implements Database {
         recordId: record.id,
         recordTitle: title,
       })
+      if (spec.path === PAGES_COLLECTION_PATH && beforePageFields) {
+        const afterPageFields = this.snapshotPageFields(spec, record)
+        const changes = this.diffPageFields(beforePageFields, afterPageFields)
+        if (changes.length) {
+          const body = readEditorContent(this.tags.ensure(), PAGES_COLLECTION_PATH, record.id)
+          await this.recordPageRevisionSafe({
+            recordId: record.id,
+            op: 'fields',
+            title: String(afterPageFields.title ?? title),
+            body,
+            fields: afterPageFields,
+            changes,
+          })
+        }
+      }
     }
     return { kind: 'record' as const, path: `${spec.path}/${record.id}`, value: withoutContent(spec, this.withBanner(spec, this.decorateRecord(spec, record))) }
   }
@@ -2217,10 +2241,21 @@ export class DatabaseService extends Service implements Database {
       }
       const initialBody = initialBodies[sourceIndex]
       if (initialBody !== undefined && bodyKey) {
-        await this.writeContent(`${spec.path}/${record.id}`, initialBody)
+        await this.writeContent(`${spec.path}/${record.id}`, initialBody, undefined, { skipRevision: true })
       }
       this.indexTagRecord(spec, this.decorateRecord(spec, record))
       this.refreshContentRefs(spec, this.withBanner(spec, record))
+      if (spec.path === PAGES_COLLECTION_PATH) {
+        const fields = this.snapshotPageFields(spec, record)
+        const body = readEditorContent(this.tags.ensure(), PAGES_COLLECTION_PATH, record.id)
+        await this.recordPageRevisionSafe({
+          recordId: record.id,
+          op: 'create',
+          title: String(fields.title ?? record.title ?? ''),
+          body,
+          fields,
+        })
+      }
     }
     this.bump(spec.path)
     const items = created.map((record) => ({
@@ -2392,6 +2427,13 @@ export class DatabaseService extends Service implements Database {
     for (const id of ids) {
       this.tags.removeRecord(spec.path, id)
       this.shares.revokeRecord(spec.path, id)
+      if (spec.path === PAGES_COLLECTION_PATH) {
+        try {
+          this.revisions.deleteForRecord(this.tags.ensure(), id)
+        } catch {
+          /* ignore */
+        }
+      }
     }
     this.bump(spec.path)
     this.recycleAssets?.()
@@ -2558,18 +2600,19 @@ export class DatabaseService extends Service implements Database {
     }
   }
 
-  async writeContent(path: string, value: unknown, expectedVersion?: number) {
+  async writeContent(path: string, value: unknown, expectedVersion?: number, opts?: { skipRevision?: boolean }) {
     const normalized = normalizeCollectionPath(path)
-    return this.serializeContentWrite(normalized, () => this.writeContentNow(path, value, expectedVersion))
+    return this.serializeContentWrite(normalized, () => this.writeContentNow(path, value, expectedVersion, opts))
   }
 
   private async writeContentNow(
     path: string,
     value: unknown,
     expectedVersion?: number,
+    opts?: { skipRevision?: boolean },
   ): Promise<{ kind: 'content'; path: string; field: string; value: unknown; updatedAt: number; version?: number }> {
     const rewritten = this.rewriteOverviewRecordPath(path)
-    if (rewritten) return this.writeContentNow(rewritten, value, expectedVersion)
+    if (rewritten) return this.writeContentNow(rewritten, value, expectedVersion, opts)
     const parts = splitPath(path)
     if (parts.length !== 2) throw new Error(`cannot write content: ${normalizeCollectionPath(path)}`)
     const spec = this.collection(`/${parts[0]}`)
@@ -2595,6 +2638,17 @@ export class DatabaseService extends Service implements Database {
     const editorContent = isEditorContentSpec(spec)
       ? readEditorContentRecord(this.tags.ensure(), spec.path, record.id)
       : null
+    if (spec.path === PAGES_COLLECTION_PATH && !opts?.skipRevision) {
+      const fields = this.snapshotPageFields(spec, record)
+      const nextBody = editorContent ? editorContent.body : String(record[field] ?? '')
+      await this.recordPageRevisionSafe({
+        recordId: record.id,
+        op: 'content',
+        title: String(fields.title ?? record.title ?? ''),
+        body: nextBody,
+        fields,
+      })
+    }
     return {
       kind: 'content' as const,
       path: `${spec.path}/${record.id}`,
@@ -2602,6 +2656,196 @@ export class DatabaseService extends Service implements Database {
       value: editorContent ? editorContent.body : (record[field] ?? null),
       updatedAt: Math.max(Number(record.updatedAt) || 0, Date.now()),
       ...(editorContent ? { version: editorContent.version } : {}),
+    }
+  }
+
+  private snapshotPageFields(spec: CollectionSpec, row: DbRecord): Record<string, unknown> {
+    const decorated = this.decorateRecord(spec, row)
+    const tag = normalizeSchemaValue(decorated.tag)
+    return {
+      title: String(decorated.title ?? ''),
+      emoji: String(decorated.emoji ?? ''),
+      parentId: String(decorated.parentId ?? ''),
+      dependsOn: Array.isArray(decorated.dependsOn) ? decorated.dependsOn.map(String) : [],
+      tag,
+    }
+  }
+
+  private diffPageFields(before: Record<string, unknown>, after: Record<string, unknown>): PageRevisionFieldChange[] {
+    const out: PageRevisionFieldChange[] = []
+    const basic: Array<[string, string]> = [
+      ['title', '标题'],
+      ['emoji', '图标'],
+      ['parentId', '父级'],
+      ['dependsOn', '依赖'],
+    ]
+    for (const [key, label] of basic) {
+      if (JSON.stringify(before[key] ?? null) !== JSON.stringify(after[key] ?? null)) {
+        out.push({ field: key, label, before: before[key] ?? null, after: after[key] ?? null })
+      }
+    }
+    const beforeTag = normalizeSchemaValue(before.tag)
+    const afterTag = normalizeSchemaValue(after.tag)
+    const tagLabelOf = (tagId: string) => this.tags.get(tagId)?.label?.trim() || tagId
+    if (JSON.stringify(beforeTag.tags) !== JSON.stringify(afterTag.tags)) {
+      out.push({
+        field: 'tag',
+        label: '标签',
+        before: beforeTag.tags.map(tagLabelOf),
+        after: afterTag.tags.map(tagLabelOf),
+      })
+    }
+    const allTagIds = new Set([...Object.keys(beforeTag.values), ...Object.keys(afterTag.values)])
+    for (const tagId of allTagIds) {
+      const pack = this.tags.get(tagId)
+      const prevVals = (beforeTag.values[tagId] ?? {}) as Record<string, unknown>
+      const nextVals = (afterTag.values[tagId] ?? {}) as Record<string, unknown>
+      const propKeys = new Set([...Object.keys(prevVals), ...Object.keys(nextVals)])
+      for (const propKey of propKeys) {
+        const bv = prevVals[propKey] ?? null
+        const av = nextVals[propKey] ?? null
+        if (JSON.stringify(bv) === JSON.stringify(av)) continue
+        const propSpec = pack?.fields.find((item) => item.key === propKey)
+        out.push({
+          field: `tag::${tagId}::${propKey}`,
+          label: propSpec?.label?.trim() || propKey,
+          before: bv,
+          after: av,
+        })
+      }
+    }
+    return out
+  }
+
+  private async currentRevisionActor(): Promise<PageRevisionActor> {
+    try {
+      const person = await resolveCurrentPerson(this.actorHost())
+      if (person.kind === 'agent') {
+        return {
+          kind: 'agent',
+          id: person.sessionId ?? '',
+          name: person.name || 'Agent',
+          sessionId: person.sessionId ?? '',
+        }
+      }
+      return {
+        kind: 'user',
+        id: person.accountId ?? '',
+        name: person.name || '用户',
+      }
+    } catch {
+      return { kind: 'user', id: currentAccountId(), name: '用户' }
+    }
+  }
+
+  private async recordPageRevisionSafe(input: {
+    recordId: string
+    op: PageRevisionOp
+    title: string
+    body: string
+    fields: Record<string, unknown>
+    changes?: PageRevisionFieldChange[]
+    restoreFromVersion?: number
+  }) {
+    try {
+      const actor = await this.currentRevisionActor()
+      return this.revisions.record(this.tags.ensure(), { ...input, actor })
+    } catch {
+      /* 历史记录失败不影响主写入流程 */
+      return null
+    }
+  }
+
+  async listPageRevisions(recordId: string, opts?: { limit?: number; offset?: number }) {
+    const spec = this.collection(PAGES_COLLECTION_PATH)
+    if (!spec) throw new Error(`unknown collection: ${PAGES_COLLECTION_PATH}`)
+    const current = await spec.get(recordId)
+    if (!current) throw new Error(`unknown record: ${PAGES_COLLECTION_PATH}/${recordId}`)
+    this.assertLiveRecord(spec, current.id, 'resource:read', current)
+    return this.revisions.list(this.tags.ensure(), current.id, opts)
+  }
+
+  async getPageRevision(recordId: string, revisionId: number) {
+    const spec = this.collection(PAGES_COLLECTION_PATH)
+    if (!spec) throw new Error(`unknown collection: ${PAGES_COLLECTION_PATH}`)
+    const current = await spec.get(recordId)
+    if (!current) throw new Error(`unknown record: ${PAGES_COLLECTION_PATH}/${recordId}`)
+    this.assertLiveRecord(spec, current.id, 'resource:read', current)
+    const rev = this.revisions.get(this.tags.ensure(), current.id, revisionId)
+    if (!rev) throw new Error(`unknown record: revision/${revisionId}`)
+    return rev
+  }
+
+  async restorePageRevision(recordId: string, revisionId: number) {
+    const spec = this.collection(PAGES_COLLECTION_PATH)
+    if (!spec || !spec.update) throw new Error(`unknown collection: ${PAGES_COLLECTION_PATH}`)
+    const current = await spec.get(recordId)
+    if (!current) throw new Error(`unknown record: ${PAGES_COLLECTION_PATH}/${recordId}`)
+    this.assertLiveRecord(spec, current.id, 'resource:update', current)
+    const rev = this.revisions.get(this.tags.ensure(), current.id, revisionId)
+    if (!rev) throw new Error(`unknown record: revision/${revisionId}`)
+
+    const beforeFields = this.snapshotPageFields(spec, current)
+    const restoredFields = rev.fields ?? {}
+    const updatePatch: Record<string, unknown> = {}
+    if (typeof restoredFields.title === 'string' && restoredFields.title.trim()) {
+      updatePatch.title = restoredFields.title
+    } else if (rev.title) {
+      updatePatch.title = rev.title
+    }
+    if (typeof restoredFields.parentId === 'string') {
+      const nextParent = restoredFields.parentId.trim()
+      if (!nextParent || (nextParent !== current.id && (await spec.get(nextParent)))) {
+        updatePatch.parentId = nextParent
+      }
+    }
+    if (Array.isArray(restoredFields.dependsOn)) {
+      const validDeps: string[] = []
+      for (const dep of restoredFields.dependsOn.map(String)) {
+        if (dep && dep !== current.id && (await spec.get(dep))) validDeps.push(dep)
+      }
+      updatePatch.dependsOn = validDeps
+    }
+
+    let record = Object.keys(updatePatch).length ? await spec.update(current.id, updatePatch) : current
+    if (typeof restoredFields.emoji === 'string') {
+      const meta = this.tags.writeRecordMeta(spec.path, record.id, { emoji: restoredFields.emoji })
+      record = { ...record, ...(meta.emoji !== null ? { emoji: meta.emoji } : {}) }
+    }
+    if (restoredFields.tag !== undefined) {
+      const pruned = pruneSchemaValue(normalizeSchemaValue(restoredFields.tag), this.tags.list())
+      record = { ...record, tag: this.persistRecordTag(spec, record.id, pruned, record) }
+    }
+
+    await this.writeContent(`${PAGES_COLLECTION_PATH}/${current.id}`, rev.body, undefined, { skipRevision: true })
+    await this.stampActor(spec.path, record.id)
+    this.indexTagRecord(spec, this.decorateRecord(spec, record))
+    this.refreshContentRefs(spec, this.withBanner(spec, record))
+    this.bump(spec.path)
+
+    const afterFields = this.snapshotPageFields(spec, record)
+    const changes = this.diffPageFields(beforeFields, afterFields)
+    const createdRev = await this.recordPageRevisionSafe({
+      recordId: record.id,
+      op: 'restore',
+      title: String(afterFields.title ?? record.title ?? ''),
+      body: rev.body,
+      fields: afterFields,
+      changes,
+      restoreFromVersion: rev.version,
+    })
+    this.logMemberActivity({
+      action: 'record.update',
+      collection: spec.path,
+      recordId: record.id,
+      recordTitle: String(afterFields.title ?? record.title ?? record.id),
+      detail: `恢复到版本 #${rev.version}`,
+    })
+    return {
+      ok: true,
+      revision: createdRev,
+      value: withoutContent(spec, this.withBanner(spec, this.decorateRecord(spec, record))),
+      body: rev.body,
     }
   }
 

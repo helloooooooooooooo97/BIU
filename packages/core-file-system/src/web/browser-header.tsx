@@ -1,5 +1,5 @@
 import { lazy, memo, Suspense, type ComponentProps, type RefObject } from 'react'
-import { EllipsisHorizontalIcon } from '@heroicons/react/16/solid'
+import { ClockIcon, EllipsisHorizontalIcon } from '@heroicons/react/16/solid'
 import { HeadlessDismiss } from '@biu/biu-ui/headless-dismiss'
 import type { CollectionSchema, DbRecord } from '@biu/type-file-system'
 import { CrumbTrail } from './crumb-trail.tsx'
@@ -7,6 +7,7 @@ import type { Crumb, CrumbTarget } from './sidebar-nav.ts'
 import type { QueryField } from './query-menus.tsx'
 import type { SavedView } from './saved-view.ts'
 import {
+  PAGES_COLLECTION_PATH,
   PLUGINS_COLLECTION_PATH,
   VIEWS_COLLECTION_PATH,
   WORKSPACE_MEMBERS_COLLECTION_PATH,
@@ -65,6 +66,7 @@ export const BrowserHeader = memo(function BrowserHeader({
   onCrumbTarget,
   onToggleLayout,
   onCloseLayout,
+  onOpenHistory,
 }: {
   sidebarGone: boolean
   crumbs: Crumb[]
@@ -96,6 +98,7 @@ export const BrowserHeader = memo(function BrowserHeader({
   onCrumbTarget?: (target: CrumbTarget) => void
   onToggleLayout: () => void
   onCloseLayout: () => void
+  onOpenHistory?: () => void
 }) {
   return (
     <header className="chat-view-header" data-biu-ignore>
@@ -142,6 +145,18 @@ export const BrowserHeader = memo(function BrowserHeader({
             onClick={() => persistStarredViews(toggleStarredView(getStarredViews(), collectionPath, activeViewId, activeView?.name))}
           >
             <UiGlyph icon="star" />
+          </button>
+        ) : null}
+        {detailId && collectionPath === PAGES_COLLECTION_PATH && onOpenHistory ? (
+          <button
+            type="button"
+            className="chat-view-header-expand"
+            title="历史记录"
+            aria-label="历史记录"
+            data-testid="page-history-toggle"
+            onClick={onOpenHistory}
+          >
+            <ClockIcon aria-hidden className="size-4" />
           </button>
         ) : null}
         {detailId ? (
