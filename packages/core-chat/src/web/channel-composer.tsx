@@ -95,6 +95,7 @@ type UnifiedMentionOption = MemberMentionOption | PageMentionOption
 export type ChannelComposerHandle = {
   focus: () => void
   uploadFiles: (files: FileList | File[]) => Promise<void>
+  insertMention: (mention: ChannelMention) => void
 }
 
 export type ChannelComposerProps = {
@@ -569,6 +570,29 @@ export const ChannelComposer = memo(
     )
     pickOptionRef.current = pickOption
 
+    const insertMention = useCallback((mention: ChannelMention) => {
+      const ed = editorRef.current
+      if (!composerEditorReady(ed)) return
+      const { $from } = ed.state.selection
+      const before = ed.state.doc.textBetween($from.start(), $from.pos, '\n', '\0')
+      const needsSpace = before.length > 0 && !/[\s\0]$/.test(before)
+      ed.chain()
+        .focus()
+        .insertContent([
+          ...(needsSpace ? [{ type: 'text', text: ' ' }] : []),
+          {
+            type: 'channelMention',
+            attrs: {
+              kind: mention.kind,
+              id: mention.id,
+              label: mention.label,
+            },
+          },
+          { type: 'text', text: ' ' },
+        ])
+        .run()
+    }, [])
+
     useImperativeHandle(
       ref,
       () => ({
@@ -576,8 +600,9 @@ export const ChannelComposer = memo(
           focusComposerEditor(editorRef.current as unknown as Parameters<typeof focusComposerEditor>[0])
         },
         uploadFiles,
+        insertMention,
       }),
-      [uploadFiles],
+      [insertMention, uploadFiles],
     )
 
     // 响应全局聚焦事件
