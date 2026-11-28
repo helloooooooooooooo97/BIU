@@ -3,7 +3,6 @@ import { createPortal } from 'react-dom'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import {
   ArrowDownIcon,
-  ArrowRightStartOnRectangleIcon,
   ArrowUturnLeftIcon,
   BellIcon,
   BellSlashIcon,
@@ -30,8 +29,6 @@ import {
   StarIcon,
   TrashIcon,
   UserGroupIcon,
-  UserPlusIcon,
-  XMarkIcon,
 } from '@heroicons/react/16/solid'
 import { Button } from '@biu/biu-ui'
 import { AiAvatar } from '@biu/biu-ui/ai-avatar'
@@ -44,25 +41,20 @@ import { PickChip, splitPickStream, type PickService } from '@biu/core-pick/web'
 import { SidebarMascot, resolveSessionMascot } from '@biu/public-mascot'
 import { bindSessionView, channelAppPath, sessionAppPath, type SessionViewService } from '@biu/web-session-view'
 import type {
-  ChannelAgentContextMode,
   ChannelMemberView,
   ChannelMention,
   ChannelMessageView,
   ChannelSavedMessageView,
   ChannelSearchHit,
-  ChannelSummary,
 } from '../shared/channel-types.ts'
 import { ChannelComposer, type ChannelComposerHandle } from './channel-composer.tsx'
-import { ChannelFloatingSidebar } from './channel-floating-sidebar.tsx'
+import { ChannelFloatingSidebar, type ChannelFloatingTab } from './channel-floating-sidebar.tsx'
 import { MarkdownBody } from './markdown.tsx'
 import {
-  addChannelMember,
   autoNameChannel,
   cancelChannelRun,
   decideChannelApproval,
-  deleteChannel,
   editChannelMessage,
-  leaveChannel,
   loadChannelDetail,
   loadChannelMessagesAround,
   loadChannelPins,
@@ -73,7 +65,6 @@ import {
   openChannelRunTrace,
   openOrCreateDm,
   recallChannelMessage,
-  removeChannelMember,
   renameChannel,
   saveChannelContentAsPage,
   searchChannelMessages,
@@ -84,7 +75,6 @@ import {
   toggleChannelPinMessage,
   toggleChannelReaction,
   toggleChannelSaveMessage,
-  updateChannelAgentContextMode,
   updateChannelPreferences,
   useChannelStore,
 } from './channel-store.ts'
@@ -360,28 +350,24 @@ export const ChannelStage = memo(function ChannelStage({
   const [editingDraft, setEditingDraft] = useState('')
   const [savingEdit, setSavingEdit] = useState(false)
   const [error, setError] = useState('')
-  const [membersModalOpen, setMembersModalOpen] = useState(false)
   const [headerMenuOpen, setHeaderMenuOpen] = useState(false)
   const [msgMenu, setMsgMenu] = useState<{ msg: ChannelMessageView; top: number; left: number } | null>(null)
-  const [pinsModalOpen, setPinsModalOpen] = useState(false)
+  const [floatingTab, setFloatingTab] = useState<ChannelFloatingTab | null>(null)
   const [pinnedMessages, setPinnedMessages] = useState<ChannelMessageView[]>([])
-  const [savedModalOpen, setSavedModalOpen] = useState(false)
   const [savedMessages, setSavedMessages] = useState<ChannelSavedMessageView[]>([])
-  const [searchOpen, setSearchOpen] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const [searchSenderId, setSearchSenderId] = useState('')
   const [searchHits, setSearchHits] = useState<ChannelSearchHit[]>([])
   const [searching, setSearching] = useState(false)
   const [highlightedMsgId, setHighlightedMsgId] = useState<string | null>(null)
   const [reactPickerMsgId, setReactPickerMsgId] = useState<string | null>(null)
-  const [summaryModal, setSummaryModal] = useState<{
-    open: boolean
+  const [summaryState, setSummaryState] = useState<{
     loading: boolean
     summary: string
     messageCount: number
     scopeLabel: string
     error: string
-  }>({ open: false, loading: false, summary: '', messageCount: 0, scopeLabel: '近期消息', error: '' })
+  }>({ loading: false, summary: '', messageCount: 0, scopeLabel: '近期消息', error: '' })
   const [savedPageNotice, setSavedPageNotice] = useState<{ id: string; title: string } | null>(null)
   const [typingTick, setTypingTick] = useState(0)
   const [agentCard, setAgentCard] = useState<ChannelMemberView | null>(null)
@@ -418,6 +404,7 @@ export const ChannelStage = memo(function ChannelStage({
     setEditingMsgId(null)
     setHeaderMenuOpen(false)
     setMsgMenu(null)
+    setFloatingTab(null)
     nearBottomRef.current = true
     prevMsgCountRef.current = 0
     prevLastMsgIdRef.current = ''
@@ -532,7 +519,7 @@ export const ChannelStage = memo(function ChannelStage({
   }, [channelId, detail, jumpToMessage, searchParams, setSearchParams, targetMsgParam])
 
   useEffect(() => {
-    if (!searchOpen) return
+    if (floatingTab !== 'search') return
     const q = searchQuery.trim()
     if (!q) {
       setSearchHits([])
@@ -559,15 +546,15 @@ export const ChannelStage = memo(function ChannelStage({
       cancelled = true
       window.clearTimeout(timer)
     }
-  }, [channelId, searchOpen, searchQuery, searchSenderId])
+  }, [channelId, floatingTab, searchQuery, searchSenderId])
 
-  const openPinsModal = useCallback(() => {
-    setPinsModalOpen(true)
+  const openPinsPanel = useCallback(() => {
+    setFloatingTab('pins')
     void loadChannelPins(channelId).then(setPinnedMessages)
   }, [channelId])
 
-  const openSavedModal = useCallback(() => {
-    setSavedModalOpen(true)
+  const openSavedPanel = useCallback(() => {
+    setFloatingTab('saved')
     void loadSavedChannelMessages().then(setSavedMessages)
   }, [])
 
@@ -589,8 +576,8 @@ export const ChannelStage = memo(function ChannelStage({
 
   const handleSummarize = useCallback(
     (unreadOnly = false) => {
-      setSummaryModal({
-        open: true,
+      setFloatingTab('summary')
+      setSummaryState({
         loading: true,
         summary: '',
         messageCount: 0,
@@ -599,8 +586,7 @@ export const ChannelStage = memo(function ChannelStage({
       })
       void summarizeChannel(channelId, unreadOnly)
         .then((res) => {
-          setSummaryModal({
-            open: true,
+          setSummaryState({
             loading: false,
             summary: res.summary,
             messageCount: res.messageCount,
@@ -609,7 +595,7 @@ export const ChannelStage = memo(function ChannelStage({
           })
         })
         .catch((err) => {
-          setSummaryModal((prev) => ({
+          setSummaryState((prev) => ({
             ...prev,
             loading: false,
             error: err instanceof Error ? err.message : String(err),
@@ -801,6 +787,7 @@ export const ChannelStage = memo(function ChannelStage({
       return
     }
     setAgentCard(member)
+    setFloatingTab('agent-card')
   }
 
   const handleApproval = async (approvalId: string, allow: boolean) => {
@@ -815,8 +802,6 @@ export const ChannelStage = memo(function ChannelStage({
   }
 
   const isDm = channel?.kind === 'dm'
-  const agentMembers = members.filter((m) => m.memberType === 'agent')
-  const humanMembers = members.filter((m) => m.memberType === 'account')
   const peerAvatar = resolveAvatar(channel?.peerAccountId, channel?.peerAvatar)
   const peerOnline = isDm && isOnline(channel?.peerAccountId)
 
@@ -1010,25 +995,13 @@ export const ChannelStage = memo(function ChannelStage({
         <div className="chat-view-header-right shrink-0">
           <button
             type="button"
-            className={`inline-flex h-[var(--biu-size-control-md)] cursor-pointer items-center gap-1 rounded-[6px] border-0 bg-transparent px-2 text-[12px] font-medium transition-colors hover:bg-(--biu-color-bg-hover) hover:text-(--biu-color-text)${searchOpen ? ' bg-(--biu-color-bg-hover) text-(--biu-color-text)' : ' text-(--biu-color-text-muted)'}`}
-            title="搜索本聊天记录"
+            className={`inline-flex h-[var(--biu-size-control-md)] cursor-pointer items-center gap-1 rounded-[6px] border-0 bg-transparent px-2 text-[12px] font-medium transition-colors hover:bg-(--biu-color-bg-hover) hover:text-(--biu-color-text)${floatingTab === 'search' ? ' bg-(--biu-color-bg-hover) text-(--biu-color-text)' : ' text-(--biu-color-text-muted)'}`}
+            title="在右侧面板搜索本聊天记录"
             aria-label="搜索聊天记录"
             data-testid="channel-search-toggle"
-            onClick={() => setSearchOpen((v) => !v)}
+            onClick={() => setFloatingTab((cur) => (cur === 'search' ? null : 'search'))}
           >
             <MagnifyingGlassIcon className="size-3.5 shrink-0" />
-          </button>
-          <button
-            type="button"
-            className="inline-flex h-[var(--biu-size-control-md)] cursor-pointer items-center gap-1.5 rounded-[6px] border-0 bg-transparent px-2 text-[12px] font-medium text-(--biu-color-text-muted) transition-colors hover:bg-(--biu-color-bg-hover) hover:text-(--biu-color-text)"
-            title="管理群成员、偏好与 Agent"
-            data-testid="channel-manage-members"
-            onClick={() => setMembersModalOpen(true)}
-          >
-            <UserGroupIcon className="size-3.5 shrink-0 text-(--biu-color-icon-active)" />
-            <span className="tabular-nums whitespace-nowrap">
-              {humanMembers.length} 人{agentMembers.length > 0 ? ` · ${agentMembers.length} Agent` : ''}
-            </span>
           </button>
           <div ref={headerMenuRef} className="relative">
             <button
@@ -1067,7 +1040,7 @@ export const ChannelStage = memo(function ChannelStage({
                   className="flex w-full cursor-pointer items-center gap-2 rounded-md border-0 bg-transparent px-2.5 py-1.5 text-left text-[12.5px] text-(--biu-color-text) hover:bg-(--biu-color-bg-popover-hover)"
                   onClick={() => {
                     setHeaderMenuOpen(false)
-                    openPinsModal()
+                    openPinsPanel()
                   }}
                 >
                   <BookmarkIcon className="size-3.5 shrink-0 text-(--biu-color-icon)" />
@@ -1085,11 +1058,24 @@ export const ChannelStage = memo(function ChannelStage({
                   className="flex w-full cursor-pointer items-center gap-2 rounded-md border-0 bg-transparent px-2.5 py-1.5 text-left text-[12.5px] text-(--biu-color-text) hover:bg-(--biu-color-bg-popover-hover)"
                   onClick={() => {
                     setHeaderMenuOpen(false)
-                    openSavedModal()
+                    openSavedPanel()
                   }}
                 >
                   <StarIcon className="size-3.5 shrink-0 text-(--biu-color-icon)" />
                   <span>我的收藏</span>
+                </button>
+                <button
+                  type="button"
+                  role="menuitem"
+                  data-testid="channel-manage-members"
+                  className="flex w-full cursor-pointer items-center gap-2 rounded-md border-0 bg-transparent px-2.5 py-1.5 text-left text-[12.5px] text-(--biu-color-text) hover:bg-(--biu-color-bg-popover-hover)"
+                  onClick={() => {
+                    setHeaderMenuOpen(false)
+                    setFloatingTab('manage')
+                  }}
+                >
+                  <UserGroupIcon className="size-3.5 shrink-0 text-(--biu-color-icon)" />
+                  <span>成员与设置</span>
                 </button>
               </div>
             ) : null}
@@ -1143,86 +1129,6 @@ export const ChannelStage = memo(function ChannelStage({
         </div>
       ) : null}
 
-      {/* 群内聊天记录搜索条 */}
-      {searchOpen ? (
-        <div
-          className="bg-(--biu-color-bg-subtle) px-4 py-2"
-          data-testid="channel-search-panel"
-        >
-          <div className="mx-auto flex max-w-[var(--biu-chat-max-w,760px)] flex-wrap items-center gap-2">
-            <div className="relative flex min-w-[200px] flex-1 items-center">
-              <MagnifyingGlassIcon className="pointer-events-none absolute left-2.5 size-3.5 text-(--biu-color-text-subtle)" />
-              <input
-                type="search"
-                value={searchQuery}
-                autoFocus
-                placeholder="搜索本聊天记录或附件文件名…"
-                aria-label="搜索聊天记录"
-                data-testid="channel-search-input"
-                className="h-8 w-full rounded-md border-0 bg-(--biu-color-bg) pr-2 pl-8 text-[12.5px] text-(--biu-color-text) outline-none ring-1 ring-inset ring-(--biu-color-border) focus:ring-(--biu-color-icon-active)"
-                onChange={(e) => setSearchQuery(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Escape') setSearchOpen(false)
-                }}
-              />
-            </div>
-            <select
-              value={searchSenderId}
-              aria-label="按发送人筛选"
-              data-testid="channel-search-sender"
-              className="h-8 rounded-md border-0 bg-(--biu-color-bg) px-2 text-[12px] text-(--biu-color-text) ring-1 ring-inset ring-(--biu-color-border)"
-              onChange={(e) => setSearchSenderId(e.target.value)}
-            >
-              <option value="">全部发送人</option>
-              {members.map((m) => (
-                <option key={`${m.memberType}:${m.memberId}`} value={m.memberId}>
-                  {m.name}
-                </option>
-              ))}
-            </select>
-            <button
-              type="button"
-              className="inline-flex size-7 cursor-pointer items-center justify-center rounded-md border-0 bg-transparent text-(--biu-color-text-muted) hover:bg-(--biu-color-bg-hover)"
-              title="关闭搜索"
-              onClick={() => setSearchOpen(false)}
-            >
-              <XMarkIcon className="size-4" />
-            </button>
-          </div>
-          {searchQuery.trim() ? (
-            <div className="mx-auto mt-2 max-h-56 max-w-[var(--biu-chat-max-w,760px)] overflow-y-auto rounded-[var(--biu-radius-popover)] border border-(--biu-color-border-popover) bg-(--biu-color-bg-popover) p-1 shadow-(--biu-shadow-popover)">
-              {searching ? (
-                <div className="px-3 py-2 text-[12px] text-(--biu-color-text-subtle)">搜索中…</div>
-              ) : searchHits.length === 0 ? (
-                <div className="px-3 py-2 text-[12px] text-(--biu-color-text-subtle)">未找到匹配消息</div>
-              ) : (
-                searchHits.map((hit) => (
-                  <button
-                    key={hit.id}
-                    type="button"
-                    data-testid={`channel-search-hit-${hit.id}`}
-                    className="flex w-full cursor-pointer items-start justify-between gap-2 rounded-md border-0 bg-transparent px-2.5 py-2 text-left text-[12.5px] hover:bg-(--biu-color-bg-popover-hover)"
-                    onClick={() => {
-                      if (activeThreadRootId) closeThread()
-                      void jumpToMessage(hit.id)
-                      setSearchOpen(false)
-                    }}
-                  >
-                    <div className="min-w-0 flex-1">
-                      <span className="font-medium text-(--biu-color-text)">{hit.senderName}</span>
-                      <span className="ml-2 text-(--biu-color-text-muted)">{hit.text.slice(0, 120)}</span>
-                    </div>
-                    <span className="shrink-0 text-[11px] text-(--biu-color-text-subtle) tabular-nums">
-                      {formatSentAt(hit.createdAt)}
-                    </span>
-                  </button>
-                ))
-              )}
-            </div>
-          ) : null}
-        </div>
-      ) : null}
-
       {/* 主对话舞台：与 AgentMainPanels 完全相同的居中舞台 + 底部悬浮胶囊输入栏 */}
       <div
         className={`relative flex min-h-0 w-full flex-1 flex-col overflow-hidden${dragOver ? ' ring-2 ring-inset ring-(--biu-color-icon-active)' : ''}`}
@@ -1268,9 +1174,9 @@ export const ChannelStage = memo(function ChannelStage({
                       <span>{isDm ? `与 ${channel?.name ?? '成员'} 的私聊` : `# ${channel?.name ?? ''}`}</span>
                     </div>
                     <p className="max-w-md text-[13px] text-(--biu-color-text-subtle)">
-                      {agentMembers.length > 0
+                      {members.some((m) => m.memberType === 'agent')
                         ? '平常对话时群内 Agent 保持静默，输入 @Agent名称 或 @所有人 即可召唤对应 Agent 协作。'
-                        : '直接发送消息开始对话，或点击右上角成员按钮拉入空间成员与你的 Agent。'}
+                        : '直接发送消息开始对话，或在右侧悬浮面板拉入空间成员与你的 Agent。'}
                     </p>
                   </div>
                 ) : null}
@@ -1817,9 +1723,10 @@ export const ChannelStage = memo(function ChannelStage({
           </div>
         </div>
 
-        {/* 聊天窗内部右侧悬浮边栏：收起为极简头像轨，悬停展开成员与快捷入口，支持图钉置顶固定 */}
-        {members.length > 0 ? (
+        {/* 聊天窗内部右侧悬浮控制面板：收起为等大头像轨，原地承载 成员 / 搜索 / 置顶 / 收藏 / 总结 / 管理 / 名片（零中心弹窗） */}
+        {members.length > 0 || floatingTab !== null ? (
           <ChannelFloatingSidebar
+            channelId={channelId}
             channel={channel}
             isDm={isDm}
             members={members}
@@ -1827,6 +1734,11 @@ export const ChannelStage = memo(function ChannelStage({
             myAccountId={myAccountId}
             canManageMembers={Boolean(detail?.canManageMembers)}
             pinnedMessageCount={mainMessages.filter((m) => m.pinnedAt && !m.deletedAt).length}
+            useSessionView={useSessionView}
+            activeTab={floatingTab}
+            onChangeTab={setFloatingTab}
+            inspectedAgentCard={agentCard}
+            onCloseAgentCard={() => setAgentCard(null)}
             resolveAvatar={resolveAvatar}
             isOnline={isOnline}
             onMention={(mention) => composerRef.current?.insertMention(mention)}
@@ -1836,11 +1748,57 @@ export const ChannelStage = memo(function ChannelStage({
                 .then((res) => navigate(channelAppPath(res.channel.id)))
                 .catch((err) => setError(err instanceof Error ? err.message : String(err)))
             }}
-            onOpenManageMembers={() => setMembersModalOpen(true)}
-            onOpenPins={openPinsModal}
-            onOpenSaved={openSavedModal}
-            onSummarize={() => handleSummarize(false)}
-            onToggleSearch={() => setSearchOpen((v) => !v)}
+            onLeftChannel={() => {
+              setFloatingTab(null)
+              navigate('/')
+            }}
+            searchQuery={searchQuery}
+            onSearchQueryChange={setSearchQuery}
+            searchSenderId={searchSenderId}
+            onSearchSenderChange={setSearchSenderId}
+            searchHits={searchHits}
+            searching={searching}
+            onJumpToMessage={(msgId) => {
+              if (activeThreadRootId) closeThread()
+              void jumpToMessage(msgId)
+            }}
+            pinnedMessages={pinnedMessages}
+            onOpenPins={openPinsPanel}
+            onUnpinMessage={(msgId) => {
+              void toggleChannelPinMessage(channelId, msgId).then(() =>
+                setPinnedMessages((prev) => prev.filter((x) => x.id !== msgId)),
+              )
+            }}
+            savedMessages={savedMessages}
+            onOpenSaved={openSavedPanel}
+            onJumpToSavedMessage={(item) => {
+              if (item.channelId === channelId) {
+                if (activeThreadRootId) closeThread()
+                void jumpToMessage(item.message.id)
+              } else {
+                navigate(`${channelAppPath(item.channelId)}?msg=${encodeURIComponent(item.message.id)}`)
+              }
+            }}
+            onUnsaveMessage={(item) => {
+              void toggleChannelSaveMessage(item.channelId, item.message.id).then(() =>
+                setSavedMessages((prev) => prev.filter((x) => x.message.id !== item.message.id)),
+              )
+            }}
+            summaryState={summaryState}
+            onSummarize={(unreadOnly) => handleSummarize(Boolean(unreadOnly))}
+            onSaveSummaryAsPage={() => {
+              const title = `${channel?.name || '聊天'} · ${summaryState.scopeLabel}总结`
+              void saveChannelContentAsPage(title, summaryState.summary)
+                .then((created) => {
+                  setSavedPageNotice(created)
+                })
+                .catch((err) =>
+                  setSummaryState((prev) => ({
+                    ...prev,
+                    error: err instanceof Error ? err.message : String(err),
+                  })),
+                )
+            }}
             onToggleChannelPinned={() => {
               void updateChannelPreferences(channelId, { pinned: !channel?.pinned }).catch((err) =>
                 setError(err instanceof Error ? err.message : String(err)),
@@ -2002,104 +1960,6 @@ export const ChannelStage = memo(function ChannelStage({
           })()
         : null}
 
-      {/* AI 聊天要点总结弹窗 */}
-      {summaryModal.open
-        ? createPortal(
-            <div
-              className="biu-float-overlay"
-              onClick={() => setSummaryModal((prev) => ({ ...prev, open: false }))}
-              data-testid="channel-summary-modal"
-            >
-              <div
-                className="biu-float scfg-float !w-[min(560px,calc(100vw-32px))]"
-                role="dialog"
-                aria-modal="true"
-                aria-label="AI 聊天要点总结"
-                onClick={(e) => e.stopPropagation()}
-              >
-                <div className="biu-float-head scfg-head">
-                  <div className="flex items-center gap-2">
-                    <SparklesIcon className="size-4 text-(--biu-color-icon-active)" />
-                    <h2 className="biu-float-title scfg-title">
-                      聊天要点总结 · {summaryModal.scopeLabel}
-                      {summaryModal.messageCount > 0 ? `（${summaryModal.messageCount} 条）` : ''}
-                    </h2>
-                  </div>
-                  <button
-                    type="button"
-                    className="biu-float-close"
-                    aria-label="关闭"
-                    onClick={() => setSummaryModal((prev) => ({ ...prev, open: false }))}
-                  >
-                    <XMarkIcon className="size-4 shrink-0" />
-                  </button>
-                </div>
-                <div className="scfg-body space-y-3">
-                  <div className="flex items-center gap-2">
-                    <Button
-                      variant={summaryModal.scopeLabel === '近期消息' ? 'default' : 'secondary'}
-                      className="h-7 px-2.5 text-[12px]"
-                      disabled={summaryModal.loading}
-                      onClick={() => handleSummarize(false)}
-                    >
-                      总结近期消息
-                    </Button>
-                    <Button
-                      variant={summaryModal.scopeLabel === '未读消息' ? 'default' : 'secondary'}
-                      className="h-7 px-2.5 text-[12px]"
-                      disabled={summaryModal.loading}
-                      onClick={() => handleSummarize(true)}
-                    >
-                      仅总结未读
-                    </Button>
-                  </div>
-                  {summaryModal.loading ? (
-                    <div className="py-6 text-center text-[13px] text-(--biu-color-text-subtle)">正在提炼聊天要点…</div>
-                  ) : summaryModal.error ? (
-                    <div className="scfg-error">{summaryModal.error}</div>
-                  ) : (
-                    <>
-                      <div className="max-h-[52vh] overflow-y-auto rounded-[var(--biu-radius-md)] bg-(--biu-color-bg-subtle) p-3 text-[13px]">
-                        <MarkdownBody text={summaryModal.summary} />
-                      </div>
-                      <div className="flex items-center justify-end gap-2">
-                        <Button
-                          variant="secondary"
-                          className="h-8 px-3 text-[12px]"
-                          onClick={() => void navigator.clipboard?.writeText(summaryModal.summary)}
-                        >
-                          复制摘要
-                        </Button>
-                        <Button
-                          className="h-8 px-3 text-[12px]"
-                          data-testid="channel-summary-save-page"
-                          onClick={() => {
-                            const title = `${channel?.name || '聊天'} · ${summaryModal.scopeLabel}总结`
-                            void saveChannelContentAsPage(title, summaryModal.summary)
-                              .then((created) => {
-                                setSummaryModal((prev) => ({ ...prev, open: false }))
-                                setSavedPageNotice(created)
-                              })
-                              .catch((err) =>
-                                setSummaryModal((prev) => ({
-                                  ...prev,
-                                  error: err instanceof Error ? err.message : String(err),
-                                })),
-                              )
-                          }}
-                        >
-                          存为页面
-                        </Button>
-                      </div>
-                    </>
-                  )}
-                </div>
-              </div>
-            </div>,
-            document.body,
-          )
-        : null}
-
       {/* 图片大图预览 Lightbox */}
       {lightboxImage
         ? createPortal(
@@ -2140,730 +2000,6 @@ export const ChannelStage = memo(function ChannelStage({
           )
         : null}
 
-      {/* 置顶消息弹窗 */}
-      {pinsModalOpen
-        ? createPortal(
-            <div className="biu-float-overlay" onClick={() => setPinsModalOpen(false)} data-testid="channel-pins-modal">
-              <div
-                className="biu-float scfg-float !w-[min(520px,calc(100vw-32px))]"
-                role="dialog"
-                aria-modal="true"
-                aria-label="置顶消息"
-                onClick={(e) => e.stopPropagation()}
-              >
-                <div className="biu-float-head scfg-head">
-                  <h2 className="biu-float-title scfg-title">置顶消息</h2>
-                  <button type="button" className="biu-float-close" aria-label="关闭" onClick={() => setPinsModalOpen(false)}>
-                    <XMarkIcon className="size-4 shrink-0" />
-                  </button>
-                </div>
-                <div className="scfg-body">
-                  {pinnedMessages.length === 0 ? (
-                    <div className="scfg-hint">当前聊天暂无置顶消息</div>
-                  ) : (
-                    <div className="space-y-2">
-                      {pinnedMessages.map((pm) => (
-                        <div
-                          key={pm.id}
-                          className="rounded-[var(--biu-radius-md)] bg-(--biu-color-bg-subtle) p-3"
-                        >
-                          <div className="mb-1 flex items-center justify-between gap-2 text-[12px] text-(--biu-color-text-muted)">
-                            <span className="font-medium text-(--biu-color-text)">{pm.senderName}</span>
-                            <div className="flex items-center gap-2">
-                              <button
-                                type="button"
-                                className="cursor-pointer border-0 bg-transparent p-0 text-[12px] text-(--biu-color-text-muted) hover:text-(--biu-color-text) hover:underline"
-                                onClick={() => {
-                                  setPinsModalOpen(false)
-                                  void jumpToMessage(pm.id)
-                                }}
-                              >
-                                定位消息
-                              </button>
-                              <button
-                                type="button"
-                                className="cursor-pointer border-0 bg-transparent p-0 text-[12px] text-(--biu-color-danger) hover:underline"
-                                onClick={() => {
-                                  void toggleChannelPinMessage(channelId, pm.id).then(() =>
-                                    setPinnedMessages((prev) => prev.filter((x) => x.id !== pm.id)),
-                                  )
-                                }}
-                              >
-                                取消置顶
-                              </button>
-                            </div>
-                          </div>
-                          <div className="text-[13px] text-(--biu-color-text)">{pm.text || '[附件消息]'}</div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>,
-            document.body,
-          )
-        : null}
-
-      {/* 我的收藏消息弹窗 */}
-      {savedModalOpen
-        ? createPortal(
-            <div className="biu-float-overlay" onClick={() => setSavedModalOpen(false)} data-testid="channel-saved-modal">
-              <div
-                className="biu-float scfg-float !w-[min(520px,calc(100vw-32px))]"
-                role="dialog"
-                aria-modal="true"
-                aria-label="我的消息收藏"
-                onClick={(e) => e.stopPropagation()}
-              >
-                <div className="biu-float-head scfg-head">
-                  <h2 className="biu-float-title scfg-title">我的消息收藏</h2>
-                  <button type="button" className="biu-float-close" aria-label="关闭" onClick={() => setSavedModalOpen(false)}>
-                    <XMarkIcon className="size-4 shrink-0" />
-                  </button>
-                </div>
-                <div className="scfg-body">
-                  {savedMessages.length === 0 ? (
-                    <div className="scfg-hint">暂无收藏的消息</div>
-                  ) : (
-                    <div className="space-y-2">
-                      {savedMessages.map((item) => (
-                        <div
-                          key={item.message.id}
-                          className="rounded-[var(--biu-radius-md)] bg-(--biu-color-bg-subtle) p-3"
-                        >
-                          <div className="mb-1 flex items-center justify-between gap-2 text-[12px] text-(--biu-color-text-muted)">
-                            <span>
-                              <span className="font-medium text-(--biu-color-text)">{item.message.senderName}</span>
-                              <span className="ml-1.5">· #{item.channelName}</span>
-                            </span>
-                            <div className="flex items-center gap-2">
-                              <button
-                                type="button"
-                                className="cursor-pointer border-0 bg-transparent p-0 text-[12px] text-(--biu-color-text-muted) hover:text-(--biu-color-text) hover:underline"
-                                onClick={() => {
-                                  setSavedModalOpen(false)
-                                  if (item.channelId === channelId) {
-                                    void jumpToMessage(item.message.id)
-                                  } else {
-                                    navigate(`${channelAppPath(item.channelId)}?msg=${encodeURIComponent(item.message.id)}`)
-                                  }
-                                }}
-                              >
-                                前往查看
-                              </button>
-                              <button
-                                type="button"
-                                className="cursor-pointer border-0 bg-transparent p-0 text-[12px] text-(--biu-color-danger) hover:underline"
-                                onClick={() => {
-                                  void toggleChannelSaveMessage(item.channelId, item.message.id).then(() =>
-                                    setSavedMessages((prev) => prev.filter((x) => x.message.id !== item.message.id)),
-                                  )
-                                }}
-                              >
-                                移出收藏
-                              </button>
-                            </div>
-                          </div>
-                          <div className="text-[13px] text-(--biu-color-text)">{item.message.text || '[附件消息]'}</div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>,
-            document.body,
-          )
-        : null}
-
-      {/* 群成员与 Agent 管理弹窗：统一使用 .biu-float-overlay + .biu-float.scfg-float */}
-      {membersModalOpen && detail ? (
-        <ChannelMembersModal
-          channelId={channelId}
-          channel={detail.channel}
-          members={members}
-          myAccountId={detail.myAccountId}
-          canManageMembers={detail.canManageMembers}
-          useSessionView={useSessionView}
-          resolveAvatar={resolveAvatar}
-          onLeft={() => {
-            setMembersModalOpen(false)
-            navigate('/')
-          }}
-          onClose={() => setMembersModalOpen(false)}
-        />
-      ) : null}
-
-      {/* 他人 Agent 只读名片弹窗：统一使用 .biu-float-overlay + .biu-float.scfg-float */}
-      {agentCard
-        ? createPortal(
-            <div
-              className="biu-float-overlay"
-              onClick={() => setAgentCard(null)}
-              data-testid="channel-agent-card"
-            >
-              <div
-                className="biu-float scfg-float !w-[min(420px,calc(100vw-32px))]"
-                role="dialog"
-                aria-modal="true"
-                aria-label="Agent 名片"
-                onClick={(e) => e.stopPropagation()}
-              >
-                <div className="biu-float-head scfg-head">
-                  <div className="flex min-w-0 items-center gap-2.5">
-                    <SidebarMascot
-                      size={24}
-                      sessionId={agentCard.memberId}
-                      identity={resolveSessionMascot(agentCard.memberId, agentCard.mascot)}
-                      animate={false}
-                      title=""
-                    />
-                    <h2 className="biu-float-title scfg-title truncate">{agentCard.name}</h2>
-                  </div>
-                  <button
-                    type="button"
-                    className="biu-float-close"
-                    title="关闭"
-                    aria-label="关闭"
-                    onClick={() => setAgentCard(null)}
-                  >
-                    <XMarkIcon className="size-4 shrink-0" />
-                  </button>
-                </div>
-
-                <div className="scfg-body">
-                  <div className="scfg-sections">
-                    <div className="scfg-section">
-                      <div className="scfg-hint">
-                        归属人：{agentCard.ownerName || '其他成员'}
-                        {agentCard.model ? ` · ${agentCard.model}` : ''}
-                      </div>
-                      {agentCard.systemPrompt ? (
-                        <div className="rounded-[var(--biu-radius-md)] bg-(--biu-color-bg-subtle) p-3 text-[12.5px] leading-relaxed text-(--biu-color-text-muted)">
-                          {agentCard.systemPrompt}
-                        </div>
-                      ) : null}
-                      <p className="scfg-hint m-0">
-                        这是他人归属的 Agent：你可以在当前群聊中 @{agentCard.name} 协同工作（数据权限自动取双人交集并屏蔽私人数据），但无法进入或查看它与归属人的 1v1 私聊记录。
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>,
-            document.body,
-          )
-        : null}
     </div>
   )
 })
-
-function ChannelMembersModal({
-  channelId,
-  channel,
-  members,
-  myAccountId,
-  canManageMembers,
-  useSessionView,
-  resolveAvatar,
-  onLeft,
-  onClose,
-}: {
-  channelId: string
-  channel: ChannelSummary
-  members: ChannelMemberView[]
-  myAccountId: string
-  canManageMembers: boolean
-  useSessionView?: ReturnType<typeof bindSessionView>
-  resolveAvatar: (accountId?: string, serverAvatar?: string) => string | undefined
-  onLeft: () => void
-  onClose: () => void
-}) {
-  const allSessions = useSessionView ? useSessionView((s) => s.sessions) : []
-  const [wsMembers, setWsMembers] = useState<Array<{ id: string; name: string; avatar?: string }>>([])
-  const [error, setError] = useState('')
-  const [syncNotice, setSyncNotice] = useState('')
-  const [busyAgentId, setBusyAgentId] = useState<string | null>(null)
-  const [savingPref, setSavingPref] = useState(false)
-  const [confirmDisband, setConfirmDisband] = useState(false)
-  const [disbanding, setDisbanding] = useState(false)
-  const [addMemberOpen, setAddMemberOpen] = useState(false)
-  const [memberSearch, setMemberSearch] = useState('')
-  const [addAgentOpen, setAddAgentOpen] = useState(false)
-  const [agentSearch, setAgentSearch] = useState('')
-  const isDm = channel.kind === 'dm'
-  const canLeaveGroup = !isDm && channel.createdBy !== myAccountId && myAccountId !== 'local'
-  const canDisbandGroup = !isDm && canManageMembers
-
-  useEffect(() => {
-    const params = new URLSearchParams({ path: '/workspace-members', limit: '200', columns: 'title,email,avatar' })
-    void apiFetch(`/api/db/list?${params.toString()}`)
-      .then((r) => (r.ok ? r.json() : null))
-      .then((body) => {
-        const rows = Array.isArray((body as { items?: unknown[] } | null)?.items)
-          ? ((body as { items: Array<Record<string, unknown>> }).items)
-          : []
-        setWsMembers(
-          rows
-            .map((r) => ({
-              id: String(r.id ?? '').trim(),
-              name: String(r.title ?? r.email ?? r.id ?? '').trim(),
-              avatar: typeof r.avatar === 'string' ? r.avatar.trim() : undefined,
-            }))
-            .filter((r) => r.id),
-        )
-      })
-      .catch(() => undefined)
-  }, [])
-
-  const inHumans = new Set(members.filter((m) => m.memberType === 'account').map((m) => m.memberId))
-  const inAgents = new Set(members.filter((m) => m.memberType === 'agent').map((m) => m.memberId))
-  const addableHumans = wsMembers.filter((m) => !inHumans.has(m.id))
-  const filteredAddableHumans = useMemo(() => {
-    const q = memberSearch.trim().toLowerCase()
-    if (!q) return addableHumans
-    return addableHumans.filter((m) => m.name.toLowerCase().includes(q))
-  }, [addableHumans, memberSearch])
-  const myAddableAgents = allSessions.filter(
-    (s) => !inAgents.has(s.id) && (!myAccountId || myAccountId === 'local' || !s.createdBy || s.createdBy === myAccountId),
-  )
-  const filteredAddableAgents = useMemo(() => {
-    const q = agentSearch.trim().toLowerCase()
-    if (!q) return myAddableAgents
-    return myAddableAgents.filter((a) => a.title.toLowerCase().includes(q))
-  }, [agentSearch, myAddableAgents])
-
-  const handleAdd = async (type: 'account' | 'agent', id: string) => {
-    setError('')
-    try {
-      await addChannelMember(channelId, type, id)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err))
-    }
-  }
-
-  const handleRemove = async (type: 'account' | 'agent', id: string) => {
-    setError('')
-    try {
-      await removeChannelMember(channelId, type, id)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err))
-    }
-  }
-
-  const handleToggleContextMode = async (agentId: string, current?: ChannelAgentContextMode) => {
-    setError('')
-    setBusyAgentId(agentId)
-    try {
-      const next: ChannelAgentContextMode = current === 'isolated' ? 'summary' : 'isolated'
-      await updateChannelAgentContextMode(channelId, agentId, next)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err))
-    } finally {
-      setBusyAgentId(null)
-    }
-  }
-
-  const handleSyncAgent = async (agentId: string, agentName: string) => {
-    setError('')
-    setSyncNotice('')
-    setBusyAgentId(agentId)
-    try {
-      await syncChannelToAgent(channelId, agentId)
-      setSyncNotice(`已将近期聊天结论同步到「${agentName}」的 1v1 主工作台。`)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err))
-    } finally {
-      setBusyAgentId(null)
-    }
-  }
-
-  return createPortal(
-    <div
-      className="biu-float-overlay"
-      role="dialog"
-      aria-modal="true"
-      aria-label="管理群成员与 Agent"
-      onClick={onClose}
-    >
-      <div className="biu-float scfg-float" onClick={(e) => e.stopPropagation()}>
-        <div className="biu-float-head scfg-head">
-          <h2 className="biu-float-title scfg-title">群成员与 Agent</h2>
-          <button type="button" className="biu-float-close" title="关闭" aria-label="关闭" onClick={onClose}>
-            <XMarkIcon className="size-4 shrink-0" />
-          </button>
-        </div>
-
-        <div className="scfg-body">
-          {error ? (
-            <div className="scfg-error" role="alert">
-              {error}
-            </div>
-          ) : null}
-          {syncNotice ? (
-            <div className="mb-3 rounded-[var(--biu-radius-md)] border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-[12px] text-emerald-400">
-              {syncNotice}
-            </div>
-          ) : null}
-
-          <div className="scfg-sections">
-            {/* 聊天偏好：置顶、免打扰、退出聊天 */}
-            <div className="scfg-section">
-              <div className="scfg-tools-head">
-                <span className="scfg-label">聊天偏好</span>
-              </div>
-              <div className="flex flex-wrap items-center gap-2">
-                <Button
-                  variant={channel.pinned ? 'default' : 'secondary'}
-                  className="h-7 px-2.5 text-[12px]"
-                  disabled={savingPref}
-                  data-testid="channel-pref-pin"
-                  onClick={() => {
-                    setSavingPref(true)
-                    setError('')
-                    void updateChannelPreferences(channelId, { pinned: !channel.pinned })
-                      .catch((err) => setError(err instanceof Error ? err.message : String(err)))
-                      .finally(() => setSavingPref(false))
-                  }}
-                >
-                  <BookmarkIcon className="size-3.5" />
-                  <span>{channel.pinned ? '已置顶聊天' : '置顶聊天'}</span>
-                </Button>
-                <Button
-                  variant={channel.muted ? 'default' : 'secondary'}
-                  className="h-7 px-2.5 text-[12px]"
-                  disabled={savingPref}
-                  data-testid="channel-pref-mute"
-                  onClick={() => {
-                    setSavingPref(true)
-                    setError('')
-                    void updateChannelPreferences(channelId, { muted: !channel.muted })
-                      .catch((err) => setError(err instanceof Error ? err.message : String(err)))
-                      .finally(() => setSavingPref(false))
-                  }}
-                >
-                  {channel.muted ? <BellSlashIcon className="size-3.5" /> : <BellIcon className="size-3.5" />}
-                  <span>{channel.muted ? '已免打扰' : '消息免打扰'}</span>
-                </Button>
-                {canLeaveGroup ? (
-                  <Button
-                    variant="destructive"
-                    className="ml-auto h-7 px-2.5 text-[12px]"
-                    disabled={savingPref}
-                    data-testid="channel-leave-btn"
-                    onClick={() => {
-                      setSavingPref(true)
-                      setError('')
-                      void leaveChannel(channelId)
-                        .then(() => onLeft())
-                        .catch((err) => setError(err instanceof Error ? err.message : String(err)))
-                        .finally(() => setSavingPref(false))
-                    }}
-                  >
-                    <ArrowRightStartOnRectangleIcon className="size-3.5" />
-                    <span>退出聊天</span>
-                  </Button>
-                ) : null}
-              </div>
-            </div>
-
-            {/* 当前在群 Agent */}
-            <div className="scfg-section">
-              <div className="scfg-tools-head">
-                <span className="scfg-label">群内 Agent</span>
-                <div className="flex items-center gap-2">
-                  <span className="scfg-hint">{members.filter((m) => m.memberType === 'agent').length} 个</span>
-                  <button
-                    type="button"
-                    data-testid="channel-open-add-agent"
-                    className={`inline-flex h-6 cursor-pointer items-center gap-1 rounded-md border-0 px-2 text-[11.5px] font-medium transition-colors ${
-                      addAgentOpen
-                        ? 'bg-(--biu-color-bg-muted) text-(--biu-color-text)'
-                        : 'bg-transparent text-(--biu-color-text-muted) hover:bg-(--biu-color-bg-hover) hover:text-(--biu-color-text)'
-                    }`}
-                    onClick={() => setAddAgentOpen((v) => !v)}
-                  >
-                    <UserPlusIcon className="size-3.5 shrink-0" />
-                    <span>{addAgentOpen ? '收起' : '添加 Agent'}</span>
-                  </button>
-                </div>
-              </div>
-              {addAgentOpen ? (
-                <div
-                  className="mb-2 flex flex-col gap-2 rounded-lg bg-(--biu-color-bg-subtle) p-2.5"
-                  data-testid="channel-add-agent-panel"
-                >
-                  {myAddableAgents.length > 0 ? (
-                    <>
-                      <input
-                        type="text"
-                        value={agentSearch}
-                        onChange={(e) => setAgentSearch(e.target.value)}
-                        placeholder="搜索我创建的 Agent…"
-                        data-testid="channel-add-agent-search"
-                        className="h-7 w-full rounded-md border-0 bg-(--biu-color-bg-muted) px-2.5 text-[12px] text-(--biu-color-text) outline-none placeholder:text-(--biu-color-text-subtle)"
-                      />
-                      {filteredAddableAgents.length > 0 ? (
-                        <div className="flex flex-wrap gap-1.5">
-                          {filteredAddableAgents.slice(0, 20).map((a) => (
-                            <Button
-                              key={a.id}
-                              variant="secondary"
-                              className="h-7 px-2.5 text-[12px]"
-                              data-testid={`channel-add-agent-${a.id}`}
-                              onClick={() => void handleAdd('agent', a.id)}
-                            >
-                              <SidebarMascot
-                                size={15}
-                                sessionId={a.id}
-                                identity={resolveSessionMascot(a.id, a.mascot)}
-                                animate={false}
-                                title=""
-                              />
-                              <span>{a.title}</span>
-                            </Button>
-                          ))}
-                        </div>
-                      ) : (
-                        <div className="text-[11.5px] text-(--biu-color-text-subtle)">未找到匹配的 Agent</div>
-                      )}
-                    </>
-                  ) : (
-                    <div className="text-[11.5px] leading-relaxed text-(--biu-color-text-subtle)">
-                      你创建的 Agent 已全部在该聊天中（他人的 Agent 需由归属人本人拉入）。
-                    </div>
-                  )}
-                </div>
-              ) : null}
-              {members.filter((m) => m.memberType === 'agent').length === 0 ? (
-                <div className="scfg-hint">暂无 Agent 入群</div>
-              ) : (
-                <ul className="scfg-tools-list">
-                  {members
-                    .filter((m) => m.memberType === 'agent')
-                    .map((a) => {
-                      const mode: ChannelAgentContextMode = a.contextMode === 'isolated' ? 'isolated' : 'summary'
-                      const isBusy = busyAgentId === a.memberId
-                      return (
-                        <li key={a.memberId} className="scfg-tool-row is-active flex-wrap gap-y-1.5">
-                          <SidebarMascot
-                            size={18}
-                            sessionId={a.memberId}
-                            identity={resolveSessionMascot(a.memberId, a.mascot)}
-                            animate={false}
-                            title=""
-                          />
-                          <span className="scfg-tool-name !font-sans font-medium">{a.name}</span>
-                          <span className="scfg-hint shrink-0">归属 {a.ownerName}</span>
-                          {a.isOwn ? (
-                            <>
-                              <button
-                                type="button"
-                                disabled={isBusy}
-                                data-testid={`agent-context-mode-${a.memberId}`}
-                                className="cursor-pointer rounded-md border border-(--biu-color-border) bg-(--biu-color-bg-subtle) px-1.5 py-0.5 text-[11px] text-(--biu-color-text-muted) hover:bg-(--biu-color-bg-hover) hover:text-(--biu-color-text) disabled:opacity-50"
-                                title={
-                                  mode === 'summary'
-                                    ? '当前：单向只读投影项目与 1v1 工作摘要（点击切换为仅群聊隔离）'
-                                    : '当前：仅群聊隔离（点击切换为同步工作摘要）'
-                                }
-                                onClick={() => void handleToggleContextMode(a.memberId, mode)}
-                              >
-                                {mode === 'summary' ? '同步工作摘要' : '仅群聊隔离'}
-                              </button>
-                              <button
-                                type="button"
-                                disabled={isBusy}
-                                data-testid={`agent-sync-channel-${a.memberId}`}
-                                className="cursor-pointer border-0 bg-transparent p-0 text-[11.5px] text-(--biu-color-text-muted) hover:text-(--biu-color-text) hover:underline disabled:opacity-50"
-                                title="将当前聊天近期结论手动同步回该代理的 1v1 主工作台"
-                                onClick={() => void handleSyncAgent(a.memberId, a.name)}
-                              >
-                                沉淀到 1v1
-                              </button>
-                            </>
-                          ) : (
-                            <span className="rounded bg-(--biu-color-bg-muted) px-1.5 py-0.5 text-[11px] text-(--biu-color-text-subtle)">
-                              {mode === 'summary' ? '同步摘要' : '仅群聊'}
-                            </span>
-                          )}
-                          {a.isOwn || canManageMembers ? (
-                            <button
-                              type="button"
-                              className="ml-1 cursor-pointer border-0 bg-transparent p-0 text-[12px] text-(--biu-color-danger) hover:underline"
-                              onClick={() => void handleRemove('agent', a.memberId)}
-                            >
-                              移出
-                            </button>
-                          ) : null}
-                        </li>
-                      )
-                    })}
-                </ul>
-              )}
-            </div>
-
-            {/* 当前在群人类成员 */}
-            <div className="scfg-section">
-              <div className="scfg-tools-head">
-                <span className="scfg-label">成员</span>
-                <div className="flex items-center gap-2">
-                  <span className="scfg-hint">{members.filter((m) => m.memberType === 'account').length} 人</span>
-                  {!isDm ? (
-                    <button
-                      type="button"
-                      data-testid="channel-open-add-member"
-                      className={`inline-flex h-6 cursor-pointer items-center gap-1 rounded-md border-0 px-2 text-[11.5px] font-medium transition-colors ${
-                        addMemberOpen
-                          ? 'bg-(--biu-color-bg-muted) text-(--biu-color-text)'
-                          : 'bg-transparent text-(--biu-color-text-muted) hover:bg-(--biu-color-bg-hover) hover:text-(--biu-color-text)'
-                      }`}
-                      onClick={() => setAddMemberOpen((v) => !v)}
-                    >
-                      <UserPlusIcon className="size-3.5 shrink-0" />
-                      <span>{addMemberOpen ? '收起' : '添加成员'}</span>
-                    </button>
-                  ) : null}
-                </div>
-              </div>
-              {!isDm && addMemberOpen ? (
-                <div
-                  className="mb-2 flex flex-col gap-2 rounded-lg bg-(--biu-color-bg-subtle) p-2.5"
-                  data-testid="channel-add-member-panel"
-                >
-                  {addableHumans.length > 0 ? (
-                    <>
-                      <input
-                        type="text"
-                        value={memberSearch}
-                        onChange={(e) => setMemberSearch(e.target.value)}
-                        placeholder="搜索空间成员…"
-                        data-testid="channel-add-member-search"
-                        className="h-7 w-full rounded-md border-0 bg-(--biu-color-bg-muted) px-2.5 text-[12px] text-(--biu-color-text) outline-none placeholder:text-(--biu-color-text-subtle)"
-                      />
-                      {filteredAddableHumans.length > 0 ? (
-                        <div className="flex flex-wrap gap-1.5">
-                          {filteredAddableHumans.map((h) => (
-                            <Button
-                              key={h.id}
-                              variant="secondary"
-                              className="h-7 px-2.5 text-[12px]"
-                              data-testid={`channel-add-member-${h.id}`}
-                              onClick={() => void handleAdd('account', h.id)}
-                            >
-                              <MemberAvatar avatar={resolveAvatar(h.id, h.avatar)} seed={h.id} size={15} />
-                              <span>{h.name}</span>
-                            </Button>
-                          ))}
-                        </div>
-                      ) : (
-                        <div className="text-[11.5px] text-(--biu-color-text-subtle)">未找到匹配的空间成员</div>
-                      )}
-                    </>
-                  ) : (
-                    <div className="text-[11.5px] leading-relaxed text-(--biu-color-text-subtle)">
-                      当前空间的全部成员均已在该聊天中。
-                    </div>
-                  )}
-                </div>
-              ) : null}
-              <ul className="scfg-tools-list">
-                {members
-                  .filter((m) => m.memberType === 'account')
-                  .map((h) => (
-                    <li key={h.memberId} className="scfg-tool-row is-active">
-                      <MemberAvatar
-                        avatar={resolveAvatar(h.memberId, h.avatar)}
-                        seed={h.memberId}
-                        size={18}
-                      />
-                      <span className="scfg-tool-name !font-sans font-medium">{h.name}</span>
-                      {h.role === 'owner' ? <span className="scfg-hint shrink-0">群主</span> : null}
-                      {canManageMembers && h.role !== 'owner' ? (
-                        <button
-                          type="button"
-                          className="ml-2 cursor-pointer border-0 bg-transparent p-0 text-[12px] text-(--biu-color-danger) hover:underline"
-                          onClick={() => void handleRemove('account', h.memberId)}
-                        >
-                          移除
-                        </button>
-                      ) : null}
-                    </li>
-                  ))}
-              </ul>
-              {isDm ? (
-                <div className="mt-1 text-[11.5px] text-(--biu-color-text-subtle)">
-                  1v1 私聊不支持添加第 3 位成员，如需多人协作请新建群聊。
-                </div>
-              ) : null}
-            </div>
-
-            {/* 危险操作区：仅群主/管理员可二次确认解散群聊 */}
-            {canDisbandGroup ? (
-              <div className="scfg-section border-t border-(--biu-color-border) pt-3">
-                {!confirmDisband ? (
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="min-w-0">
-                      <div className="text-[12.5px] font-medium text-(--biu-color-text)">解散并删除聊天</div>
-                      <div className="text-[11.5px] text-(--biu-color-text-subtle)">
-                        将永久清空全员消息与讨论串，不可恢复
-                      </div>
-                    </div>
-                    <Button
-                      variant="destructive"
-                      className="h-7 shrink-0 px-2.5 text-[12px]"
-                      data-testid="channel-disband-btn"
-                      onClick={() => setConfirmDisband(true)}
-                    >
-                      <TrashIcon className="size-3.5" />
-                      <span>解散聊天</span>
-                    </Button>
-                  </div>
-                ) : (
-                  <div
-                    className="flex flex-col gap-2 rounded-lg bg-(--biu-color-danger)/10 px-3 py-2.5"
-                    data-testid="channel-disband-confirm-box"
-                  >
-                    <div className="text-[12px] leading-relaxed text-(--biu-color-text)">
-                      确认解散「{channel.name}」吗？解散后该聊天的所有消息、附件与讨论串将被永久清空，所有成员均无法再查看。
-                    </div>
-                    <div className="flex items-center justify-end gap-2">
-                      <Button
-                        variant="secondary"
-                        className="h-7 px-2.5 text-[12px]"
-                        disabled={disbanding}
-                        onClick={() => setConfirmDisband(false)}
-                      >
-                        取消
-                      </Button>
-                      <Button
-                        variant="destructive"
-                        className="h-7 px-2.5 text-[12px]"
-                        disabled={disbanding}
-                        data-testid="channel-disband-confirm-btn"
-                        onClick={() => {
-                          setDisbanding(true)
-                          setError('')
-                          void deleteChannel(channelId)
-                            .then(() => onLeft())
-                            .catch((err) => {
-                              setError(err instanceof Error ? err.message : String(err))
-                              setDisbanding(false)
-                            })
-                        }}
-                      >
-                        {disbanding ? '解散中…' : '确认解散'}
-                      </Button>
-                    </div>
-                  </div>
-                )}
-              </div>
-            ) : null}
-          </div>
-        </div>
-      </div>
-    </div>,
-    document.body,
-  )
-}

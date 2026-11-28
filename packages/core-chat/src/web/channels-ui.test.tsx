@@ -421,13 +421,15 @@ test('ChannelStage reuses 1v1 chat card/composer/float styles and syncs workspac
     assert.equal(Boolean(viaBadge?.textContent?.includes('赤板灵')), true)
   })
 
-  // 打开「群成员与 Agent」弹窗：必须使用统一 .biu-float-overlay / .scfg-float 且头像一致
-  fireEvent.click(view.getByTestId('channel-manage-members'))
-  const modal = document.querySelector('.biu-float-overlay .biu-float.scfg-float')
-  assert.ok(modal, 'members modal must reuse unified .biu-float.scfg-float dialog style')
-  const modalImgs = [...modal.querySelectorAll('img')].map((el) => el.getAttribute('src'))
-  assert.ok(modalImgs.includes(aliceAvatar))
-  assert.ok(modalImgs.includes(bobAvatar))
+  // 顶栏不再显示「2 人 · 1 Agent」计数按钮；所有成员与设置统一原地开在右侧悬浮面板（不再弹中心遮罩弹窗）且头像一致
+  assert.equal(view.container.querySelector('.chat-view-header')?.textContent?.includes('2 人'), false)
+  fireEvent.click(view.getByTestId('channel-more-menu-btn'))
+  fireEvent.click(await waitFor(() => view.getByTestId('channel-manage-members')))
+  const panel = await waitFor(() => view.getByTestId('channel-manage-panel'))
+  assert.equal(document.querySelector('.biu-float-overlay'), null, 'manage view must stay in-place in right floating panel with no modal overlay')
+  const panelImgs = [...panel.querySelectorAll('img')].map((el) => el.getAttribute('src'))
+  assert.ok(panelImgs.includes(aliceAvatar))
+  assert.ok(panelImgs.includes(bobAvatar))
 })
 
 test('membersChrome Icon renders workspace avatar with green dot for online members and no dot when offline', () => {
@@ -643,7 +645,8 @@ test('ChannelStage allows agent owner to toggle contextMode and manually sync co
   })
 
   // 打开群成员与 Agent 弹窗并切换只读上下文模式
-  fireEvent.click(view.getByTestId('channel-manage-members'))
+  fireEvent.click(view.getByTestId('channel-more-menu-btn'))
+  fireEvent.click(await waitFor(() => view.getByTestId('channel-manage-members')))
   const toggleBtn = await waitFor(() => view.getByTestId('agent-context-mode-ag-mine'))
   assert.equal(toggleBtn.textContent, '同步工作摘要')
   fireEvent.click(toggleBtn)
@@ -1063,7 +1066,8 @@ test('ChannelStage supports emoji reactions, pin/save, in-channel search, and ch
   await waitFor(() => assert.ok(stage.getByTestId('channel-search-hit-m-1')))
 
   // 4. 偏好设置（置顶聊天）与非群主可见退群按钮
-  fireEvent.click(stage.getByTestId('channel-manage-members'))
+  fireEvent.click(stage.getByTestId('channel-more-menu-btn'))
+  fireEvent.click(await waitFor(() => stage.getByTestId('channel-manage-members')))
   await waitFor(() => assert.ok(stage.getByTestId('channel-leave-btn')))
   fireEvent.click(stage.getByTestId('channel-pref-pin'))
   await waitFor(() => {
@@ -1558,7 +1562,8 @@ test('sidebar uses hide/leave/unfollow menus, breadcrumb toggles thread follow, 
   })
 
   // 3. 群成员弹窗常驻「添加成员 / 添加 Agent」入口（无候选人时展示明确提示而非隐身），群主解散需二次确认
-  fireEvent.click(view.getByTestId('channel-manage-members'))
+  fireEvent.click(view.getByTestId('channel-more-menu-btn'))
+  fireEvent.click(await waitFor(() => view.getByTestId('channel-manage-members')))
   fireEvent.click(await waitFor(() => view.getByTestId('channel-open-add-member')))
   assert.ok(await waitFor(() => view.getByTestId('channel-add-member-panel').textContent?.includes('全部成员均已在该聊天中')))
   fireEvent.click(view.getByTestId('channel-open-add-agent'))
