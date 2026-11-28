@@ -1,6 +1,7 @@
 import { apiFetch } from '@biu/biu-ui/api-client'
 import { registerWorkspaceCache } from '@biu/biu-ui/cache'
-import { registerShellDataBridge, type ShellDatabaseUi } from '@biu/web-app-shell/data-bridge'
+import { registerShellDataBridge, type ShellDatabaseUi, type ShellShareButtonProps } from '@biu/web-app-shell/data-bridge'
+import { ShareButton } from './share-popover.tsx'
 import { getPagePrefs, getWorkspaceProfile, hydratePagePrefs, resetWorkspaceProfileGet, subscribePageWidth } from './page-width.ts'
 import { overlayDataRoute } from './main-data-route.ts'
 import { loadTags } from './tag-catalog.ts'
@@ -55,6 +56,7 @@ registerShellDataBridge({
   getDatabaseUi: () => (getDatabaseUi() as unknown as ShellDatabaseUi) ?? null,
   loadTags,
   LayoutPrefsMenu: LayoutPrefsMenu as unknown as ComponentType<Record<string, unknown>>,
+  ShareButton: ShareButton as unknown as ComponentType<ShellShareButtonProps>,
   getInspectorDbPath,
   isInspectorPaneAbandoned,
   restoreInspectorDbPaths,

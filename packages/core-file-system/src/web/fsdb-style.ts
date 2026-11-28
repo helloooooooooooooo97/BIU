@@ -9,7 +9,7 @@ const CSS = `
 .fsdb-page{display:flex;min-width:0;min-height:0;flex:1;flex-direction:row;overflow:hidden;background:var(--biu-color-bg);color:var(--biu-color-text);font-family:ui-sans-serif,-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,sans-serif,"Apple Color Emoji","Segoe UI Emoji";font-size:var(--biu-font-size-4);letter-spacing:-.011em}
 .fsdb-right{display:flex;min-width:0;min-height:0;flex:1;flex-direction:column;overflow:hidden}
 .fsdb-right .chat-view-header{flex:none}
-.fsdb-right .chat-view-header:has(.fsdb-share-panel),.chat-view-header:has(.fsdb-layout-menu){z-index:var(--biu-z-dropdown)}
+.chat-view-header:has(.fsdb-share-panel),.fsdb-right .chat-view-header:has(.fsdb-share-panel),.chat-view-header:has(.fsdb-layout-menu){z-index:var(--biu-z-dropdown)}
 .fsdb-crumbs{display:flex;min-width:0;align-items:center;gap:0}
 .fsdb-crumbs.is-leaf-only .fsdb-crumb:not(:last-child){display:none}
 .fsdb-crumb{display:inline-flex;min-width:0;align-items:center;gap:0}

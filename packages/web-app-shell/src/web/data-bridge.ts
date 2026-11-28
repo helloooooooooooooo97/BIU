@@ -1,4 +1,4 @@
-import { createElement, type ComponentType, type ReactNode } from 'react'
+import { createElement, useSyncExternalStore, type ComponentType, type ReactNode } from 'react'
 import { apiFetch } from '@biu/biu-ui/api-client'
 import { registerWorkspaceCache } from '@biu/biu-ui/cache'
 import type { CollectionActionInfo, CollectionSchemaPack, DbRecord } from '@biu/type-file-system'
@@ -35,6 +35,19 @@ export interface ShellDatabaseUi {
   [key: string]: unknown
 }
 
+export interface ShellShareTarget {
+  kind: 'record'
+  collection: string
+  recordId: string
+  title: string
+}
+
+export interface ShellShareButtonProps {
+  target: ShellShareTarget | null
+  buttonClassName?: string
+  localOnly?: boolean
+}
+
 export interface ShellDataBridge {
   hydratePagePrefs: () => Promise<unknown>
   getPagePrefs: () => ShellPagePrefs
@@ -45,6 +58,7 @@ export interface ShellDataBridge {
   getDatabaseUi: () => ShellDatabaseUi | null
   loadTags: (collectionPath?: string) => CollectionSchemaPack[]
   LayoutPrefsMenu: ComponentType<Record<string, unknown>>
+  ShareButton: ComponentType<ShellShareButtonProps>
   getInspectorDbPath: (paneId?: string) => string | undefined
   isInspectorPaneAbandoned: (paneId: string) => boolean
   restoreInspectorDbPaths: (paths?: Record<string, string>) => void
@@ -94,6 +108,7 @@ const bridge: ShellDataBridge = {
   getDatabaseUi: () => null,
   loadTags: () => EMPTY_TAGS,
   LayoutPrefsMenu: EmptyComponent,
+  ShareButton: () => null,
   getInspectorDbPath: () => undefined,
   isInspectorPaneAbandoned: () => false,
   restoreInspectorDbPaths: () => undefined,
@@ -114,9 +129,24 @@ const pageWidthSubs = new Map<() => void, (() => void) | null>()
 let dbPathSubBound = false
 let paneMenuSubBound = false
 let pageWidthSubBound = false
+let bridgeVersion = 0
+const bridgeSubs = new Set<() => void>()
+
+function subscribeBridge(fn: () => void) {
+  bridgeSubs.add(fn)
+  return () => {
+    bridgeSubs.delete(fn)
+  }
+}
+
+function getBridgeVersion() {
+  return bridgeVersion
+}
 
 export function registerShellDataBridge(partial: Partial<ShellDataBridge>) {
   Object.assign(bridge, partial)
+  bridgeVersion += 1
+  for (const fn of bridgeSubs) fn()
   if (partial.restoreInspectorDbPaths) {
     inspectorDbPathsBound = true
     if (pendingInspectorDbPaths !== null) {
@@ -165,7 +195,12 @@ export const overlayDataRoute: ShellDataBridge['overlayDataRoute'] = () => bridg
 export const getDatabaseUi: ShellDataBridge['getDatabaseUi'] = () => bridge.getDatabaseUi()
 export const loadTags: ShellDataBridge['loadTags'] = (collectionPath) => bridge.loadTags(collectionPath)
 export function LayoutPrefsMenu(props: Record<string, unknown>) {
+  useSyncExternalStore(subscribeBridge, getBridgeVersion, getBridgeVersion)
   return createElement(bridge.LayoutPrefsMenu, props)
+}
+export function ShareButton(props: ShellShareButtonProps) {
+  useSyncExternalStore(subscribeBridge, getBridgeVersion, getBridgeVersion)
+  return createElement(bridge.ShareButton, props)
 }
 export const getInspectorDbPath: ShellDataBridge['getInspectorDbPath'] = (paneId) =>
   !inspectorDbPathsBound && pendingInspectorDbPaths ? pendingInspectorDbPaths[paneId] : bridge.getInspectorDbPath(paneId)

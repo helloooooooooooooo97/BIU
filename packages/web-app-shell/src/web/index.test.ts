@@ -358,3 +358,12 @@ test('settings nav omits routes, events, and about', () => {
   assert.doesNotMatch(shell, /key: 'update'/)
   assert.doesNotMatch(shell, /ShellSettingsAbout/)
 })
+
+test('chat header renders ChatSessionShare before session config button', () => {
+  const shell = readFileSync(resolve(import.meta.dirname, './index.tsx'), 'utf8')
+  const titleSrc = readFileSync(resolve(import.meta.dirname, './chat-session-title.tsx'), 'utf8')
+  const headerRight = shell.slice(shell.indexOf('const chatHeader = ('), shell.indexOf('const overlayHeader = ('))
+  assert.match(headerRight, /<ChatSessionShare[\s\S]*data-testid="header-config-toggle"/)
+  assert.match(titleSrc, /collection:\s*'\/agents'/)
+  assert.match(titleSrc, /<ShareButton/)
+})
