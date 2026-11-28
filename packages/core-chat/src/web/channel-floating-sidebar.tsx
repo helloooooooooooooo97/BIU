@@ -12,6 +12,7 @@ import {
   Cog6ToothIcon,
   DocumentDuplicateIcon,
   HashtagIcon,
+  LockClosedIcon,
   MagnifyingGlassIcon,
   MapPinIcon,
   MegaphoneIcon,
@@ -22,6 +23,7 @@ import {
   SparklesIcon,
   StarIcon,
   TrashIcon,
+  UserGroupIcon,
   UserPlusIcon,
   XMarkIcon,
 } from '@heroicons/react/16/solid'
@@ -32,17 +34,20 @@ import { getWorkspaceEndpoint } from '@biu/biu-ui/workspace-transport'
 import { pickPreview } from '@biu/core-pick/web'
 import { SidebarMascot, resolveSessionMascot } from '@biu/public-mascot'
 import type { bindSessionView } from '@biu/web-session-view'
-import type {
-  ChannelAgentActivity,
-  ChannelAgentContextMode,
-  ChannelMemberView,
-  ChannelMention,
-  ChannelMessageView,
-  ChannelSavedMessageView,
-  ChannelSearchHit,
-  ChannelSummary,
-  ChannelWebhookView,
-  GroupChannelKind,
+import {
+  channelShareScopeLabel,
+  computeChannelShareScope,
+  type ChannelAccessMode,
+  type ChannelAgentActivity,
+  type ChannelAgentContextMode,
+  type ChannelMemberView,
+  type ChannelMention,
+  type ChannelMessageView,
+  type ChannelSavedMessageView,
+  type ChannelSearchHit,
+  type ChannelSummary,
+  type ChannelWebhookView,
+  type GroupChannelKind,
 } from '../shared/channel-types.ts'
 import {
   addChannelMember,
@@ -1455,6 +1460,78 @@ export const ChannelFloatingSidebar = memo(function ChannelFloatingSidebar({
                   {syncNotice}
                 </div>
               ) : null}
+
+              {/* 通用访问与可见范围（对齐系统 私人 / 共享 / 空间 模型，切换通用访问不清空已有成员） */}
+              {!isDm ? (() => {
+                const effectiveScope =
+                  channel.shareScope ??
+                  computeChannelShareScope(channel.accessMode, humanMembers.length || channel.memberCount, channel.kind)
+                const scopeLabel = channelShareScopeLabel(effectiveScope)
+                const canToggleAccess = Boolean(channel.canChangeAccessMode ?? canManageMembers)
+                return (
+                  <div className="space-y-1.5 rounded-[10px] bg-(--biu-color-bg-muted)/45 p-2" data-testid="channel-access-panel">
+                    <div className="flex items-center justify-between px-0.5">
+                      <span className="text-[11px] font-medium text-(--biu-color-text-subtle)">通用访问</span>
+                      <span
+                        className="inline-flex items-center gap-1 rounded-full bg-(--biu-color-bg-elevated) px-2 py-0.5 text-[10.5px] font-medium text-(--biu-color-text)"
+                        data-testid="channel-share-scope-badge"
+                      >
+                        {effectiveScope === 'personal' ? (
+                          <LockClosedIcon className="size-2.5 shrink-0" />
+                        ) : effectiveScope === 'shared' ? (
+                          <UserGroupIcon className="size-2.5 shrink-0" />
+                        ) : (
+                          <HashtagIcon className="size-2.5 shrink-0" />
+                        )}
+                        <span>可见范围：{scopeLabel}</span>
+                      </span>
+                    </div>
+                    {canToggleAccess ? (
+                      <div className="grid grid-cols-2 gap-1">
+                        {(
+                          [
+                            { id: 'private', label: '仅受邀人员', Icon: effectiveScope === 'personal' ? LockClosedIcon : UserGroupIcon },
+                            { id: 'workspace', label: '空间全员', Icon: HashtagIcon },
+                          ] as const
+                        ).map(({ id, label, Icon }) => {
+                          const active = channel.accessMode === id
+                          return (
+                            <button
+                              key={id}
+                              type="button"
+                              disabled={savingPref}
+                              data-testid={`channel-access-btn-${id}`}
+                              className={`inline-flex h-7 cursor-pointer items-center justify-center gap-1 rounded-[7px] border-0 px-2 text-[11.5px] font-medium transition-colors disabled:opacity-50 ${
+                                active
+                                  ? 'bg-(--biu-color-bg-elevated) text-(--biu-color-text) shadow-xs'
+                                  : 'bg-transparent text-(--biu-color-text-muted) hover:bg-(--biu-color-bg-popover-hover) hover:text-(--biu-color-text)'
+                              }`}
+                              onClick={() => {
+                                if (!channelId || active) return
+                                setSavingPref(true)
+                                setManageError('')
+                                void updateChannel(channelId, { accessMode: id as ChannelAccessMode })
+                                  .catch((err) => setManageError(err instanceof Error ? err.message : String(err)))
+                                  .finally(() => setSavingPref(false))
+                              }}
+                            >
+                              <Icon className="size-3 shrink-0" />
+                              <span>{label}</span>
+                            </button>
+                          )
+                        })}
+                      </div>
+                    ) : null}
+                    <div className="px-0.5 text-[10.5px] leading-relaxed text-(--biu-color-text-subtle)">
+                      {effectiveScope === 'workspace'
+                        ? '空间所有内部成员默认可见（外部协作者与访客仍需显式受邀）。'
+                        : effectiveScope === 'personal'
+                          ? '仅你与你的 Agent 可见；拉入其他成员后自动变为共享。'
+                          : '仅受邀成员可见；切换通用访问不会清空现有成员列表。'}
+                    </div>
+                  </div>
+                )
+              })() : null}
 
               {/* 频道模式切换（仅群主/管理员可改：群聊 / 公告 / 论坛，底层数据完全复用） */}
               {!isDm && canManageMembers ? (

@@ -36,6 +36,7 @@ import {
 import { SIDEBAR_ROW_MAIN_CLASS, SidebarRow, SidebarRowMain, type SidebarRowMenuItem } from '@biu/web-session-view/sidebar-row'
 import {
   buildDefaultChannelName,
+  computeChannelShareScope,
   type ChannelAccessMode,
   type ChannelAgentContextMode,
   type GroupChannelKind,
@@ -294,8 +295,10 @@ export const ChannelSidebarSections = memo(function ChannelSidebarSections({
                   <MegaphoneIcon className="size-3.5 opacity-80" aria-hidden />
                 ) : ch.kind === 'forum' ? (
                   <RectangleStackIcon className="size-3.5 opacity-80" aria-hidden />
-                ) : ch.accessMode === 'private' ? (
+                ) : (ch.shareScope ?? computeChannelShareScope(ch.accessMode, ch.memberCount, ch.kind)) === 'personal' ? (
                   <LockClosedIcon className="size-3.5 opacity-80" aria-hidden />
+                ) : (ch.shareScope ?? computeChannelShareScope(ch.accessMode, ch.memberCount, ch.kind)) === 'shared' ? (
+                  <UserGroupIcon className="size-3.5 opacity-80" aria-hidden />
                 ) : (
                   <HashtagIcon className="size-4 opacity-80" aria-hidden />
                 )}
@@ -396,10 +399,12 @@ export const ChannelSidebarSections = memo(function ChannelSidebarSections({
                       <MegaphoneIcon className="size-3.5" data-testid={`sidebar-channel-icon-announcement-${ch.id}`} />
                     ) : ch.kind === 'forum' ? (
                       <RectangleStackIcon className="size-3.5" data-testid={`sidebar-channel-icon-forum-${ch.id}`} />
-                    ) : ch.accessMode === 'private' ? (
-                      <LockClosedIcon className="size-3.5" />
+                    ) : (ch.shareScope ?? computeChannelShareScope(ch.accessMode, ch.memberCount, ch.kind)) === 'personal' ? (
+                      <LockClosedIcon className="size-3.5" data-testid={`sidebar-channel-icon-personal-${ch.id}`} />
+                    ) : (ch.shareScope ?? computeChannelShareScope(ch.accessMode, ch.memberCount, ch.kind)) === 'shared' ? (
+                      <UserGroupIcon className="size-3.5" data-testid={`sidebar-channel-icon-shared-${ch.id}`} />
                     ) : (
-                      <HashtagIcon className="size-3.5" />
+                      <HashtagIcon className="size-3.5" data-testid={`sidebar-channel-icon-workspace-${ch.id}`} />
                     )}
                     {peerOnline ? (
                       <span
@@ -1000,23 +1005,38 @@ function CreateChannelDialog({
                 ) : null}
               </div>
 
-              <div className="flex gap-2">
-                <Button
-                  variant={accessMode === 'private' ? 'default' : 'secondary'}
-                  className="h-8 flex-1 text-[12px]"
-                  onClick={() => setAccessMode('private')}
-                >
-                  <LockClosedIcon className="size-3.5" />
-                  <span>私密邀请</span>
-                </Button>
-                <Button
-                  variant={accessMode === 'workspace' ? 'default' : 'secondary'}
-                  className="h-8 flex-1 text-[12px]"
-                  onClick={() => setAccessMode('workspace')}
-                >
-                  <HashtagIcon className="size-3.5" />
-                  <span>空间公开</span>
-                </Button>
+              <div className="space-y-1.5">
+                <div className="flex gap-2">
+                  <Button
+                    variant={accessMode === 'private' ? 'default' : 'secondary'}
+                    className="h-8 flex-1 text-[12px]"
+                    data-testid="create-channel-access-private"
+                    onClick={() => setAccessMode('private')}
+                  >
+                    {pickedMembers.length === 0 ? (
+                      <LockClosedIcon className="size-3.5" />
+                    ) : (
+                      <UserGroupIcon className="size-3.5" />
+                    )}
+                    <span>仅受邀人员</span>
+                  </Button>
+                  <Button
+                    variant={accessMode === 'workspace' ? 'default' : 'secondary'}
+                    className="h-8 flex-1 text-[12px]"
+                    data-testid="create-channel-access-workspace"
+                    onClick={() => setAccessMode('workspace')}
+                  >
+                    <HashtagIcon className="size-3.5" />
+                    <span>空间全员</span>
+                  </Button>
+                </div>
+                <span className="scfg-hint" data-testid="create-channel-scope-hint">
+                  {accessMode === 'workspace'
+                    ? '可见范围：空间 · 空间所有内部成员默认可见（不含外部协作者与访客）。'
+                    : pickedMembers.length === 0
+                      ? '可见范围：私人 · 仅你与你的 Agent 可见，拉入其他成员后自动变为共享。'
+                      : `可见范围：共享 · 仅你与已选的 ${pickedMembers.length} 位受邀成员可见。`}
+                </span>
               </div>
             </div>
 

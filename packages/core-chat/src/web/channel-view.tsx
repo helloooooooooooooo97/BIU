@@ -43,13 +43,14 @@ import { useWorkspaceProfile } from '@biu/biu-ui/use-workspace-profile'
 import { PickChip, pickPreview, splitPickStream, type PickService } from '@biu/core-pick/web'
 import { SidebarMascot, resolveSessionMascot } from '@biu/public-mascot'
 import { bindSessionView, channelAppPath, sessionAppPath, type SessionViewService } from '@biu/web-session-view'
-import type {
-  ChannelMemberView,
-  ChannelMention,
-  ChannelMessageView,
-  ChannelSavedMessageView,
-  ChannelSearchHit,
-  ForumPostStatus,
+import {
+  computeChannelShareScope,
+  type ChannelMemberView,
+  type ChannelMention,
+  type ChannelMessageView,
+  type ChannelSavedMessageView,
+  type ChannelSearchHit,
+  type ForumPostStatus,
 } from '../shared/channel-types.ts'
 import { ChannelComposer, type ChannelComposerHandle } from './channel-composer.tsx'
 import { ChannelFloatingSidebar, type ChannelFloatingTab } from './channel-floating-sidebar.tsx'
@@ -823,6 +824,10 @@ export const ChannelStage = memo(function ChannelStage({
   const isDm = channel?.kind === 'dm'
   const isAnnouncement = channel?.kind === 'announcement'
   const isForum = channel?.kind === 'forum'
+  const effectiveShareScope = channel
+    ? (channel.shareScope ?? computeChannelShareScope(channel.accessMode, channel.memberCount, channel.kind))
+    : 'personal'
+  const isReadOnlyMember = !isAnnouncement && channel?.canPost === false
   const canPostAnnouncement = !isAnnouncement || (channel?.canPost ?? Boolean(detail?.canManageMembers))
   const activeForumPostStatus = isForum && activeThreadRootId ? getForumPostStatus(threadRootMessage) : null
   const canManageActiveForumPost =
@@ -909,8 +914,10 @@ export const ChannelStage = memo(function ChannelStage({
                     <MegaphoneIcon className="size-3.5 shrink-0 text-(--biu-color-icon)" aria-hidden />
                   ) : isForum ? (
                     <RectangleStackIcon className="size-3.5 shrink-0 text-(--biu-color-icon)" aria-hidden />
-                  ) : channel?.accessMode === 'private' ? (
+                  ) : effectiveShareScope === 'personal' ? (
                     <LockClosedIcon className="size-3.5 shrink-0 text-(--biu-color-icon)" aria-hidden />
+                  ) : effectiveShareScope === 'shared' ? (
+                    <UserGroupIcon className="size-3.5 shrink-0 text-(--biu-color-icon)" aria-hidden />
                   ) : (
                     <HashtagIcon className="size-3.5 shrink-0 text-(--biu-color-icon)" aria-hidden />
                   )}
@@ -1002,8 +1009,10 @@ export const ChannelStage = memo(function ChannelStage({
                     <MegaphoneIcon className="size-3.5 shrink-0 text-(--biu-color-icon)" aria-hidden />
                   ) : isForum ? (
                     <RectangleStackIcon className="size-3.5 shrink-0 text-(--biu-color-icon)" aria-hidden />
-                  ) : channel?.accessMode === 'private' ? (
+                  ) : effectiveShareScope === 'personal' ? (
                     <LockClosedIcon className="size-3.5 shrink-0 text-(--biu-color-icon)" aria-hidden />
+                  ) : effectiveShareScope === 'shared' ? (
+                    <UserGroupIcon className="size-3.5 shrink-0 text-(--biu-color-icon)" aria-hidden />
                   ) : (
                     <HashtagIcon className="size-3.5 shrink-0 text-(--biu-color-icon)" aria-hidden />
                   )}
@@ -1885,7 +1894,15 @@ export const ChannelStage = memo(function ChannelStage({
                     </div>
                   ) : null}
 
-                  {isForum && !activeThreadRootId ? null : isAnnouncement && !activeThreadRootId && !canPostAnnouncement ? (
+                  {isForum && !activeThreadRootId ? null : isReadOnlyMember ? (
+                    <div
+                      className="pointer-events-auto flex items-center justify-center gap-2 rounded-full border border-(--biu-color-border) bg-(--biu-color-bg-subtle)/95 px-4 py-2.5 text-[12.5px] text-(--biu-color-text-muted) shadow-xs backdrop-blur-md"
+                      data-testid="channel-readonly-member-bar"
+                    >
+                      <EyeIcon className="size-4 shrink-0 text-(--biu-color-icon)" aria-hidden />
+                      <span>当前为只读权限（查看者 / 访客），无法发送消息</span>
+                    </div>
+                  ) : isAnnouncement && !activeThreadRootId && !canPostAnnouncement ? (
                     <div
                       className="pointer-events-auto flex items-center justify-center gap-2 rounded-full border border-(--biu-color-border) bg-(--biu-color-bg-subtle)/95 px-4 py-2.5 text-[12.5px] text-(--biu-color-text-muted) shadow-xs backdrop-blur-md"
                       data-testid="channel-announcement-readonly-bar"

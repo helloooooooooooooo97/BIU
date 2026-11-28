@@ -310,14 +310,16 @@ export const ChannelForumBoard = memo(function ChannelForumBoard({
           <span>{sortBy === 'active' ? '最近活跃' : '最新发布'}</span>
         </button>
 
-        <Button
-          className="h-8 shrink-0 gap-1 px-3 text-[12.5px]"
-          data-testid="forum-new-post-btn"
-          onClick={() => setComposerOpen((v) => !v)}
-        >
-          {composerOpen ? <XMarkIcon className="size-3.5" /> : <PlusIcon className="size-3.5" />}
-          <span>{composerOpen ? '收起发帖' : '新建帖子'}</span>
-        </Button>
+        {channel.canPost !== false ? (
+          <Button
+            className="h-8 shrink-0 gap-1 px-3 text-[12.5px]"
+            data-testid="forum-new-post-btn"
+            onClick={() => setComposerOpen((v) => !v)}
+          >
+            {composerOpen ? <XMarkIcon className="size-3.5" /> : <PlusIcon className="size-3.5" />}
+            <span>{composerOpen ? '收起发帖' : '新建帖子'}</span>
+          </Button>
+        ) : null}
       </div>
 
       {/* 标签过滤行 */}
@@ -490,7 +492,7 @@ export const ChannelForumBoard = memo(function ChannelForumBoard({
               ? '每条帖子都是一个独立议题，支持标题、标签、解决状态与独立的 Agent 讨论上下文。'
               : '可以切换状态/标签筛选，或清空搜索关键词查看全部帖子。'}
           </p>
-          {posts.length === 0 && !composerOpen ? (
+          {posts.length === 0 && !composerOpen && channel.canPost !== false ? (
             <Button className="h-8 gap-1 px-3.5 text-[12.5px]" onClick={() => setComposerOpen(true)}>
               <PlusIcon className="size-3.5" />
               <span>发布第一篇帖子</span>
