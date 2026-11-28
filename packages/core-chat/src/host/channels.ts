@@ -819,10 +819,10 @@ export class ChannelService {
       .get(row.id) as { text?: string; attachments_json?: string; deleted_at?: number; created_at?: number } | undefined
     const viewerMember = db
       .prepare(
-        `SELECT last_read_seq, muted, pinned FROM channel_members
+        `SELECT last_read_seq, muted, pinned, hidden_at FROM channel_members
          WHERE channel_id = ? AND member_type = 'account' AND member_id = ? LIMIT 1`,
       )
-      .get(row.id, viewerAccountId) as { last_read_seq?: number; muted?: number; pinned?: number } | undefined
+      .get(row.id, viewerAccountId) as { last_read_seq?: number; muted?: number; pinned?: number; hidden_at?: number } | undefined
     const lastReadSeq = Number(viewerMember?.last_read_seq ?? 0)
     const unreadRows = db
       .prepare(
@@ -872,7 +872,7 @@ export class ChannelService {
         displayName = peerName
       }
     }
-    const sidebarThreads = this.listSidebarThreads(row.id)
+    const sidebarThreads = this.listSidebarThreads(row.id, viewerAccountId)
     return {
       id: row.id,
       workspaceId: row.workspace_id,
@@ -896,11 +896,72 @@ export class ChannelService {
       lastReadSeq,
       muted: Boolean(viewerMember?.muted),
       pinned: Boolean(viewerMember?.pinned),
+      ...(Number(viewerMember?.hidden_at ?? 0) > 0 ? { hidden: true } : {}),
+      canManage: this.canManageChannel(row, viewerAccountId),
       ...(sidebarThreads.length > 0 ? { threads: sidebarThreads } : {}),
     }
   }
 
-  private listSidebarThreads(channelId: string): ChannelSidebarThreadItem[] {
+  private isFollowingThread(rootMsgId: string, viewerAccountId: string): boolean {
+    if (!rootMsgId || !viewerAccountId) return false
+    const db = this.db()
+    const row = db
+      .prepare(`SELECT state FROM channel_thread_follows WHERE root_message_id = ? AND account_id = ? LIMIT 1`)
+      .get(rootMsgId, viewerAccountId) as { state?: string } | undefined
+    if (row?.state) return row.state === 'follow'
+    // 兼容存量历史讨论串：若尚未写入 follow 表，且用户是根消息发送者或参与过串内回复，则默认视为已关注
+    const participated = db
+      .prepare(
+        `SELECT 1 FROM channel_messages
+         WHERE (id = ? OR thread_root_id = ?)
+           AND sender_type = 'account' AND sender_id = ?
+           AND ephemeral_to = '' AND deleted_at = 0
+         LIMIT 1`,
+      )
+      .get(rootMsgId, rootMsgId, viewerAccountId)
+    return Boolean(participated)
+  }
+
+  private setThreadFollowState(
+    channelId: string,
+    rootMsgId: string,
+    accountId: string,
+    state: 'follow' | 'unfollow',
+    opts?: { onlyIfUnset?: boolean },
+  ) {
+    if (!channelId || !rootMsgId || !accountId) return
+    const now = Date.now()
+    if (opts?.onlyIfUnset) {
+      this.db()
+        .prepare(
+          `INSERT OR IGNORE INTO channel_thread_follows (channel_id, root_message_id, account_id, state, updated_at)
+           VALUES (?, ?, ?, ?, ?)`,
+        )
+        .run(channelId, rootMsgId, accountId, state, now)
+      return
+    }
+    this.db()
+      .prepare(
+        `INSERT INTO channel_thread_follows (channel_id, root_message_id, account_id, state, updated_at)
+         VALUES (?, ?, ?, ?, ?)
+         ON CONFLICT(root_message_id, account_id) DO UPDATE SET
+           state = excluded.state,
+           updated_at = excluded.updated_at`,
+      )
+      .run(channelId, rootMsgId, accountId, state, now)
+  }
+
+  private broadcastChannelSummaryPerViewer(ch: ChannelRow, accountIds?: string[]) {
+    const targets =
+      accountIds ??
+      this.channelHumanAccountIds(ch.id, ch.workspace_id, ch.access_mode === 'workspace')
+    for (const accId of targets) {
+      const summary = this.toSummary(ch, accId)
+      this.broadcastToAccounts([accId], ch.workspace_id, 'channel/updated', { channel: summary })
+    }
+  }
+
+  private listSidebarThreads(channelId: string, viewerAccountId: string): ChannelSidebarThreadItem[] {
     const rows = this.db()
       .prepare(
         `SELECT
@@ -911,12 +972,33 @@ export class ChannelService {
            root.attachments_json AS root_attachments
          FROM channel_messages r
          JOIN channel_messages root ON root.id = r.thread_root_id
-         WHERE r.channel_id = ? AND r.thread_root_id != '' AND r.ephemeral_to = '' AND r.deleted_at = 0
+         LEFT JOIN channel_thread_follows f
+           ON f.root_message_id = r.thread_root_id AND f.account_id = ?
+         WHERE r.channel_id = ?
+           AND r.thread_root_id != ''
+           AND r.ephemeral_to = ''
+           AND r.deleted_at = 0
+           AND (
+             f.state = 'follow'
+             OR (
+               f.state IS NULL AND (
+                 (root.sender_type = 'account' AND root.sender_id = ?)
+                 OR EXISTS (
+                   SELECT 1 FROM channel_messages mine
+                   WHERE mine.thread_root_id = r.thread_root_id
+                     AND mine.sender_type = 'account'
+                     AND mine.sender_id = ?
+                     AND mine.ephemeral_to = ''
+                     AND mine.deleted_at = 0
+                 )
+               )
+             )
+           )
          GROUP BY r.thread_root_id
          ORDER BY last_reply_at DESC
          LIMIT 12`,
       )
-      .all(channelId) as Array<{
+      .all(viewerAccountId, channelId, viewerAccountId, viewerAccountId) as Array<{
       root_id: string
       reply_count: number
       last_reply_at: number
@@ -956,6 +1038,7 @@ export class ChannelService {
     return rows
       .filter((row) => this.canReadChannel(row, accountId))
       .map((row) => this.toSummary(row, accountId))
+      .filter((summary) => !summary.hidden)
       .sort(
         (a, b) =>
           Number(Boolean(b.pinned)) - Number(Boolean(a.pinned)) ||
@@ -1025,7 +1108,13 @@ export class ChannelService {
       .prepare(`SELECT * FROM channels WHERE workspace_id = ? AND kind = 'dm' AND dm_key = ? LIMIT 1`)
       .get(workspaceId, dmKey) as ChannelRow | undefined
     if (existing) {
-      return this.getChannelDetail(existing.id)
+      db.prepare(
+        `UPDATE channel_members SET hidden_at = 0
+         WHERE channel_id = ? AND member_type = 'account' AND member_id = ? AND hidden_at > 0`,
+      ).run(existing.id, accountId)
+      const detail = this.getChannelDetail(existing.id)
+      this.broadcastToAccounts([accountId], workspaceId, 'channel/updated', { channel: detail.channel })
+      return detail
     }
 
     const id = allocateRecordId()
@@ -1252,6 +1341,7 @@ export class ChannelService {
       this.queues.delete(key)
     }
     const db = this.db()
+    db.prepare(`DELETE FROM channel_thread_follows WHERE channel_id = ?`).run(channelId)
     db.prepare(`DELETE FROM channel_message_reactions WHERE channel_id = ?`).run(channelId)
     db.prepare(`DELETE FROM channel_saved_messages WHERE channel_id = ?`).run(channelId)
     db.prepare(`DELETE FROM channel_agent_runs WHERE channel_id = ?`).run(channelId)
@@ -1689,7 +1779,9 @@ export class ChannelService {
     const pinnedBy = String(row.pinned_by ?? '').trim()
     const threadRootId = String(row.thread_root_id ?? '').trim()
     const threadSummary =
-      !threadRootId && !row.ephemeral_to ? this.threadSummaryForMessage(row.id, channelWorkspaceId) : undefined
+      !threadRootId && !row.ephemeral_to
+        ? this.threadSummaryForMessage(row.id, channelWorkspaceId, viewerAccountId)
+        : undefined
     const reactions = deletedAt === 0 && !row.ephemeral_to ? this.reactionsForMessage(row.id, viewerAccountId, channelWorkspaceId) : []
     const savedRow =
       deletedAt === 0 && !row.ephemeral_to
@@ -1726,7 +1818,11 @@ export class ChannelService {
     }
   }
 
-  private threadSummaryForMessage(rootMsgId: string, workspaceId?: string): ChannelThreadSummary | undefined {
+  private threadSummaryForMessage(
+    rootMsgId: string,
+    workspaceId?: string,
+    viewerAccountId?: string,
+  ): ChannelThreadSummary | undefined {
     const rows = this.db()
       .prepare(
         `SELECT sender_type, sender_id, created_at FROM channel_messages
@@ -1755,6 +1851,7 @@ export class ChannelService {
       replyCount: rows.length,
       lastReplyAt,
       participantNames: participantNames.slice(0, 6),
+      ...(viewerAccountId ? { following: this.isFollowingThread(rootMsgId, viewerAccountId) } : {}),
     }
   }
 
@@ -1785,7 +1882,27 @@ export class ChannelService {
       channelId,
       root: this.hydrateMessage(rootRow, lookup, ch.workspace_id, accountId),
       replies: replyRows.map((r) => this.hydrateMessage(r, lookup, ch.workspace_id, accountId)),
+      following: this.isFollowingThread(rootRow.id, accountId),
     }
+  }
+
+  setThreadFollow(
+    channelId: string,
+    rootMsgId: string,
+    follow: boolean,
+  ): { ok: true; channelId: string; rootId: string; following: boolean; channel: ChannelSummary } {
+    const { accountId } = this.currentActorIds()
+    const ch = this.requireChannelRow(channelId, accountId)
+    const db = this.db()
+    const rawRoot = db
+      .prepare(`SELECT id, thread_root_id, ephemeral_to FROM channel_messages WHERE id = ? AND channel_id = ?`)
+      .get(rootMsgId, channelId) as { id?: string; thread_root_id?: string; ephemeral_to?: string } | undefined
+    if (!rawRoot || rawRoot.ephemeral_to) throw new Error('未找到对应的话题根消息')
+    const effectiveRootId = rawRoot.thread_root_id?.trim() || rawRoot.id!
+    this.setThreadFollowState(channelId, effectiveRootId, accountId, follow ? 'follow' : 'unfollow')
+    const summary = this.toSummary(ch, accountId)
+    this.broadcastToAccounts([accountId], ch.workspace_id, 'channel/updated', { channel: summary })
+    return { ok: true, channelId, rootId: effectiveRootId, following: follow, channel: summary }
   }
 
   async summarizeChannel(
@@ -1917,14 +2034,57 @@ export class ChannelService {
       JSON.stringify(input.meta ?? {}),
       now,
     )
+    let unhiddenAccountIds: string[] = []
     if (!input.ephemeralTo) {
       db.prepare(`UPDATE channels SET updated_at = ? WHERE id = ?`).run(now, input.channelId)
+      const hiddenRows = db
+        .prepare(
+          `SELECT member_id FROM channel_members
+           WHERE channel_id = ? AND member_type = 'account' AND hidden_at > 0`,
+        )
+        .all(input.channelId) as Array<{ member_id: string }>
+      if (hiddenRows.length > 0) {
+        unhiddenAccountIds = hiddenRows.map((r) => r.member_id)
+        db.prepare(
+          `UPDATE channel_members SET hidden_at = 0
+           WHERE channel_id = ? AND member_type = 'account' AND hidden_at > 0`,
+        ).run(input.channelId)
+      }
       if (input.senderType === 'account' && input.senderId && !threadRootId) {
         db.prepare(
           `UPDATE channel_members
            SET last_read_seq = MAX(last_read_seq, ?)
            WHERE channel_id = ? AND member_type = 'account' AND member_id = ?`,
         ).run(seq, input.channelId, input.senderId)
+      }
+      if (threadRootId) {
+        // 自动 Follow 规则：
+        // 1) 串内发言者强制 follow
+        if (input.senderType === 'account' && input.senderId) {
+          this.setThreadFollowState(input.channelId, threadRootId, input.senderId, 'follow')
+        }
+        // 2) 根消息作者默认 follow（若此前主动 unfollow 则保持不打扰）
+        const rootAuthor = db
+          .prepare(`SELECT sender_type, sender_id FROM channel_messages WHERE id = ? AND channel_id = ?`)
+          .get(threadRootId, input.channelId) as { sender_type?: string; sender_id?: string } | undefined
+        if (rootAuthor?.sender_type === 'account' && rootAuthor.sender_id) {
+          this.setThreadFollowState(input.channelId, threadRootId, rootAuthor.sender_id, 'follow', { onlyIfUnset: true })
+        }
+        // 3) 显式 @成员 强制 follow；@所有人 仅对未显式 unfollow 的成员生效
+        const mentions = input.mentions ?? []
+        for (const m of mentions) {
+          if (m.kind === 'account' && m.id) {
+            this.setThreadFollowState(input.channelId, threadRootId, m.id, 'follow')
+          }
+        }
+        if (mentions.some((m) => m.kind === 'everyone')) {
+          const chMeta = db.prepare(`SELECT * FROM channels WHERE id = ?`).get(input.channelId) as ChannelRow | undefined
+          if (chMeta) {
+            for (const hid of this.channelHumanAccountIds(chMeta.id, chMeta.workspace_id, chMeta.access_mode === 'workspace')) {
+              this.setThreadFollowState(input.channelId, threadRootId, hid, 'follow', { onlyIfUnset: true })
+            }
+          }
+        }
       }
     }
     const row = db.prepare(`SELECT * FROM channel_messages WHERE id = ?`).get(id) as MessageRow
@@ -1943,11 +2103,15 @@ export class ChannelService {
             const rootView = this.hydrateMessage(rootRow, undefined, ch.workspace_id)
             this.broadcastToChannel(input.channelId, ch.workspace_id, 'channel/message-updated', { message: rootView })
           }
-          const updatedSummary = this.toSummary(ch)
-          this.broadcastToChannel(input.channelId, ch.workspace_id, 'channel/updated', { channel: updatedSummary })
-        } else if (input.senderType === 'account' || input.senderType === 'agent') {
-          const actorForNaming = input.senderType === 'account' ? input.senderId : ch.created_by
-          this.maybeScheduleAutoName(input.channelId, ch, actorForNaming)
+          this.broadcastChannelSummaryPerViewer(ch)
+        } else {
+          if (unhiddenAccountIds.length > 0) {
+            this.broadcastChannelSummaryPerViewer(ch, unhiddenAccountIds)
+          }
+          if (input.senderType === 'account' || input.senderType === 'agent') {
+            const actorForNaming = input.senderType === 'account' ? input.senderId : ch.created_by
+            this.maybeScheduleAutoName(input.channelId, ch, actorForNaming)
+          }
         }
       }
     }
@@ -1997,6 +2161,17 @@ export class ChannelService {
     const updatedRow = db.prepare(`SELECT * FROM channel_messages WHERE id = ?`).get(messageId) as MessageRow
     const view = this.hydrateMessage(updatedRow, undefined, ch.workspace_id, accountId)
     this.broadcastToChannel(channelId, ch.workspace_id, 'channel/message-updated', { message: view })
+    const recalledThreadRootId = String(row.thread_root_id ?? '').trim()
+    if (recalledThreadRootId) {
+      const rootRow = db
+        .prepare(`SELECT * FROM channel_messages WHERE id = ? AND channel_id = ?`)
+        .get(recalledThreadRootId, channelId) as MessageRow | undefined
+      if (rootRow) {
+        const rootView = this.hydrateMessage(rootRow, undefined, ch.workspace_id)
+        this.broadcastToChannel(channelId, ch.workspace_id, 'channel/message-updated', { message: rootView })
+      }
+      this.broadcastChannelSummaryPerViewer(ch)
+    }
     return view
   }
 
@@ -2178,7 +2353,7 @@ export class ChannelService {
     })
   }
 
-  updatePreferences(channelId: string, patch: { muted?: boolean; pinned?: boolean }): ChannelSummary {
+  updatePreferences(channelId: string, patch: { muted?: boolean; pinned?: boolean; hidden?: boolean }): ChannelSummary {
     const { accountId } = this.currentActorIds()
     const row = this.requireChannelRow(channelId, accountId)
     const db = this.db()
@@ -2198,6 +2373,11 @@ export class ChannelService {
         `UPDATE channel_members SET pinned = ? WHERE channel_id = ? AND member_type = 'account' AND member_id = ?`,
       ).run(patch.pinned ? 1 : 0, channelId, accountId)
     }
+    if (typeof patch.hidden === 'boolean') {
+      db.prepare(
+        `UPDATE channel_members SET hidden_at = ? WHERE channel_id = ? AND member_type = 'account' AND member_id = ?`,
+      ).run(patch.hidden ? Date.now() : 0, channelId, accountId)
+    }
     const summary = this.toSummary(row, accountId)
     this.broadcastToAccounts([accountId], row.workspace_id, 'channel/updated', { channel: summary })
     return summary
@@ -2206,12 +2386,14 @@ export class ChannelService {
   leaveChannel(channelId: string): { ok: true; channelId: string } {
     const { accountId } = this.currentActorIds()
     const row = this.requireChannelRow(channelId, accountId)
-    if (row.kind === 'dm') throw new Error('私聊不支持退出，请直接删除对话')
+    if (row.kind === 'dm') throw new Error('私聊不支持退出，请隐藏对话')
     if (row.created_by === accountId && accountId !== 'local') {
       throw new Error('群主不能直接退群，请先解散聊天')
     }
-    this.db()
-      .prepare(`DELETE FROM channel_members WHERE channel_id = ? AND member_type = 'account' AND member_id = ?`)
+    const db = this.db()
+    db.prepare(`DELETE FROM channel_members WHERE channel_id = ? AND member_type = 'account' AND member_id = ?`)
+      .run(channelId, accountId)
+    db.prepare(`DELETE FROM channel_thread_follows WHERE channel_id = ? AND account_id = ?`)
       .run(channelId, accountId)
     const members = this.listMembers(channelId, accountId, row.workspace_id)
     this.broadcastToChannel(channelId, row.workspace_id, 'channel/members', { channelId, members })
@@ -3265,7 +3447,7 @@ export function registerChannelRoutes(ctx: Context, resolveLlm: (sessionId?: str
 
   ctx.http.route('PATCH', '/api/channels/:id/preferences', async (route) => {
     try {
-      const body = (await route.json()) as { muted?: boolean; pinned?: boolean }
+      const body = (await route.json()) as { muted?: boolean; pinned?: boolean; hidden?: boolean }
       route.send(200, { channel: service.updatePreferences(route.params.id, body ?? {}) })
     } catch (error) {
       sendError(route, error)
@@ -3371,6 +3553,15 @@ export function registerChannelRoutes(ctx: Context, resolveLlm: (sessionId?: str
   ctx.http.route('GET', '/api/channels/:id/threads/:rootMsgId', (route) => {
     try {
       route.send(200, service.getThread(route.params.id, route.params.rootMsgId))
+    } catch (error) {
+      sendError(route, error)
+    }
+  })
+
+  ctx.http.route('POST', '/api/channels/:id/threads/:rootMsgId/follow', async (route) => {
+    try {
+      const body = (await route.json().catch(() => ({}))) as { follow?: boolean }
+      route.send(200, service.setThreadFollow(route.params.id, route.params.rootMsgId, Boolean(body?.follow)))
     } catch (error) {
       sendError(route, error)
     }

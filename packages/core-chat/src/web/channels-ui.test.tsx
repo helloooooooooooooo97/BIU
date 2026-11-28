@@ -1377,3 +1377,174 @@ test('ChannelSidebarSections derives expandable sub-threads from loaded channel 
   assert.ok(link.textContent?.includes('关于产品数据划分的方案'))
   assert.ok(link.textContent?.includes('3'))
 })
+
+test('sidebar uses hide/leave/unfollow menus, breadcrumb toggles thread follow, and disband requires two-step confirm in members modal', async () => {
+  let hiddenCalled = false
+  let unfollowedCalled = false
+  let disbandCalled = false
+  const now = Date.now()
+  const rootMsg = {
+    id: 'm-root-f',
+    channelId: 'ch-grp',
+    seq: 1,
+    senderType: 'account',
+    senderId: 'acc-alice',
+    senderName: 'Alice',
+    replyToId: '',
+    text: '讨论 Follow 机制',
+    mentions: [],
+    threadSummary: { replyCount: 1, lastReplyAt: now, participantNames: ['Bob'], following: true },
+    traceId: '',
+    ephemeralTo: '',
+    createdAt: now - 2000,
+  }
+  const replyMsg = {
+    id: 'm-rep-f',
+    channelId: 'ch-grp',
+    seq: 2,
+    senderType: 'account',
+    senderId: 'acc-bob',
+    senderName: 'Bob',
+    replyToId: '',
+    threadRootId: 'm-root-f',
+    text: '完全同意',
+    mentions: [],
+    traceId: '',
+    ephemeralTo: '',
+    createdAt: now - 1000,
+  }
+  const chGrp = {
+    id: 'ch-grp',
+    workspaceId: 'ws-1',
+    kind: 'channel',
+    dmKey: '',
+    name: '产品讨论组',
+    topic: '',
+    accessMode: 'private',
+    createdBy: 'acc-alice',
+    createdAt: now - 5000,
+    updatedAt: now,
+    memberCount: 2,
+    agentCount: 0,
+    lastMessageAt: now,
+    lastMessageText: rootMsg.text,
+    canManage: true,
+    threads: [{ rootId: 'm-root-f', title: '讨论 Follow 机制', replyCount: 1, lastReplyAt: now }],
+  }
+  const dmBob = {
+    id: 'dm-bob',
+    workspaceId: 'ws-1',
+    kind: 'dm',
+    dmKey: 'acc-alice\0acc-bob',
+    peerAccountId: 'acc-bob',
+    peerName: 'Bob',
+    name: 'Bob',
+    topic: '',
+    accessMode: 'private',
+    createdBy: 'acc-alice',
+    createdAt: now - 4000,
+    updatedAt: now - 1000,
+    memberCount: 2,
+    agentCount: 0,
+    lastMessageAt: now - 1000,
+    lastMessageText: 'hi',
+    canManage: true,
+  }
+
+  const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = new URL(String(input), 'http://test.local')
+    if (url.pathname === '/api/channels' && (!init?.method || init.method === 'GET')) {
+      return new Response(JSON.stringify({ channels: [chGrp, dmBob] }), { status: 200 })
+    }
+    if (url.pathname === '/api/account/workspace-profile') {
+      return new Response(JSON.stringify({ accountId: 'acc-alice', name: 'Alice' }), { status: 200 })
+    }
+    if (url.pathname === '/api/channels/ch-grp' && (!init?.method || init.method === 'GET')) {
+      return new Response(
+        JSON.stringify({
+          channel: chGrp,
+          members: [
+            { channelId: 'ch-grp', memberType: 'account', memberId: 'acc-alice', role: 'owner', addedBy: 'acc-alice', addedAt: 1, name: 'Alice', isOwn: true },
+            { channelId: 'ch-grp', memberType: 'account', memberId: 'acc-bob', role: 'member', addedBy: 'acc-alice', addedAt: 1, name: 'Bob', isOwn: false },
+          ],
+          messages: [rootMsg],
+          activities: [],
+          myAccountId: 'acc-alice',
+          canManageMembers: true,
+        }),
+        { status: 200 },
+      )
+    }
+    if (url.pathname === '/api/channels/ch-grp/threads/m-root-f' && (!init?.method || init.method === 'GET')) {
+      return new Response(JSON.stringify({ channelId: 'ch-grp', root: rootMsg, replies: [replyMsg], following: true }), { status: 200 })
+    }
+    if (url.pathname === '/api/channels/ch-grp/threads/m-root-f/follow' && init?.method === 'POST') {
+      const body = JSON.parse(String(init.body ?? '{}')) as { follow?: boolean }
+      if (body.follow === false) unfollowedCalled = true
+      return new Response(
+        JSON.stringify({
+          ok: true,
+          channelId: 'ch-grp',
+          rootId: 'm-root-f',
+          following: Boolean(body.follow),
+          channel: { ...chGrp, threads: body.follow ? chGrp.threads : [] },
+        }),
+        { status: 200 },
+      )
+    }
+    if (url.pathname === '/api/channels/dm-bob/preferences' && init?.method === 'PATCH') {
+      const body = JSON.parse(String(init.body ?? '{}')) as { hidden?: boolean }
+      if (body.hidden) hiddenCalled = true
+      return new Response(JSON.stringify({ channel: { ...dmBob, hidden: Boolean(body.hidden) } }), { status: 200 })
+    }
+    if (url.pathname === '/api/channels/ch-grp' && init?.method === 'DELETE') {
+      disbandCalled = true
+      return new Response(JSON.stringify({ ok: true, id: 'ch-grp' }), { status: 200 })
+    }
+    return new Response(JSON.stringify({ items: [] }), { status: 200 })
+  })
+  vi.stubGlobal('fetch', fetchMock)
+
+  const view = render(
+    <MemoryRouter initialEntries={['/channels/ch-grp?thread=m-root-f']}>
+      <ChannelSidebarSections routeChannelId="ch-grp" />
+      <ChannelStage channelId="ch-grp" />
+    </MemoryRouter>,
+  )
+
+  // 1. 私聊侧栏 ⋯ 菜单显示「隐藏对话」（而非「删除」），点击隐藏仅移除自身侧栏
+  const moreBtns = await waitFor(() => {
+    const btns = view.getAllByTestId('sidebar-row-more')
+    assert.ok(btns.length >= 2)
+    return btns
+  })
+  const dmMoreBtn = moreBtns.find((b) => b.getAttribute('aria-label') === 'Bob 更多操作')!
+  fireEvent.click(dmMoreBtn)
+  const hideDmItem = await waitFor(() => view.getByTestId('sidebar-row-menu-hide'))
+  assert.equal(hideDmItem.textContent?.includes('隐藏对话'), true)
+  assert.equal(view.queryByTestId('sidebar-row-menu-delete'), null)
+  fireEvent.click(hideDmItem)
+  await waitFor(() => {
+    assert.equal(hiddenCalled, true)
+    assert.equal(view.getByTestId('sidebar-channels-section').textContent?.includes('Bob'), false)
+  })
+
+  // 2. 二级面包屑顶栏「已关注」按钮可切换取消关注，并同步从侧栏移除子讨论串
+  const followBtn = await waitFor(() => view.getByTestId('channel-thread-follow-btn'))
+  assert.equal(followBtn.getAttribute('aria-pressed'), 'true')
+  fireEvent.click(followBtn)
+  await waitFor(() => {
+    assert.equal(unfollowedCalled, true)
+    assert.equal(view.getByTestId('channel-thread-follow-btn').getAttribute('aria-pressed'), 'false')
+    assert.equal(view.queryByTestId('sidebar-thread-m-root-f'), null)
+  })
+
+  // 3. 群主解散聊天需在「群成员与 Agent」弹窗底部二次确认
+  fireEvent.click(view.getByTestId('channel-manage-members'))
+  fireEvent.click(await waitFor(() => view.getByTestId('channel-disband-btn')))
+  assert.equal(disbandCalled, false)
+  fireEvent.click(await waitFor(() => view.getByTestId('channel-disband-confirm-btn')))
+  await waitFor(() => {
+    assert.equal(disbandCalled, true)
+  })
+})

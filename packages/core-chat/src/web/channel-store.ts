@@ -123,6 +123,7 @@ function deriveSidebarThreadsFromMessages(messages: ChannelMessageView[]): Chann
   const items: ChannelSidebarThreadItem[] = []
   for (const m of messages) {
     if (m.deletedAt || m.ephemeralTo || !m.threadSummary || m.threadSummary.replyCount <= 0) continue
+    if (m.threadSummary.following === false) continue
     items.push({
       rootId: m.id,
       title: formatSidebarThreadTitle(m),
@@ -162,16 +163,20 @@ export async function loadChannelDetail(channelId: string): Promise<ChannelDetai
     if (!res.ok) return null
     const detail = (await res.json()) as ChannelDetailPayload
     const derivedThreads =
-      detail.channel.threads?.length ? detail.channel.threads : deriveSidebarThreadsFromMessages(detail.messages ?? [])
+      detail.channel.threads !== undefined
+        ? detail.channel.threads
+        : deriveSidebarThreadsFromMessages(detail.messages ?? [])
     const hydratedChannel: ChannelSummary = derivedThreads.length
       ? { ...detail.channel, threads: derivedThreads }
       : detail.channel
     const hydratedDetail: ChannelDetailPayload = { ...detail, channel: hydratedChannel }
     setState((prev) => {
       const exists = prev.channels.some((c) => c.id === hydratedChannel.id)
-      const channels = exists
-        ? prev.channels.map((c) => (c.id === hydratedChannel.id ? hydratedChannel : c))
-        : [hydratedChannel, ...prev.channels]
+      const channels = hydratedChannel.hidden
+        ? prev.channels.filter((c) => c.id !== hydratedChannel.id)
+        : exists
+          ? prev.channels.map((c) => (c.id === hydratedChannel.id ? hydratedChannel : c))
+          : [hydratedChannel, ...prev.channels]
       return {
         ...prev,
         channels,
@@ -410,6 +415,90 @@ export async function loadChannelThread(
     return payload
   } catch {
     return null
+  }
+}
+
+export async function setChannelThreadFollow(
+  channelId: string,
+  rootMsgId: string,
+  follow: boolean,
+): Promise<{ ok: true; channelId: string; rootId: string; following: boolean; channel?: ChannelSummary }> {
+  const res = await apiFetch(
+    `/api/channels/${encodeURIComponent(channelId)}/threads/${encodeURIComponent(rootMsgId)}/follow`,
+    {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ follow }),
+    },
+  )
+  const body = (await res.json().catch(() => ({}))) as {
+    ok?: true
+    channelId?: string
+    rootId?: string
+    following?: boolean
+    channel?: ChannelSummary
+    error?: string
+  }
+  if (!res.ok) throw new Error(body.error || (follow ? '关注讨论串失败' : '取消关注失败'))
+  const effectiveRootId = body.rootId || rootMsgId
+  const nextFollowing = typeof body.following === 'boolean' ? body.following : follow
+  setState((prev) => {
+    const nextChannels = body.channel
+      ? prev.channels.map((c) => (c.id === channelId ? body.channel! : c))
+      : prev.channels.map((c) => {
+          if (c.id !== channelId) return c
+          const curThreads = c.threads ?? []
+          if (!nextFollowing) {
+            return { ...c, threads: curThreads.filter((t) => t.rootId !== effectiveRootId) }
+          }
+          if (curThreads.some((t) => t.rootId === effectiveRootId)) return c
+          const tData = prev.threads[effectiveRootId]
+          const rootMsg = tData?.root ?? prev.details[channelId]?.messages.find((m) => m.id === effectiveRootId)
+          const replyCount = tData?.replies.filter((r) => !r.deletedAt).length ?? rootMsg?.threadSummary?.replyCount ?? 0
+          if (replyCount <= 0) return c
+          const item: ChannelSidebarThreadItem = {
+            rootId: effectiveRootId,
+            title: rootMsg ? formatSidebarThreadTitle(rootMsg) : '讨论串',
+            replyCount,
+            lastReplyAt: rootMsg?.threadSummary?.lastReplyAt ?? Date.now(),
+          }
+          return { ...c, threads: [item, ...curThreads].sort((a, b) => b.lastReplyAt - a.lastReplyAt).slice(0, 12) }
+        })
+    const existingThread = prev.threads[effectiveRootId]
+    const nextThreads = existingThread
+      ? {
+          ...prev.threads,
+          [effectiveRootId]: { ...existingThread, following: nextFollowing },
+        }
+      : prev.threads
+    const detail = prev.details[channelId]
+    const nextDetails = detail
+      ? {
+          ...prev.details,
+          [channelId]: {
+            ...detail,
+            ...(body.channel ? { channel: body.channel } : {}),
+            messages: detail.messages.map((m) =>
+              m.id === effectiveRootId && m.threadSummary
+                ? { ...m, threadSummary: { ...m.threadSummary, following: nextFollowing } }
+                : m,
+            ),
+          },
+        }
+      : prev.details
+    return {
+      ...prev,
+      channels: nextChannels,
+      threads: nextThreads,
+      details: nextDetails,
+    }
+  })
+  return {
+    ok: true,
+    channelId,
+    rootId: effectiveRootId,
+    following: nextFollowing,
+    ...(body.channel ? { channel: body.channel } : {}),
   }
 }
 
@@ -754,7 +843,7 @@ export async function searchChannelMessages(opts: {
 
 export async function updateChannelPreferences(
   channelId: string,
-  patch: { muted?: boolean; pinned?: boolean },
+  patch: { muted?: boolean; pinned?: boolean; hidden?: boolean },
 ): Promise<ChannelSummary> {
   const res = await apiFetch(`/api/channels/${encodeURIComponent(channelId)}/preferences`, {
     method: 'PATCH',
@@ -764,16 +853,19 @@ export async function updateChannelPreferences(
   const body = (await res.json()) as { channel?: ChannelSummary; error?: string }
   if (!res.ok || !body.channel) throw new Error(body.error || '更新偏好失败')
   setState((prev) => {
-    const channels = sortChannels(
-      prev.channels.some((c) => c.id === body.channel!.id)
-        ? prev.channels.map((c) => (c.id === body.channel!.id ? body.channel! : c))
-        : [body.channel!, ...prev.channels],
-    )
+    const updated = body.channel!
+    const channels = updated.hidden
+      ? prev.channels.filter((c) => c.id !== updated.id)
+      : sortChannels(
+          prev.channels.some((c) => c.id === updated.id)
+            ? prev.channels.map((c) => (c.id === updated.id ? updated : c))
+            : [updated, ...prev.channels],
+        )
     const detail = prev.details[channelId]
     return {
       ...prev,
       channels,
-      ...(detail ? { details: { ...prev.details, [channelId]: { ...detail, channel: body.channel! } } } : {}),
+      ...(detail ? { details: { ...prev.details, [channelId]: { ...detail, channel: updated } } } : {}),
     }
   })
   return body.channel
@@ -902,6 +994,7 @@ function upsertChannelMessage(message: ChannelMessageView, isUpdateOrSelf = fals
           if (c.id !== message.channelId) return c
           const prevThreads = c.threads ?? []
           const existsInList = prevThreads.some((t) => t.rootId === rootId)
+          if (!existsInList && !isUpdateOrSelf) return c
           const nextThreads = existsInList
             ? prevThreads.map((t) =>
                 t.rootId === rootId
@@ -1126,9 +1219,13 @@ export function bindChannelRealtime(snapshot?: { onMessage?: (type: string, hand
         if (!ch?.id) return
         setState((prev) => {
           const exists = prev.channels.some((c) => c.id === ch.id)
-          const channels = exists
-            ? prev.channels.map((c) => (c.id === ch.id ? ch : c))
-            : [ch, ...prev.channels]
+          const channels = ch.hidden
+            ? prev.channels.filter((c) => c.id !== ch.id)
+            : sortChannels(
+                exists
+                  ? prev.channels.map((c) => (c.id === ch.id ? ch : c))
+                  : [ch, ...prev.channels],
+              )
           const detail = prev.details[ch.id]
           return {
             ...prev,

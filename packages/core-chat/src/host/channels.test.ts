@@ -1274,4 +1274,99 @@ describe('Slack-style Group Channels: RBAC, Mention Dispatch, Per-Invoker Queue,
       rmSync(dir, { recursive: true, force: true })
     }
   })
+
+  it('supports personal channel hide/auto-unhide, per-user thread follow/unfollow, auto-follow rules, and recall cleanup', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'biu-channels-follow-'))
+    const db = openAndMigrateBiu(join(dir, 'biu.sqlite'))
+    const store = new CollabStore(db)
+    const alice = store.register('Alice', Date.now(), 'pass123456', 'alice@example.com')
+    const bob = store.register('Bob', Date.now(), 'pass123456', 'bob@example.com')
+    const carol = store.register('Carol', Date.now(), 'pass123456', 'carol@example.com')
+    const ws = store.createWorkspace(alice.id, 'Follow WS')
+    store.addMemberByEmail(alice.id, ws.id, 'bob@example.com')
+    store.addMemberByEmail(alice.id, ws.id, 'carol@example.com')
+
+    const fakeCtx = {
+      get: (key: string) => (key === 'account' ? { store } : undefined),
+      account: { store },
+      sessions: { peekSummary: () => null },
+      tools: { schemas: () => [], invoke: async () => ({ ok: true }) },
+      http: { broadcast: () => undefined, broadcastAccount: () => undefined },
+      effect: () => undefined,
+    } as unknown as Context
+
+    const svc = new ChannelService(
+      fakeCtx,
+      () => ({ chat: async () => ({ content: 'ok', toolCalls: [] }) }),
+      { db },
+    )
+    const asUser = <T>(acc: string, fn: () => T) => runWithAccount(acc, () => runWithRequestWorkspace(ws.id, fn))
+
+    try {
+      // 1. 1v1 私聊隐藏仅影响自己，不影响对方；对方发新消息或重新打开私聊自动浮现
+      const dm = asUser(alice.id, () => svc.openOrCreateDm(bob.id))
+      asUser(alice.id, () => svc.sendMessage(dm.channel.id, { text: '先同步个事' }))
+      const hiddenDm = asUser(alice.id, () => svc.updatePreferences(dm.channel.id, { hidden: true }))
+      assert.equal(hiddenDm.hidden, true)
+      assert.equal(asUser(alice.id, () => svc.listChannels()).some((c) => c.id === dm.channel.id), false)
+      assert.equal(asUser(bob.id, () => svc.listChannels()).some((c) => c.id === dm.channel.id), true)
+
+      // 对方发新消息后自动浮现回 Alice 的侧边栏，且历史消息完整保留
+      asUser(bob.id, () => svc.sendMessage(dm.channel.id, { text: '收到啦' }))
+      assert.equal(asUser(alice.id, () => svc.listChannels()).some((c) => c.id === dm.channel.id), true)
+      assert.equal(asUser(alice.id, () => svc.listMessages(dm.channel.id)).length, 2)
+
+      // 再次隐藏后通过 openOrCreateDm 重开也能自动浮现
+      asUser(alice.id, () => svc.updatePreferences(dm.channel.id, { hidden: true }))
+      assert.equal(asUser(alice.id, () => svc.listChannels()).some((c) => c.id === dm.channel.id), false)
+      asUser(alice.id, () => svc.openOrCreateDm(bob.id))
+      assert.equal(asUser(alice.id, () => svc.listChannels()).some((c) => c.id === dm.channel.id), true)
+
+      // 2. 多人聊天子讨论串：只有已 Follow 的用户才在侧边栏展示
+      const ch = asUser(alice.id, () =>
+        svc.createChannel({ name: '产品评审', memberAccountIds: [bob.id, carol.id] }),
+      )
+      const chId = ch.channel.id
+      const rootMsg = asUser(alice.id, () => svc.sendMessage(chId, { text: '讨论一下侧边栏交互' })).message
+      const r1 = asUser(bob.id, () => svc.sendMessage(chId, { text: '我建议按 Follow 展示', threadRootId: rootMsg.id })).message
+
+      // Alice（根消息作者）与 Bob（回复者）自动 Follow，Carol（未参与）不显示
+      assert.equal(asUser(alice.id, () => svc.listChannels().find((c) => c.id === chId)?.threads?.length ?? 0), 1)
+      assert.equal(asUser(bob.id, () => svc.listChannels().find((c) => c.id === chId)?.threads?.length ?? 0), 1)
+      assert.equal(asUser(carol.id, () => svc.listChannels().find((c) => c.id === chId)?.threads?.length ?? 0), 0)
+      assert.equal(asUser(carol.id, () => svc.getThread(chId, rootMsg.id).following), false)
+
+      // Alice 手动取消关注 → 从 Alice 侧栏消失；Bob 再发普通回复不会打扰重新拉回
+      const unfollowed = asUser(alice.id, () => svc.setThreadFollow(chId, rootMsg.id, false))
+      assert.equal(unfollowed.following, false)
+      assert.equal(asUser(alice.id, () => svc.listChannels().find((c) => c.id === chId)?.threads?.length ?? 0), 0)
+      const r2 = asUser(bob.id, () => svc.sendMessage(chId, { text: '再补充一点细节', threadRootId: rootMsg.id })).message
+      assert.equal(asUser(alice.id, () => svc.listChannels().find((c) => c.id === chId)?.threads?.length ?? 0), 0)
+
+      // Bob 在串内显式 @Alice → 重新自动 Follow，避免漏掉呼唤
+      const r3 = asUser(bob.id, () =>
+        svc.sendMessage(chId, {
+          text: '@Alice 看下这个方案',
+          threadRootId: rootMsg.id,
+          mentions: [{ kind: 'account', id: alice.id, label: 'Alice' }],
+        }),
+      ).message
+      assert.equal(asUser(alice.id, () => svc.listChannels().find((c) => c.id === chId)?.threads?.length ?? 0), 1)
+
+      // Carol 主动点击关注 → 立刻出现在 Carol 侧栏
+      asUser(carol.id, () => svc.setThreadFollow(chId, rootMsg.id, true))
+      assert.equal(asUser(carol.id, () => svc.listChannels().find((c) => c.id === chId)?.threads?.length ?? 0), 1)
+
+      // 撤回串内全部回复 → 有效回复归零，自动从所有人侧栏消失
+      asUser(bob.id, () => svc.recallMessage(chId, r1.id))
+      asUser(bob.id, () => svc.recallMessage(chId, r2.id))
+      asUser(bob.id, () => svc.recallMessage(chId, r3.id))
+      assert.equal(asUser(alice.id, () => svc.listChannels().find((c) => c.id === chId)?.threads?.length ?? 0), 0)
+      assert.equal(asUser(carol.id, () => svc.listChannels().find((c) => c.id === chId)?.threads?.length ?? 0), 0)
+    } finally {
+      svc.dispose()
+      db.close()
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
 })

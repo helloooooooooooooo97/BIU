@@ -519,6 +519,7 @@ CREATE TABLE IF NOT EXISTS channel_members (
   last_read_seq INTEGER NOT NULL DEFAULT 0,
   muted INTEGER NOT NULL DEFAULT 0,
   pinned INTEGER NOT NULL DEFAULT 0,
+  hidden_at INTEGER NOT NULL DEFAULT 0,
   added_by TEXT NOT NULL DEFAULT '',
   added_at INTEGER NOT NULL,
   PRIMARY KEY (channel_id, member_type, member_id)
@@ -566,6 +567,16 @@ CREATE TABLE IF NOT EXISTS channel_saved_messages (
   PRIMARY KEY (account_id, message_id)
 );
 CREATE INDEX IF NOT EXISTS channel_saved_account ON channel_saved_messages(account_id, created_at DESC);
+
+CREATE TABLE IF NOT EXISTS channel_thread_follows (
+  channel_id TEXT NOT NULL,
+  root_message_id TEXT NOT NULL,
+  account_id TEXT NOT NULL,
+  state TEXT NOT NULL DEFAULT 'follow',
+  updated_at INTEGER NOT NULL,
+  PRIMARY KEY (root_message_id, account_id)
+);
+CREATE INDEX IF NOT EXISTS channel_thread_follows_lookup ON channel_thread_follows(channel_id, account_id, state);
 
 CREATE TABLE IF NOT EXISTS channel_agent_runs (
   id TEXT PRIMARY KEY,
@@ -764,6 +775,7 @@ export function ensureChannelsSchema(db: DatabaseSync) {
   addColumnIfMissing('channel_members', 'last_read_seq', `INTEGER NOT NULL DEFAULT 0`)
   addColumnIfMissing('channel_members', 'muted', `INTEGER NOT NULL DEFAULT 0`)
   addColumnIfMissing('channel_members', 'pinned', `INTEGER NOT NULL DEFAULT 0`)
+  addColumnIfMissing('channel_members', 'hidden_at', `INTEGER NOT NULL DEFAULT 0`)
   addColumnIfMissing('channel_messages', 'attachments_json', `TEXT NOT NULL DEFAULT '[]'`)
   addColumnIfMissing('channel_messages', 'thread_root_id', `TEXT NOT NULL DEFAULT ''`)
   addColumnIfMissing('channel_messages', 'pinned_at', `INTEGER NOT NULL DEFAULT 0`)
