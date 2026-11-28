@@ -5,12 +5,12 @@ import type { DatabaseSync } from 'node:sqlite'
 import { allocateRecordId } from '@biu/type-file-system'
 import type { LlmClient, LlmConfig, LlmMessage } from '@biu/host-llm'
 import {
-  CREATE_CHANNELS_SQL,
   currentAccountId,
   currentRequestWorkspaceId,
   dataDir,
   dataHome,
   dataPath,
+  ensureChannelsSchema,
   openAndMigrateBiu,
   runWithAccount,
   runWithActorContext,
@@ -560,26 +560,7 @@ export class ChannelService {
   private db(): DatabaseSync {
     const conn = this.dbOverride ?? openAndMigrateBiu(join(dataDir(), 'biu.sqlite'))
     if (!this.schemaReady.has(conn)) {
-      conn.exec(CREATE_CHANNELS_SQL)
-      const migrations = [
-        `ALTER TABLE channel_members ADD COLUMN context_mode TEXT NOT NULL DEFAULT 'summary'`,
-        `ALTER TABLE channel_members ADD COLUMN last_read_seq INTEGER NOT NULL DEFAULT 0`,
-        `ALTER TABLE channel_members ADD COLUMN muted INTEGER NOT NULL DEFAULT 0`,
-        `ALTER TABLE channel_members ADD COLUMN pinned INTEGER NOT NULL DEFAULT 0`,
-        `ALTER TABLE channel_messages ADD COLUMN attachments_json TEXT NOT NULL DEFAULT '[]'`,
-        `ALTER TABLE channel_messages ADD COLUMN thread_root_id TEXT NOT NULL DEFAULT ''`,
-        `ALTER TABLE channel_messages ADD COLUMN pinned_at INTEGER NOT NULL DEFAULT 0`,
-        `ALTER TABLE channel_messages ADD COLUMN pinned_by TEXT NOT NULL DEFAULT ''`,
-        `ALTER TABLE channel_messages ADD COLUMN edited_at INTEGER NOT NULL DEFAULT 0`,
-        `ALTER TABLE channel_messages ADD COLUMN deleted_at INTEGER NOT NULL DEFAULT 0`,
-      ]
-      for (const sql of migrations) {
-        try {
-          conn.exec(sql)
-        } catch {
-          /* column already exists */
-        }
-      }
+      ensureChannelsSchema(conn)
       this.schemaReady.add(conn)
     }
     return conn
