@@ -134,6 +134,31 @@ export type BatchPermissionApplyResult = {
   updatedIds: string[]
 }
 
+export type AccessRequestRole = 'viewer' | 'commenter' | 'editor'
+export type AccessRequestStatus = 'pending' | 'approved' | 'rejected' | 'cancelled'
+
+export type AccessRequestRecord = {
+  id: string
+  workspaceId: string
+  collection: string
+  recordId: string
+  requesterId: string
+  requesterName: string
+  requesterEmail: string
+  requesterAvatar?: string
+  requesterMemberKind: 'member' | 'external' | 'guest'
+  requestedRole: AccessRequestRole
+  note: string
+  status: AccessRequestStatus
+  grantedRole?: AccessRequestRole
+  handledBy?: string
+  handledByName?: string
+  handledAt?: number
+  decisionNote?: string
+  createdAt: number
+  updatedAt: number
+}
+
 export function id(prefix: string) {
   return `${prefix}_${randomBytes(8).toString('hex')}`
 }

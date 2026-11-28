@@ -1437,6 +1437,92 @@ export function apply(ctx: Context, config: AccountConfig = {}) {
     })
   })
 
+  authedRoute('POST', '/api/account/access-requests', async (route, me) => {
+    const activeWorkspace = resolveScopedWorkspaceId(ctx)
+    requireCollaborativeWorkspace(activeWorkspace ?? '')
+    const body = (await route.json()) as {
+      collection?: string
+      recordId?: string
+      requestedRole?: string
+      note?: string
+    }
+    const result = account.store.createAccessRequest(
+      me.id,
+      String(body.collection ?? ''),
+      String(body.recordId ?? ''),
+      body.requestedRole ?? 'viewer',
+      String(body.note ?? ''),
+    )
+    route.send(200, {
+      submitted: result.submitted,
+      updated: result.updated,
+      request: result.request,
+    })
+  })
+
+  authedRoute('GET', '/api/account/access-requests', async (route, me) => {
+    const activeWorkspace = resolveScopedWorkspaceId(ctx)
+    if (!activeWorkspace || account.workspaceLocation(activeWorkspace) !== 'cloud') {
+      route.send(200, { items: [] })
+      return
+    }
+    const rawScope = route.query.get('scope')
+    const rawStatus = route.query.get('status')
+    const status =
+      rawStatus === 'all' ||
+      rawStatus === 'pending' ||
+      rawStatus === 'approved' ||
+      rawStatus === 'rejected' ||
+      rawStatus === 'cancelled'
+        ? rawStatus
+        : 'pending'
+    const items = account.store.listAccessRequests(me.id, {
+      scope: rawScope === 'mine' ? 'mine' : 'inbox',
+      status,
+      collection: String(route.query.get('collection') ?? '').trim() || undefined,
+      recordId: String(route.query.get('recordId') ?? '').trim() || undefined,
+      limit: Number(route.query.get('limit') ?? 100),
+    })
+    route.send(200, { items })
+  })
+
+  authedRoute('POST', '/api/account/access-requests/:id/decide', async (route, me) => {
+    const activeWorkspace = resolveScopedWorkspaceId(ctx)
+    requireCollaborativeWorkspace(activeWorkspace ?? '')
+    const body = (await route.json()) as {
+      decision?: string
+      grantedRole?: string
+      decisionNote?: string
+    }
+    if (body.decision !== 'approve' && body.decision !== 'reject') {
+      route.send(400, { error: 'decision 只能是 approve 或 reject' })
+      return
+    }
+    const grantedRole =
+      body.grantedRole === 'viewer' || body.grantedRole === 'commenter' || body.grantedRole === 'editor'
+        ? body.grantedRole
+        : undefined
+    if (body.grantedRole !== undefined && !grantedRole) {
+      route.send(400, { error: '无效的授予角色' })
+      return
+    }
+    const result = account.store.decideAccessRequest(me.id, String(route.params.id ?? ''), body.decision, {
+      ...(grantedRole ? { grantedRole } : {}),
+      decisionNote: String(body.decisionNote ?? ''),
+    })
+    if (body.decision === 'approve') {
+      broadcastRecordAccessChange(activeWorkspace, result.request.collection, result.request.recordId)
+    }
+    route.send(200, { request: result.request })
+  })
+
+  authedRoute('POST', '/api/account/access-requests/:id/cancel', async (route, me) => {
+    const activeWorkspace = resolveScopedWorkspaceId(ctx)
+    requireCollaborativeWorkspace(activeWorkspace ?? '')
+    const request = account.store.cancelAccessRequest(me.id, String(route.params.id ?? ''))
+    route.send(200, { request })
+  })
+
   authedRoute('POST', '/api/account/presence', async (route, me) => {
     const body = (await route.json()) as { workspaceId?: string; collection?: string; recordId?: string }
     requireCollaborativeWorkspace(String(body.workspaceId ?? ''))

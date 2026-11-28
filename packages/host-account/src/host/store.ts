@@ -26,6 +26,9 @@ import {
   registerBuiltinPluginLookup,
   tokenHash,
   verifyPassword,
+  type AccessRequestRecord,
+  type AccessRequestRole,
+  type AccessRequestStatus,
   type Account,
   type BatchPermissionApplyInput,
   type BatchPermissionApplyResult,
@@ -48,6 +51,9 @@ export {
   PRESENCE_STALE_MS,
   isRegisteredBuiltinPlugin,
   registerBuiltinPluginLookup,
+  type AccessRequestRecord,
+  type AccessRequestRole,
+  type AccessRequestStatus,
   type Account,
   type BatchPermissionApplyInput,
   type BatchPermissionApplyResult,
@@ -2374,6 +2380,9 @@ export class CollabStore {
       .prepare('DELETE FROM record_grants WHERE workspace_id = ? AND collection = ? AND record_id = ?')
       .run(workspaceId, collection, recordId)
     this.db
+      .prepare('DELETE FROM access_requests WHERE workspace_id = ? AND collection = ? AND record_id = ?')
+      .run(workspaceId, collection, recordId)
+    this.db
       .prepare('DELETE FROM resource_policies WHERE workspace_id = ? AND collection = ? AND record_id = ?')
       .run(workspaceId, collection, recordId)
     this.authorization.invalidate(workspaceId, collection)
@@ -3616,6 +3625,403 @@ export class CollabStore {
       throw new CollabError('记录路径不合法', 400)
     }
     return { collection: normalized, recordId: idPart }
+  }
+
+  private normalizeAccessRequestRole(raw: unknown): AccessRequestRole {
+    if (raw === 'viewer' || raw === 'commenter' || raw === 'editor') return raw
+    throw new CollabError('申请角色只能是 viewer、commenter 或 editor', 400)
+  }
+
+  private hydrateAccessRequestRow(row: {
+    id: string
+    workspace_id: string
+    collection: string
+    record_id: string
+    requester_id: string
+    requested_role: string
+    note: string
+    status: string
+    granted_role: string | null
+    handled_by: string | null
+    handled_at: number | null
+    decision_note: string
+    created_at: number
+    updated_at: number
+    requester_name: string | null
+    requester_display_name: string | null
+    requester_email: string | null
+    requester_avatar: string | null
+    requester_member_kind: string | null
+    handler_name: string | null
+    handler_display_name: string | null
+  }): AccessRequestRecord {
+    const requesterName =
+      String(row.requester_display_name ?? '').trim() ||
+      String(row.requester_name ?? '').trim() ||
+      String(row.requester_email ?? '').trim() ||
+      row.requester_id
+    const handlerName = row.handled_by
+      ? String(row.handler_display_name ?? '').trim() || String(row.handler_name ?? '').trim() || row.handled_by
+      : undefined
+    const memberKind =
+      row.requester_member_kind === 'external' || row.requester_member_kind === 'guest'
+        ? row.requester_member_kind
+        : 'member'
+    return {
+      id: row.id,
+      workspaceId: row.workspace_id,
+      collection: row.collection,
+      recordId: row.record_id,
+      requesterId: row.requester_id,
+      requesterName,
+      requesterEmail: String(row.requester_email ?? ''),
+      ...(row.requester_avatar?.trim() ? { requesterAvatar: row.requester_avatar.trim() } : {}),
+      requesterMemberKind: memberKind,
+      requestedRole: row.requested_role as AccessRequestRole,
+      note: row.note ?? '',
+      status: row.status as AccessRequestStatus,
+      ...(row.granted_role ? { grantedRole: row.granted_role as AccessRequestRole } : {}),
+      ...(row.handled_by ? { handledBy: row.handled_by } : {}),
+      ...(handlerName ? { handledByName: handlerName } : {}),
+      ...(row.handled_at != null ? { handledAt: row.handled_at } : {}),
+      ...(row.decision_note ? { decisionNote: row.decision_note } : {}),
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+    }
+  }
+
+  private getAccessRequestRow(workspaceId: string, requestId: string): AccessRequestRecord | null {
+    const row = this.db
+      .prepare(
+        `SELECT r.*,
+                ra.name AS requester_name,
+                rm.display_name AS requester_display_name,
+                ra.email AS requester_email,
+                rm.avatar AS requester_avatar,
+                rm.member_kind AS requester_member_kind,
+                ha.name AS handler_name,
+                hm.display_name AS handler_display_name
+         FROM access_requests r
+         LEFT JOIN accounts ra ON ra.id = r.requester_id
+         LEFT JOIN workspace_members rm ON rm.workspace_id = r.workspace_id AND rm.account_id = r.requester_id
+         LEFT JOIN accounts ha ON ha.id = r.handled_by
+         LEFT JOIN workspace_members hm ON hm.workspace_id = r.workspace_id AND hm.account_id = r.handled_by
+         WHERE r.workspace_id = ? AND r.id = ?`,
+      )
+      .get(workspaceId, requestId) as Parameters<CollabStore['hydrateAccessRequestRow']>[0] | undefined
+    return row ? this.hydrateAccessRequestRow(row) : null
+  }
+
+  /** 返回记录的所有可审批人（owner + 显式 manager，且仍为空间成员）。 */
+  recordApproverIds(workspaceId: string, collection: string, recordId: string): string[] {
+    if (!workspaceId || !collection || !recordId) return []
+    const policy = this.db
+      .prepare(
+        `SELECT owner_account_id FROM resource_policies
+         WHERE workspace_id = ? AND collection = ? AND record_id = ?`,
+      )
+      .get(workspaceId, collection, recordId) as { owner_account_id?: string } | undefined
+    const grantRows = this.db
+      .prepare(
+        `SELECT subject_id FROM record_grants
+         WHERE workspace_id = ? AND collection = ? AND record_id = ?
+           AND subject_type = 'account' AND effect = 'allow' AND role IN ('owner', 'manager')`,
+      )
+      .all(workspaceId, collection, recordId) as Array<{ subject_id: string }>
+    const candidates = [
+      ...(policy?.owner_account_id ? [policy.owner_account_id] : []),
+      ...grantRows.map((row) => row.subject_id),
+    ]
+    const out: string[] = []
+    const seen = new Set<string>()
+    for (const accId of candidates) {
+      const clean = String(accId ?? '').trim()
+      if (!clean || seen.has(clean)) continue
+      if (!this.isMember(clean, workspaceId)) continue
+      seen.add(clean)
+      out.push(clean)
+    }
+    return out
+  }
+
+  private assertAccessRequestRoleAllowed(
+    workspaceId: string,
+    collection: string,
+    requesterId: string,
+    role: AccessRequestRole,
+  ) {
+    const memberRow = this.db
+      .prepare('SELECT role, member_kind FROM workspace_members WHERE workspace_id = ? AND account_id = ?')
+      .get(workspaceId, requesterId) as { role?: string; member_kind?: string } | undefined
+    if (!memberRow) throw new CollabError('申请人不是这个工作区的成员', 403)
+    const wsPolicy = this.workspacePermissionPolicy(workspaceId)
+    const memberKind =
+      memberRow.member_kind === 'external' || memberRow.member_kind === 'guest' ? memberRow.member_kind : 'member'
+    if (memberKind !== 'member' && !isPolicyExternalShareAllowed(wsPolicy, collection)) {
+      throw new CollabError('当前空间已禁止对外分享，无法申请权限', 403)
+    }
+    if ((memberKind === 'guest' || memberRow.role === 'viewer') && role !== 'viewer') {
+      throw new CollabError('访客或只读成员最高仅可申请可查看权限', 403)
+    }
+    if (collection === '/agents') {
+      if (role === 'commenter') throw new CollabError('代理权限仅支持可查看或可编辑', 400)
+      if (role === 'editor' && !isPolicyAgentEditShareAllowed(wsPolicy)) {
+        throw new CollabError('当前空间已关闭代理可编辑分享', 403)
+      }
+    }
+  }
+
+  /** 提交或更新一条权限申请（防存在性探测：跨空间或不存在的记录静默返回 delivered=false）。 */
+  createAccessRequest(
+    actorId: string,
+    collection: string,
+    recordId: string,
+    requestedRoleRaw: unknown = 'viewer',
+    noteRaw = '',
+    now = Date.now(),
+  ): {
+    submitted: true
+    delivered: boolean
+    updated: boolean
+    request: AccessRequestRecord | null
+    approverIds: string[]
+  } {
+    const workspaceId = this.activeWorkspaceId()
+    if (!workspaceId) throw new CollabError('没有工作区', 400)
+    this.requireMember(actorId, workspaceId)
+    const target = this.recordKey(collection, recordId)
+    if (!(PERMISSION_MANAGED_COLLECTIONS as readonly string[]).includes(target.collection)) {
+      throw new CollabError('该数据类型不支持权限申请', 400)
+    }
+    if (target.collection === '/plugins' && isRegisteredBuiltinPlugin(target.recordId)) {
+      throw new CollabError('内置插件不支持申请权限', 400)
+    }
+    const requestedRole = this.normalizeAccessRequestRole(requestedRoleRaw)
+    this.assertAccessRequestRoleAllowed(workspaceId, target.collection, actorId, requestedRole)
+    const note = String(noteRaw ?? '').trim().slice(0, 500)
+
+    const policy = this.db
+      .prepare(
+        `SELECT owner_account_id FROM resource_policies
+         WHERE workspace_id = ? AND collection = ? AND record_id = ?`,
+      )
+      .get(workspaceId, target.collection, target.recordId) as { owner_account_id?: string } | undefined
+    if (!policy) {
+      // 防存在性探测：记录不存在或属于其他空间时，不返回 404 也不建申请单
+      return { submitted: true, delivered: false, updated: false, request: null, approverIds: [] }
+    }
+
+    const currentDecision = this.authorization.authorize(
+      { type: 'account', accountId: actorId, workspaceId },
+      'resource:read',
+      { type: 'record', workspaceId, collection: target.collection, recordId: target.recordId },
+    )
+    if (currentDecision.allowed && ROLE_RANK[currentDecision.effectiveRole] >= ROLE_RANK[requestedRole]) {
+      throw new CollabError('你已经拥有该权限或更高权限', 409)
+    }
+
+    const approverIds = this.recordApproverIds(workspaceId, target.collection, target.recordId).filter(
+      (accId) => accId !== actorId,
+    )
+    const existing = this.db
+      .prepare(
+        `SELECT id FROM access_requests
+         WHERE workspace_id = ? AND collection = ? AND record_id = ? AND requester_id = ? AND status = 'pending'`,
+      )
+      .get(workspaceId, target.collection, target.recordId, actorId) as { id?: string } | undefined
+
+    if (existing?.id) {
+      this.db
+        .prepare(
+          `UPDATE access_requests
+           SET requested_role = ?, note = ?, updated_at = ?
+           WHERE id = ? AND workspace_id = ? AND status = 'pending'`,
+        )
+        .run(requestedRole, note, now, existing.id, workspaceId)
+      return {
+        submitted: true,
+        delivered: true,
+        updated: true,
+        request: this.getAccessRequestRow(workspaceId, existing.id),
+        approverIds,
+      }
+    }
+
+    const reqId = id('areq')
+    this.db
+      .prepare(
+        `INSERT INTO access_requests
+          (id, workspace_id, collection, record_id, requester_id, requested_role, note, status, decision_note, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', '', ?, ?)`,
+      )
+      .run(reqId, workspaceId, target.collection, target.recordId, actorId, requestedRole, note, now, now)
+    return {
+      submitted: true,
+      delivered: true,
+      updated: false,
+      request: this.getAccessRequestRow(workspaceId, reqId),
+      approverIds,
+    }
+  }
+
+  listAccessRequests(
+    actorId: string,
+    opts: {
+      scope?: 'inbox' | 'mine'
+      status?: AccessRequestStatus | 'all'
+      collection?: string
+      recordId?: string
+      limit?: number
+    } = {},
+  ): AccessRequestRecord[] {
+    const workspaceId = this.activeWorkspaceId()
+    if (!workspaceId) throw new CollabError('没有工作区', 400)
+    this.requireMember(actorId, workspaceId)
+    const scope = opts.scope === 'mine' ? 'mine' : 'inbox'
+    const status = opts.status ?? 'pending'
+    const collection = String(opts.collection ?? '').trim()
+    const recordId = String(opts.recordId ?? '').trim()
+    const limit = Math.min(Math.max(Number(opts.limit) || 100, 1), 200)
+
+    const where: string[] = ['r.workspace_id = ?']
+    const params: Array<string | number> = [workspaceId]
+    if (scope === 'mine') {
+      where.push('r.requester_id = ?')
+      params.push(actorId)
+    }
+    if (status !== 'all') {
+      where.push('r.status = ?')
+      params.push(status)
+    }
+    if (collection) {
+      where.push('r.collection = ?')
+      params.push(collection)
+    }
+    if (recordId) {
+      where.push('r.record_id = ?')
+      params.push(recordId)
+    }
+
+    const rows = this.db
+      .prepare(
+        `SELECT r.*,
+                ra.name AS requester_name,
+                rm.display_name AS requester_display_name,
+                ra.email AS requester_email,
+                rm.avatar AS requester_avatar,
+                rm.member_kind AS requester_member_kind,
+                ha.name AS handler_name,
+                hm.display_name AS handler_display_name
+         FROM access_requests r
+         LEFT JOIN accounts ra ON ra.id = r.requester_id
+         LEFT JOIN workspace_members rm ON rm.workspace_id = r.workspace_id AND rm.account_id = r.requester_id
+         LEFT JOIN accounts ha ON ha.id = r.handled_by
+         LEFT JOIN workspace_members hm ON hm.workspace_id = r.workspace_id AND hm.account_id = r.handled_by
+         WHERE ${where.join(' AND ')}
+         ORDER BY r.created_at DESC
+         LIMIT ?`,
+      )
+      .all(...params, scope === 'inbox' ? limit * 4 : limit) as Array<
+      Parameters<CollabStore['hydrateAccessRequestRow']>[0]
+    >
+
+    const hydrated = rows.map((row) => this.hydrateAccessRequestRow(row))
+    if (scope === 'mine') return hydrated.slice(0, limit)
+    const actor = { type: 'account' as const, accountId: actorId, workspaceId }
+    const out: AccessRequestRecord[] = []
+    for (const item of hydrated) {
+      const decision = this.authorization.authorize(actor, 'resource:manage-permissions', {
+        type: 'record',
+        workspaceId,
+        collection: item.collection,
+        recordId: item.recordId,
+      })
+      if (decision.allowed) {
+        out.push(item)
+        if (out.length >= limit) break
+      }
+    }
+    return out
+  }
+
+  /** 审批权限申请（支持审批人调整授予角色，使用原子条件更新防并发重复审批）。 */
+  decideAccessRequest(
+    actorId: string,
+    requestId: string,
+    decision: 'approve' | 'reject',
+    opts: { grantedRole?: AccessRequestRole; decisionNote?: string } = {},
+    now = Date.now(),
+  ): { request: AccessRequestRecord; approverIds: string[] } {
+    const workspaceId = this.activeWorkspaceId()
+    if (!workspaceId) throw new CollabError('没有工作区', 400)
+    this.requireMember(actorId, workspaceId)
+    const cleanId = String(requestId ?? '').trim()
+    if (!cleanId) throw new CollabError('申请 ID 不能为空', 400)
+    const current = this.getAccessRequestRow(workspaceId, cleanId)
+    if (!current) throw new CollabError('权限申请不存在', 404)
+
+    const auth = this.authorization.authorize(
+      { type: 'account', accountId: actorId, workspaceId },
+      'resource:manage-permissions',
+      { type: 'record', workspaceId, collection: current.collection, recordId: current.recordId },
+    )
+    if (!auth.allowed) throw new CollabError('你没有审批该记录权限申请的资格', 403)
+    if (current.status !== 'pending') throw new CollabError('该申请已被处理或已撤回', 409)
+
+    const decisionNote = String(opts.decisionNote ?? '').trim().slice(0, 500)
+    const approverIds = this.recordApproverIds(workspaceId, current.collection, current.recordId)
+
+    if (decision === 'approve') {
+      const grantedRole =
+        opts.grantedRole !== undefined ? this.normalizeAccessRequestRole(opts.grantedRole) : current.requestedRole
+      this.assertAccessRequestRoleAllowed(workspaceId, current.collection, current.requesterId, grantedRole)
+      const updated = this.db
+        .prepare(
+          `UPDATE access_requests
+           SET status = 'approved', granted_role = ?, handled_by = ?, handled_at = ?, decision_note = ?, updated_at = ?
+           WHERE id = ? AND workspace_id = ? AND status = 'pending'`,
+        )
+        .run(grantedRole, actorId, now, decisionNote, now, cleanId, workspaceId)
+      if (Number(updated.changes) === 0) throw new CollabError('该申请已被处理或已撤回', 409)
+      this.authorization.grant(
+        actorId,
+        { type: 'record', workspaceId, collection: current.collection, recordId: current.recordId },
+        'account',
+        current.requesterId,
+        grantedRole,
+        now,
+      )
+      return { request: this.getAccessRequestRow(workspaceId, cleanId)!, approverIds }
+    }
+
+    const updated = this.db
+      .prepare(
+        `UPDATE access_requests
+         SET status = 'rejected', handled_by = ?, handled_at = ?, decision_note = ?, updated_at = ?
+         WHERE id = ? AND workspace_id = ? AND status = 'pending'`,
+      )
+      .run(actorId, now, decisionNote, now, cleanId, workspaceId)
+    if (Number(updated.changes) === 0) throw new CollabError('该申请已被处理或已撤回', 409)
+    return { request: this.getAccessRequestRow(workspaceId, cleanId)!, approverIds }
+  }
+
+  cancelAccessRequest(actorId: string, requestId: string, now = Date.now()): AccessRequestRecord {
+    const workspaceId = this.activeWorkspaceId()
+    if (!workspaceId) throw new CollabError('没有工作区', 400)
+    this.requireMember(actorId, workspaceId)
+    const cleanId = String(requestId ?? '').trim()
+    if (!cleanId) throw new CollabError('申请 ID 不能为空', 400)
+    const current = this.getAccessRequestRow(workspaceId, cleanId)
+    if (!current || current.requesterId !== actorId) throw new CollabError('权限申请不存在', 404)
+    const updated = this.db
+      .prepare(
+        `UPDATE access_requests
+         SET status = 'cancelled', updated_at = ?
+         WHERE id = ? AND workspace_id = ? AND requester_id = ? AND status = 'pending'`,
+      )
+      .run(now, cleanId, workspaceId, actorId)
+    if (Number(updated.changes) === 0) throw new CollabError('该申请已被处理，无法撤回', 409)
+    return this.getAccessRequestRow(workspaceId, cleanId)!
   }
 
 }

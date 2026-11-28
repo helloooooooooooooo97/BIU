@@ -1,6 +1,6 @@
 type DatabaseSync = import('node:sqlite').DatabaseSync
 
-export const LATEST_BIU_SCHEMA = 64
+export const LATEST_BIU_SCHEMA = 65
 
 export const CREATE_CORE_SQL = `
 CREATE TABLE IF NOT EXISTS pages (
@@ -584,7 +584,33 @@ CREATE TABLE IF NOT EXISTS channel_agent_runs (
 CREATE INDEX IF NOT EXISTS channel_agent_runs_channel ON channel_agent_runs(channel_id, created_at DESC);
 `
 
-const CREATE_LATEST_SQL = `${CREATE_CORE_SQL}\n${CREATE_EDITOR_SQL}\n${CREATE_CHANNELS_SQL}`
+export const CREATE_ACCESS_REQUESTS_SQL = `
+CREATE TABLE IF NOT EXISTS access_requests (
+  id TEXT PRIMARY KEY,
+  workspace_id TEXT NOT NULL,
+  collection TEXT NOT NULL,
+  record_id TEXT NOT NULL,
+  requester_id TEXT NOT NULL,
+  requested_role TEXT NOT NULL,
+  note TEXT NOT NULL DEFAULT '',
+  status TEXT NOT NULL DEFAULT 'pending',
+  granted_role TEXT,
+  handled_by TEXT,
+  handled_at INTEGER,
+  decision_note TEXT NOT NULL DEFAULT '',
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS access_requests_target
+  ON access_requests(workspace_id, collection, record_id, status);
+CREATE INDEX IF NOT EXISTS access_requests_requester
+  ON access_requests(workspace_id, requester_id, status, created_at DESC);
+CREATE UNIQUE INDEX IF NOT EXISTS access_requests_pending_uniq
+  ON access_requests(workspace_id, collection, record_id, requester_id)
+  WHERE status = 'pending';
+`
+
+const CREATE_LATEST_SQL = `${CREATE_CORE_SQL}\n${CREATE_EDITOR_SQL}\n${CREATE_CHANNELS_SQL}\n${CREATE_ACCESS_REQUESTS_SQL}`
 
 function hasTable(db: DatabaseSync, name: string) {
   return tableNames(db).includes(name)
