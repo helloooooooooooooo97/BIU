@@ -17,6 +17,7 @@ import type {
   ChannelSavedMessageView,
   ChannelSearchHit,
   ChannelSummary,
+  ChannelThreadPayload,
 } from '../shared/channel-types.ts'
 
 export type ChannelTypingUser = {
@@ -30,6 +31,7 @@ export type ChannelStoreState = {
   loaded: boolean
   activeChannelId: string | null
   details: Record<string, ChannelDetailPayload>
+  threads: Record<string, ChannelThreadPayload>
   inspected: { channelId: string; runId: string } | null
   runs: Record<string, ChannelRunDetail>
   typingByChannel: Record<string, ChannelTypingUser[]>
@@ -40,6 +42,7 @@ let state: ChannelStoreState = {
   loaded: false,
   activeChannelId: null,
   details: {},
+  threads: {},
   inspected: null,
   runs: {},
   typingByChannel: {},
@@ -81,6 +84,7 @@ export function resetChannelStore() {
     loaded: false,
     activeChannelId: null,
     details: {},
+    threads: {},
     inspected: null,
     runs: {},
     typingByChannel: {},
@@ -325,7 +329,13 @@ export async function removeChannelMember(
 
 export async function sendChannelMessage(
   channelId: string,
-  input: { text: string; replyToId?: string; mentions?: ChannelMention[]; attachments?: ChannelAttachment[] },
+  input: {
+    text: string
+    replyToId?: string
+    threadRootId?: string
+    mentions?: ChannelMention[]
+    attachments?: ChannelAttachment[]
+  },
 ): Promise<{ message: ChannelMessageView; triggeredRunIds: string[] }> {
   const res = await apiFetch(`/api/channels/${encodeURIComponent(channelId)}/messages`, {
     method: 'POST',
@@ -336,6 +346,72 @@ export async function sendChannelMessage(
   if (!res.ok || !body.message) throw new Error(body.error || '发送失败')
   upsertChannelMessage(body.message, true)
   return { message: body.message, triggeredRunIds: body.triggeredRunIds ?? [] }
+}
+
+export async function loadChannelThread(
+  channelId: string,
+  rootMsgId: string,
+): Promise<ChannelThreadPayload | null> {
+  if (!channelId || !rootMsgId) return null
+  try {
+    const res = await apiFetch(
+      `/api/channels/${encodeURIComponent(channelId)}/threads/${encodeURIComponent(rootMsgId)}`,
+    )
+    if (!res.ok) return null
+    const payload = (await res.json()) as ChannelThreadPayload
+    if (!payload?.root?.id) return null
+    setState((prev) => ({
+      ...prev,
+      threads: { ...prev.threads, [payload.root.id]: payload },
+    }))
+    return payload
+  } catch {
+    return null
+  }
+}
+
+export async function summarizeChannel(
+  channelId: string,
+  unreadOnly = false,
+): Promise<{ summary: string; messageCount: number; scopeLabel: string }> {
+  const res = await apiFetch(`/api/channels/${encodeURIComponent(channelId)}/summarize`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ unreadOnly }),
+  })
+  const body = (await res.json()) as { summary?: string; messageCount?: number; scopeLabel?: string; error?: string }
+  if (!res.ok) throw new Error(body.error || '总结聊天失败')
+  return {
+    summary: body.summary ?? '',
+    messageCount: Number(body.messageCount ?? 0),
+    scopeLabel: body.scopeLabel ?? '近期消息',
+  }
+}
+
+export async function saveChannelContentAsPage(
+  title: string,
+  content: string,
+): Promise<{ id: string; title: string }> {
+  const cleanTitle = title.trim().slice(0, 80) || '聊天记录沉淀'
+  const res = await apiFetch('/api/db/create', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      path: '/pages',
+      records: [{ title: cleanTitle, content }],
+      scope: 'workspace',
+    }),
+  })
+  const body = (await res.json().catch(() => ({}))) as {
+    ids?: string[]
+    items?: Array<{ id?: string; value?: { id?: string } }>
+    error?: string
+  }
+  if (!res.ok) throw new Error(body.error || '保存为页面失败')
+  const id =
+    String(body.ids?.[0] ?? body.items?.[0]?.id ?? body.items?.[0]?.value?.id ?? '').trim()
+  if (!id) throw new Error('保存为页面失败：未返回页面 ID')
+  return { id, title: cleanTitle }
 }
 
 export async function uploadChannelAttachment(channelId: string, file: File): Promise<ChannelAttachment> {
@@ -493,21 +569,39 @@ export async function loadChannelMessagesAround(channelId: string, messageId: st
 function applyReactionsToMessage(channelId: string, messageId: string, reactions: ChannelReactionSummary[]) {
   setState((prev) => {
     const detail = prev.details[channelId]
-    if (!detail) return prev
-    const myId = detail.myAccountId
+    const myId = detail?.myAccountId ?? ''
     const hydrated = reactions.map((r) => ({
       ...r,
       reactedByMe: Array.isArray(r.accountIds) ? r.accountIds.includes(myId) : r.reactedByMe,
     }))
+    let nextThreads = prev.threads
+    for (const [rootId, thread] of Object.entries(prev.threads)) {
+      if (thread.root.id === messageId) {
+        nextThreads = { ...nextThreads, [rootId]: { ...thread, root: { ...thread.root, reactions: hydrated } } }
+      } else if (thread.replies.some((r) => r.id === messageId)) {
+        nextThreads = {
+          ...nextThreads,
+          [rootId]: {
+            ...thread,
+            replies: thread.replies.map((r) => (r.id === messageId ? { ...r, reactions: hydrated } : r)),
+          },
+        }
+      }
+    }
     return {
       ...prev,
-      details: {
-        ...prev.details,
-        [channelId]: {
-          ...detail,
-          messages: detail.messages.map((m) => (m.id === messageId ? { ...m, reactions: hydrated } : m)),
-        },
-      },
+      threads: nextThreads,
+      ...(detail
+        ? {
+            details: {
+              ...prev.details,
+              [channelId]: {
+                ...detail,
+                messages: detail.messages.map((m) => (m.id === messageId ? { ...m, reactions: hydrated } : m)),
+              },
+            },
+          }
+        : {}),
     }
   })
 }
@@ -718,6 +812,49 @@ function messagePreviewText(message: ChannelMessageView): string {
 function upsertChannelMessage(message: ChannelMessageView, isUpdateOrSelf = false) {
   setState((prev) => {
     const detail = prev.details[message.channelId]
+    // 讨论串回复仅进入对应 thread，不污染主频道消息流
+    if (message.threadRootId) {
+      const rootId = message.threadRootId
+      const existingThread = prev.threads[rootId]
+      let nextThreads = prev.threads
+      if (existingThread) {
+        const exists = existingThread.replies.some((m) => m.id === message.id)
+        const nextReplies = exists
+          ? existingThread.replies.map((m) => (m.id === message.id ? message : m))
+          : [...existingThread.replies, message].sort((a, b) => a.seq - b.seq)
+        nextThreads = {
+          ...prev.threads,
+          [rootId]: { ...existingThread, replies: nextReplies },
+        }
+      }
+      // 乐观更新主消息流里 root 的回复计数
+      let nextDetails = prev.details
+      if (detail && !message.ephemeralTo && !isUpdateOrSelf) {
+        nextDetails = {
+          ...prev.details,
+          [message.channelId]: {
+            ...detail,
+            messages: detail.messages.map((m) => {
+              if (m.id !== rootId) return m
+              const prevSum = m.threadSummary
+              const names = prevSum?.participantNames ?? []
+              return {
+                ...m,
+                threadSummary: {
+                  replyCount: (prevSum?.replyCount ?? 0) + 1,
+                  lastReplyAt: Math.max(prevSum?.lastReplyAt ?? 0, message.createdAt),
+                  participantNames: names.includes(message.senderName)
+                    ? names
+                    : [...names, message.senderName].slice(0, 6),
+                },
+              }
+            }),
+          },
+        }
+      }
+      return { ...prev, threads: nextThreads, details: nextDetails }
+    }
+
     const existed = detail ? detail.messages.some((m) => m.id === message.id) : false
     const myAccountId = detail?.myAccountId ?? ''
     const isFromSelf = Boolean(myAccountId) && message.senderType === 'account' && message.senderId === myAccountId
@@ -752,13 +889,17 @@ function upsertChannelMessage(message: ChannelMessageView, isUpdateOrSelf = fals
         }
       }),
     )
-    if (!detail) return { ...prev, channels: nextChannels }
+    const nextThreads = prev.threads[message.id]
+      ? { ...prev.threads, [message.id]: { ...prev.threads[message.id]!, root: message } }
+      : prev.threads
+    if (!detail) return { ...prev, channels: nextChannels, threads: nextThreads }
     const nextMessages = existed
       ? detail.messages.map((m) => (m.id === message.id ? message : m))
       : [...detail.messages, message].sort((a, b) => a.seq - b.seq)
     return {
       ...prev,
       channels: nextChannels,
+      threads: nextThreads,
       details: {
         ...prev.details,
         [message.channelId]: { ...detail, messages: nextMessages },

@@ -1099,4 +1099,95 @@ describe('Slack-style Group Channels: RBAC, Mention Dispatch, Per-Invoker Queue,
       rmSync(dir, { recursive: true, force: true })
     }
   })
+
+  it('supports Slack Threads (isolated from main feed, thread-focused Agent context) and AI channel summarization', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'biu-channels-p2-'))
+    const db = openAndMigrateBiu(join(dir, 'biu.sqlite'))
+    const store = new CollabStore(db)
+    const alice = store.register('Alice', Date.now(), 'pass123456', 'alice@example.com')
+    const bob = store.register('Bob', Date.now(), 'pass123456', 'bob@example.com')
+    const ws = store.createWorkspace(alice.id, 'P2 WS')
+    store.addMemberByEmail(alice.id, ws.id, 'bob@example.com')
+    runWithAccount(alice.id, () =>
+      runWithRequestWorkspace(ws.id, () => {
+        store.attach(ws.id, '/agents', 'ag-thread', Date.now(), { accessMode: 'private' })
+      }),
+    )
+
+    const capturedThreadPrompts: Array<{ system: string; users: string[] }> = []
+    const fakeCtx = {
+      get: (key: string) => (key === 'account' ? { store } : undefined),
+      account: { store },
+      sessions: {
+        peekSummary: (id: string) => (id === 'ag-thread' ? { id, title: '架构助手', config: {} } : null),
+      },
+      tools: { schemas: () => [], invoke: async () => ({ ok: true }) },
+      http: { broadcast: () => undefined, broadcastAccount: () => undefined },
+      effect: () => undefined,
+    } as unknown as Context
+
+    const svc = new ChannelService(
+      fakeCtx,
+      () => ({
+        chat: async (messages) => {
+          const system = String(messages.find((m) => m.role === 'system')?.content ?? '')
+          const users = messages.filter((m) => m.role === 'user').map((m) => String(m.content ?? ''))
+          if (system.includes('聊天总结助手')) {
+            return { content: '1. 核心结论：数据库分库方案已定。\n2. 待办：Bob 本周五完成压测。', toolCalls: [] }
+          }
+          capturedThreadPrompts.push({ system, users })
+          return { content: '话题内回复：建议使用读写分离 + 连接池限流。', toolCalls: [] }
+        },
+      }),
+      { db },
+    )
+    const asUser = <T>(acc: string, fn: () => T) => runWithAccount(acc, () => runWithRequestWorkspace(ws.id, fn))
+
+    try {
+      const ch = asUser(alice.id, () =>
+        svc.createChannel({ name: '架构群', memberAccountIds: [bob.id], agentIds: ['ag-thread'] }),
+      )
+      const chId = ch.channel.id
+
+      // 主聊天流两条独立消息
+      const rootMsg = asUser(alice.id, () => svc.sendMessage(chId, { text: '讨论一下数据库分库方案' })).message
+      asUser(bob.id, () => svc.sendMessage(chId, { text: '无关闲聊：中午吃什么？' }))
+
+      // 在 rootMsg 下发起 Thread 回复并 @架构助手
+      const tReply = asUser(bob.id, () =>
+        svc.sendMessage(chId, { text: '@架构助手 读写分离怎么设计？', threadRootId: rootMsg.id }),
+      ).message
+      assert.equal(tReply.threadRootId, rootMsg.id)
+
+      await waitFor(() => capturedThreadPrompts.length === 1)
+      await waitFor(() => asUser(alice.id, () => svc.getThread(chId, rootMsg.id).replies.length) === 2)
+
+      // 1. Thread 回复不会污染主信息流，但主信息流的 rootMsg 带上了 threadSummary
+      const mainMessages = asUser(alice.id, () => svc.listMessages(chId))
+      assert.equal(mainMessages.length, 2)
+      const hydratedRoot = mainMessages.find((m) => m.id === rootMsg.id)!
+      assert.equal(hydratedRoot.threadSummary?.replyCount, 2)
+      assert.ok(hydratedRoot.threadSummary?.participantNames.includes('Bob'))
+      assert.ok(hydratedRoot.threadSummary?.participantNames.includes('架构助手'))
+
+      // 2. Thread 内 @Agent 只聚焦根消息与串内回复，不包含主群无关闲聊，且回复直接落在同一个 Thread 里
+      assert.ok(capturedThreadPrompts[0]!.system.includes('讨论串（Thread）'))
+      assert.ok(capturedThreadPrompts[0]!.users.some((u) => u.includes('数据库分库方案')))
+      assert.equal(capturedThreadPrompts[0]!.users.some((u) => u.includes('中午吃什么')), false)
+
+      const thread = asUser(alice.id, () => svc.getThread(chId, rootMsg.id))
+      assert.equal(thread.replies.length, 2)
+      assert.equal(thread.replies[1]!.senderType, 'agent')
+      assert.equal(thread.replies[1]!.threadRootId, rootMsg.id)
+
+      // 3. AI 总结聊天要点
+      const summarized = await asUser(alice.id, () => svc.summarizeChannel(chId))
+      assert.ok(summarized.messageCount >= 4)
+      assert.ok(summarized.summary.includes('数据库分库方案'))
+    } finally {
+      svc.dispose()
+      db.close()
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
 })

@@ -1041,3 +1041,143 @@ test('ChannelStage supports emoji reactions, pin/save, in-channel search, and ch
     assert.deepEqual(prefPatched, { pinned: true })
   })
 })
+
+test('ChannelStage supports Threads drawer, AI summary modal, and saving message to BIU page', async () => {
+  let threadSentBody: Record<string, unknown> | null = null
+  let createdPageBody: Record<string, unknown> | null = null
+  const now = Date.now()
+  const rootMsg = {
+    id: 'm-root',
+    channelId: 'ch-p2',
+    seq: 1,
+    senderType: 'account',
+    senderId: 'acc-97',
+    senderName: '97',
+    replyToId: '',
+    text: '讨论一下数据库分库方案',
+    mentions: [],
+    threadSummary: { replyCount: 1, lastReplyAt: now, participantNames: ['Alice'] },
+    traceId: '',
+    ephemeralTo: '',
+    createdAt: now - 5000,
+  }
+  const existingReply = {
+    id: 'm-r1',
+    channelId: 'ch-p2',
+    seq: 2,
+    senderType: 'account',
+    senderId: 'acc-alice',
+    senderName: 'Alice',
+    replyToId: '',
+    threadRootId: 'm-root',
+    text: '先按租户分片吧',
+    mentions: [],
+    traceId: '',
+    ephemeralTo: '',
+    createdAt: now - 2000,
+  }
+
+  const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = new URL(String(input), 'http://test.local')
+    if (url.pathname === '/api/channels/ch-p2' && (!init?.method || init.method === 'GET')) {
+      return new Response(
+        JSON.stringify({
+          channel: {
+            id: 'ch-p2',
+            workspaceId: 'ws-1',
+            kind: 'channel',
+            dmKey: '',
+            name: '架构群',
+            topic: '',
+            accessMode: 'private',
+            createdBy: 'acc-alice',
+            createdAt: now - 5000,
+            updatedAt: now,
+            memberCount: 2,
+            agentCount: 0,
+            lastMessageAt: now,
+            lastMessageText: rootMsg.text,
+          },
+          members: [
+            { channelId: 'ch-p2', memberType: 'account', memberId: 'acc-alice', role: 'owner', addedBy: 'acc-alice', addedAt: 1, name: 'Alice', isOwn: true },
+            { channelId: 'ch-p2', memberType: 'account', memberId: 'acc-97', role: 'member', addedBy: 'acc-alice', addedAt: 1, name: '97', isOwn: false },
+          ],
+          messages: [rootMsg],
+          activities: [],
+          myAccountId: 'acc-alice',
+          canManageMembers: true,
+        }),
+        { status: 200 },
+      )
+    }
+    if (url.pathname === '/api/channels/ch-p2/threads/m-root' && (!init?.method || init.method === 'GET')) {
+      return new Response(JSON.stringify({ channelId: 'ch-p2', root: rootMsg, replies: [existingReply] }), { status: 200 })
+    }
+    if (url.pathname === '/api/channels/ch-p2/messages' && init?.method === 'POST') {
+      threadSentBody = JSON.parse(String(init.body ?? '{}')) as Record<string, unknown>
+      return new Response(
+        JSON.stringify({
+          message: {
+            id: 'm-r2',
+            channelId: 'ch-p2',
+            seq: 3,
+            senderType: 'account',
+            senderId: 'acc-alice',
+            senderName: 'Alice',
+            replyToId: '',
+            threadRootId: 'm-root',
+            text: String(threadSentBody.text ?? ''),
+            mentions: [],
+            traceId: '',
+            ephemeralTo: '',
+            createdAt: now,
+          },
+          triggeredRunIds: [],
+        }),
+        { status: 200 },
+      )
+    }
+    if (url.pathname === '/api/channels/ch-p2/summarize' && init?.method === 'POST') {
+      return new Response(
+        JSON.stringify({ summary: '核心结论：按租户分片。', messageCount: 2, scopeLabel: '近期消息' }),
+        { status: 200 },
+      )
+    }
+    if (url.pathname === '/api/db/create' && init?.method === 'POST') {
+      createdPageBody = JSON.parse(String(init.body ?? '{}')) as Record<string, unknown>
+      return new Response(JSON.stringify({ ok: true, ids: ['pg-new-1'] }), { status: 200 })
+    }
+    return new Response(JSON.stringify({ items: [] }), { status: 200 })
+  })
+  vi.stubGlobal('fetch', fetchMock)
+
+  const stage = render(
+    <MemoryRouter initialEntries={['/channels/ch-p2']}>
+      <ChannelStage channelId="ch-p2" />
+    </MemoryRouter>,
+  )
+
+  // 1. 点击「1 条回复」打开右侧讨论串面板并发送串内回复
+  const threadBar = await waitFor(() => stage.getByTestId('channel-thread-bar-m-root'))
+  fireEvent.click(threadBar)
+  await waitFor(() => assert.ok(stage.getByTestId('channel-thread-reply-m-r1')))
+
+  fireEvent.change(stage.getByTestId('channel-thread-input'), { target: { value: '同意这个方案' } })
+  fireEvent.click(stage.getByTestId('channel-thread-send'))
+  await waitFor(() => {
+    assert.equal(threadSentBody?.threadRootId, 'm-root')
+    assert.equal(threadSentBody?.text, '同意这个方案')
+    assert.ok(stage.getByTestId('channel-thread-reply-m-r2'))
+  })
+
+  // 2. 点击「✨ 总结」弹出 AI 聊天要点总结，并一键存为 BIU 页面
+  fireEvent.click(stage.getByTestId('channel-summarize-btn'))
+  await waitFor(() => {
+    assert.ok(stage.getByTestId('channel-summary-modal').textContent?.includes('按租户分片'))
+  })
+  fireEvent.click(stage.getByTestId('channel-summary-save-page'))
+  await waitFor(() => {
+    assert.equal(createdPageBody?.path, '/pages')
+    assert.ok(stage.getByTestId('channel-saved-page-toast'))
+  })
+})

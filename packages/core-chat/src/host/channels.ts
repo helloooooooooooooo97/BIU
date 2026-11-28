@@ -42,6 +42,8 @@ import {
   type ChannelSavedMessageView,
   type ChannelSearchHit,
   type ChannelSummary,
+  type ChannelThreadPayload,
+  type ChannelThreadSummary,
 } from '../shared/channel-types.ts'
 
 export const MAX_CHANNEL_HANDOFF_HOPS = 3
@@ -106,6 +108,7 @@ type MessageRow = {
   sender_type: string
   sender_id: string
   reply_to_id: string
+  thread_root_id?: string
   text: string
   mentions_json: string
   attachments_json?: string
@@ -142,6 +145,7 @@ type QueuedJob = {
   agentOwnerId: string
   invokerId: string
   originMessageId: string
+  threadRootId?: string
   hopCount: number
   visitedAgents: Set<string>
   messages: Array<{ id: string; senderName: string; text: string }>
@@ -563,6 +567,7 @@ export class ChannelService {
         `ALTER TABLE channel_members ADD COLUMN muted INTEGER NOT NULL DEFAULT 0`,
         `ALTER TABLE channel_members ADD COLUMN pinned INTEGER NOT NULL DEFAULT 0`,
         `ALTER TABLE channel_messages ADD COLUMN attachments_json TEXT NOT NULL DEFAULT '[]'`,
+        `ALTER TABLE channel_messages ADD COLUMN thread_root_id TEXT NOT NULL DEFAULT ''`,
         `ALTER TABLE channel_messages ADD COLUMN pinned_at INTEGER NOT NULL DEFAULT 0`,
         `ALTER TABLE channel_messages ADD COLUMN pinned_by TEXT NOT NULL DEFAULT ''`,
         `ALTER TABLE channel_messages ADD COLUMN edited_at INTEGER NOT NULL DEFAULT 0`,
@@ -824,7 +829,7 @@ export class ChannelService {
     const last = db
       .prepare(
         `SELECT text, attachments_json, deleted_at, created_at FROM channel_messages
-         WHERE channel_id = ? AND ephemeral_to = ''
+         WHERE channel_id = ? AND ephemeral_to = '' AND thread_root_id = ''
          ORDER BY seq DESC LIMIT 1`,
       )
       .get(row.id) as { text?: string; attachments_json?: string; deleted_at?: number; created_at?: number } | undefined
@@ -838,7 +843,7 @@ export class ChannelService {
     const unreadRows = db
       .prepare(
         `SELECT mentions_json FROM channel_messages
-         WHERE channel_id = ? AND ephemeral_to = '' AND deleted_at = 0
+         WHERE channel_id = ? AND ephemeral_to = '' AND deleted_at = 0 AND thread_root_id = ''
            AND seq > ? AND NOT (sender_type = 'account' AND sender_id = ?)`,
       )
       .all(row.id, lastReadSeq, viewerAccountId) as Array<{ mentions_json?: string }>
@@ -1483,7 +1488,7 @@ export class ChannelService {
       ? this.db()
           .prepare(
             `SELECT * FROM channel_messages
-             WHERE channel_id = ? AND (ephemeral_to = '' OR ephemeral_to = ?) AND seq < ?
+             WHERE channel_id = ? AND thread_root_id = '' AND (ephemeral_to = '' OR ephemeral_to = ?) AND seq < ?
              ORDER BY seq DESC
              LIMIT ?`,
           )
@@ -1491,7 +1496,7 @@ export class ChannelService {
       : this.db()
           .prepare(
             `SELECT * FROM channel_messages
-             WHERE channel_id = ? AND (ephemeral_to = '' OR ephemeral_to = ?)
+             WHERE channel_id = ? AND thread_root_id = '' AND (ephemeral_to = '' OR ephemeral_to = ?)
              ORDER BY seq DESC
              LIMIT ?`,
           )
@@ -1525,7 +1530,7 @@ export class ChannelService {
       db
         .prepare(
           `SELECT * FROM channel_messages
-           WHERE channel_id = ? AND (ephemeral_to = '' OR ephemeral_to = ?) AND seq <= ?
+           WHERE channel_id = ? AND thread_root_id = '' AND (ephemeral_to = '' OR ephemeral_to = ?) AND seq <= ?
            ORDER BY seq DESC LIMIT ?`,
         )
         .all(channelId, viewerAccountId, target.seq, half + 1) as MessageRow[]
@@ -1536,7 +1541,7 @@ export class ChannelService {
       db
         .prepare(
           `SELECT * FROM channel_messages
-           WHERE channel_id = ? AND (ephemeral_to = '' OR ephemeral_to = ?) AND seq > ?
+           WHERE channel_id = ? AND thread_root_id = '' AND (ephemeral_to = '' OR ephemeral_to = ?) AND seq > ?
            ORDER BY seq ASC LIMIT ?`,
         )
         .all(channelId, viewerAccountId, target.seq, half) as MessageRow[]
@@ -1641,6 +1646,9 @@ export class ChannelService {
     const deletedAt = Number(row.deleted_at ?? 0)
     const pinnedAt = Number(row.pinned_at ?? 0)
     const pinnedBy = String(row.pinned_by ?? '').trim()
+    const threadRootId = String(row.thread_root_id ?? '').trim()
+    const threadSummary =
+      !threadRootId && !row.ephemeral_to ? this.threadSummaryForMessage(row.id, channelWorkspaceId) : undefined
     const reactions = deletedAt === 0 && !row.ephemeral_to ? this.reactionsForMessage(row.id, viewerAccountId, channelWorkspaceId) : []
     const savedRow =
       deletedAt === 0 && !row.ephemeral_to
@@ -1659,6 +1667,8 @@ export class ChannelService {
       ...(senderMascot ? { senderMascot } : {}),
       replyToId: row.reply_to_id,
       replyPreview,
+      ...(threadRootId ? { threadRootId } : {}),
+      ...(threadSummary ? { threadSummary } : {}),
       text: deletedAt > 0 ? '' : row.text,
       mentions: safeJsonParse<ChannelMention[]>(row.mentions_json, []),
       ...(deletedAt === 0 && attachments.length ? { attachments } : {}),
@@ -1674,11 +1684,162 @@ export class ChannelService {
     }
   }
 
+  private threadSummaryForMessage(rootMsgId: string, workspaceId?: string): ChannelThreadSummary | undefined {
+    const rows = this.db()
+      .prepare(
+        `SELECT sender_type, sender_id, created_at FROM channel_messages
+         WHERE thread_root_id = ? AND ephemeral_to = '' AND deleted_at = 0
+         ORDER BY seq ASC`,
+      )
+      .all(rootMsgId) as Array<{ sender_type: string; sender_id: string; created_at: number }>
+    if (rows.length === 0) return undefined
+    const seen = new Set<string>()
+    const participantNames: string[] = []
+    let lastReplyAt = 0
+    for (const r of rows) {
+      if (r.created_at > lastReplyAt) lastReplyAt = r.created_at
+      const key = `${r.sender_type}:${r.sender_id}`
+      if (seen.has(key)) continue
+      seen.add(key)
+      const name =
+        r.sender_type === 'agent'
+          ? this.agentMeta(r.sender_id).name
+          : r.sender_type === 'account'
+            ? this.accountLabel(r.sender_id, workspaceId)
+            : '系统'
+      participantNames.push(name)
+    }
+    return {
+      replyCount: rows.length,
+      lastReplyAt,
+      participantNames: participantNames.slice(0, 6),
+    }
+  }
+
+  getThread(channelId: string, rootMsgId: string): ChannelThreadPayload {
+    const { accountId } = this.currentActorIds()
+    const ch = this.requireChannelRow(channelId, accountId)
+    const db = this.db()
+    const rawRoot = db
+      .prepare(`SELECT * FROM channel_messages WHERE id = ? AND channel_id = ?`)
+      .get(rootMsgId, channelId) as MessageRow | undefined
+    if (!rawRoot || rawRoot.ephemeral_to) throw new Error('未找到对应的话题根消息')
+    const effectiveRootId = rawRoot.thread_root_id?.trim() || rawRoot.id
+    const rootRow =
+      effectiveRootId === rawRoot.id
+        ? rawRoot
+        : ((db.prepare(`SELECT * FROM channel_messages WHERE id = ? AND channel_id = ?`).get(effectiveRootId, channelId) as MessageRow | undefined) ?? rawRoot)
+    const replyRows = db
+      .prepare(
+        `SELECT * FROM channel_messages
+         WHERE channel_id = ? AND thread_root_id = ? AND (ephemeral_to = '' OR ephemeral_to = ?)
+         ORDER BY seq ASC
+         LIMIT 200`,
+      )
+      .all(channelId, rootRow.id, accountId) as MessageRow[]
+    const lookup = new Map<string, MessageRow>([[rootRow.id, rootRow]])
+    for (const r of replyRows) lookup.set(r.id, r)
+    return {
+      channelId,
+      root: this.hydrateMessage(rootRow, lookup, ch.workspace_id, accountId),
+      replies: replyRows.map((r) => this.hydrateMessage(r, lookup, ch.workspace_id, accountId)),
+    }
+  }
+
+  async summarizeChannel(
+    channelId: string,
+    opts?: { unreadOnly?: boolean },
+  ): Promise<{ summary: string; messageCount: number; scopeLabel: string }> {
+    const { accountId } = this.currentActorIds()
+    const ch = this.requireChannelRow(channelId, accountId)
+    const db = this.db()
+    const memberRow = db
+      .prepare(
+        `SELECT last_read_seq FROM channel_members WHERE channel_id = ? AND member_type = 'account' AND member_id = ?`,
+      )
+      .get(channelId, accountId) as { last_read_seq?: number } | undefined
+    const lastReadSeq = Number(memberRow?.last_read_seq ?? 0)
+    let rows: MessageRow[] = []
+    let scopeLabel = '近期消息'
+    if (opts?.unreadOnly && lastReadSeq > 0) {
+      rows = db
+        .prepare(
+          `SELECT * FROM channel_messages
+           WHERE channel_id = ? AND ephemeral_to = '' AND deleted_at = 0 AND seq > ?
+           ORDER BY seq ASC LIMIT 40`,
+        )
+        .all(channelId, lastReadSeq) as MessageRow[]
+      if (rows.length > 0) scopeLabel = '未读消息'
+    }
+    if (rows.length === 0) {
+      rows = db
+        .prepare(
+          `SELECT * FROM (
+             SELECT * FROM channel_messages
+             WHERE channel_id = ? AND ephemeral_to = '' AND deleted_at = 0
+             ORDER BY seq DESC LIMIT 30
+           ) ORDER BY seq ASC`,
+        )
+        .all(channelId) as MessageRow[]
+    }
+    if (rows.length === 0) {
+      return { summary: '当前聊天暂无可总结的消息。', messageCount: 0, scopeLabel }
+    }
+    const viewerName = this.accountLabel(accountId, ch.workspace_id)
+    const transcript = rows
+      .map((r) => {
+        const who =
+          r.sender_type === 'agent'
+            ? this.agentMeta(r.sender_id).name
+            : r.sender_type === 'account'
+              ? this.accountLabel(r.sender_id, ch.workspace_id)
+              : '系统'
+        const threadTag = r.thread_root_id ? '[话题回复] ' : ''
+        return `- ${threadTag}${who}: ${r.text.replace(/\s+/g, ' ').trim().slice(0, 260)}`
+      })
+      .join('\n')
+
+    try {
+      const llm = this.resolveLlmClient('', accountId, accountId)
+      const res = await llm.chat(
+        [
+          {
+            role: 'system',
+            content: `你是 BIU 聊天总结助手。请为「${viewerName}」总结聊天「#${ch.name}」的${scopeLabel}，输出简洁清晰的 Markdown，包含：\n1. 核心结论与进展\n2. 待办与负责人\n3. 与「${viewerName}」直接相关或被 @ 提及的事项（如有）。`,
+          },
+          { role: 'user', content: transcript },
+        ],
+        [],
+      )
+      const raw = String(res?.content ?? '').trim()
+      if (raw && !raw.startsWith('未配置 API Key')) {
+        return { summary: raw, messageCount: rows.length, scopeLabel }
+      }
+    } catch {
+      /* fallback below */
+    }
+    const fallbackLines = rows.slice(-8).map((r) => {
+      const who =
+        r.sender_type === 'agent'
+          ? this.agentMeta(r.sender_id).name
+          : r.sender_type === 'account'
+            ? this.accountLabel(r.sender_id, ch.workspace_id)
+            : '系统'
+      return `- **${who}**：${r.text.replace(/\s+/g, ' ').trim().slice(0, 140) || '[附件]'}`
+    })
+    return {
+      summary: `### #${ch.name} · ${scopeLabel}摘要（共 ${rows.length} 条）\n\n${fallbackLines.join('\n')}`,
+      messageCount: rows.length,
+      scopeLabel,
+    }
+  }
+
   private insertMessage(input: {
     channelId: string
     senderType: 'account' | 'agent' | 'system'
     senderId: string
     replyToId?: string
+    threadRootId?: string
     text: string
     mentions?: ChannelMention[]
     attachments?: ChannelAttachment[]
@@ -1693,10 +1854,11 @@ export class ChannelService {
       .prepare(`SELECT COALESCE(MAX(seq), 0) AS max_seq FROM channel_messages WHERE channel_id = ?`)
       .get(input.channelId) as { max_seq?: number } | undefined
     const seq = Number(maxRow?.max_seq ?? 0) + 1
+    const threadRootId = String(input.threadRootId ?? '').trim()
     db.prepare(
       `INSERT INTO channel_messages
-        (id, channel_id, seq, sender_type, sender_id, reply_to_id, text, mentions_json, attachments_json, trace_id, ephemeral_to, meta_json, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        (id, channel_id, seq, sender_type, sender_id, reply_to_id, thread_root_id, text, mentions_json, attachments_json, trace_id, ephemeral_to, meta_json, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     ).run(
       id,
       input.channelId,
@@ -1704,6 +1866,7 @@ export class ChannelService {
       input.senderType,
       input.senderId,
       input.replyToId ?? '',
+      threadRootId,
       input.text,
       JSON.stringify(input.mentions ?? []),
       JSON.stringify(input.attachments ?? []),
@@ -1714,7 +1877,7 @@ export class ChannelService {
     )
     if (!input.ephemeralTo) {
       db.prepare(`UPDATE channels SET updated_at = ? WHERE id = ?`).run(now, input.channelId)
-      if (input.senderType === 'account' && input.senderId) {
+      if (input.senderType === 'account' && input.senderId && !threadRootId) {
         db.prepare(
           `UPDATE channel_members
            SET last_read_seq = MAX(last_read_seq, ?)
@@ -1730,7 +1893,15 @@ export class ChannelService {
         this.broadcastToAccounts([input.ephemeralTo], ch.workspace_id, 'channel/message', { message: view })
       } else {
         this.broadcastToChannel(input.channelId, ch.workspace_id, 'channel/message', { message: view })
-        if (input.senderType === 'account' || input.senderType === 'agent') {
+        if (threadRootId) {
+          const rootRow = db
+            .prepare(`SELECT * FROM channel_messages WHERE id = ? AND channel_id = ?`)
+            .get(threadRootId, input.channelId) as MessageRow | undefined
+          if (rootRow) {
+            const rootView = this.hydrateMessage(rootRow, undefined, ch.workspace_id)
+            this.broadcastToChannel(input.channelId, ch.workspace_id, 'channel/message-updated', { message: rootView })
+          }
+        } else if (input.senderType === 'account' || input.senderType === 'agent') {
           const actorForNaming = input.senderType === 'account' ? input.senderId : ch.created_by
           this.maybeScheduleAutoName(input.channelId, ch, actorForNaming)
         }
@@ -2045,11 +2216,19 @@ export class ChannelService {
 
   sendMessage(
     channelId: string,
-    input: { text: string; replyToId?: string; mentions?: ChannelMention[]; attachments?: ChannelAttachment[] },
+    input: { text: string; replyToId?: string; threadRootId?: string; mentions?: ChannelMention[]; attachments?: ChannelAttachment[] },
   ): { message: ChannelMessageView; triggeredRunIds: string[] } {
     const { accountId } = this.currentActorIds()
     const channel = this.requireChannelRow(channelId, accountId)
     const text = String(input.text ?? '').trim()
+    let threadRootId = String(input.threadRootId ?? '').trim()
+    if (threadRootId) {
+      const rootRow = this.db()
+        .prepare(`SELECT id, thread_root_id, ephemeral_to FROM channel_messages WHERE id = ? AND channel_id = ?`)
+        .get(threadRootId, channelId) as { id?: string; thread_root_id?: string; ephemeral_to?: string } | undefined
+      if (!rootRow || rootRow.ephemeral_to) throw new Error('未找到对应的话题根消息')
+      threadRootId = rootRow.thread_root_id?.trim() || rootRow.id!
+    }
     const attachments: ChannelAttachment[] = Array.isArray(input.attachments)
       ? input.attachments
           .filter((a) => a && typeof a === 'object' && typeof a.id === 'string' && typeof a.url === 'string')
@@ -2089,6 +2268,7 @@ export class ChannelService {
       senderType: 'account',
       senderId: accountId,
       replyToId: input.replyToId ?? '',
+      threadRootId,
       text,
       mentions,
       attachments,
@@ -2105,6 +2285,7 @@ export class ChannelService {
         agentId,
         invokerId: accountId,
         originMessageId: message.id,
+        ...(threadRootId ? { threadRootId } : {}),
         senderName: message.senderName,
         text: text || attachments.map((a) => `[附件: ${a.name}]`).join(' '),
         hopCount: 0,
@@ -2179,6 +2360,7 @@ export class ChannelService {
     agentId: string
     invokerId: string
     originMessageId: string
+    threadRootId?: string
     senderName: string
     text: string
     hopCount: number
@@ -2192,9 +2374,15 @@ export class ChannelService {
       this.queues.set(key, state)
     }
 
-    // 同一个人在 Bot 忙时连续 @ → 合并到同一个排队批次（权限完全一致）；不同人绝不合并！
+    // 同一个人在 Bot 忙时连续 @ 且在同一讨论串 → 合并到同一个排队批次（权限完全一致）；不同人或不同话题绝不合并！
     const tail = state.queue.at(-1)
-    if (tail && tail.invokerId === opts.invokerId && tail.hopCount === 0 && opts.hopCount === 0) {
+    if (
+      tail &&
+      tail.invokerId === opts.invokerId &&
+      (tail.threadRootId ?? '') === (opts.threadRootId ?? '') &&
+      tail.hopCount === 0 &&
+      opts.hopCount === 0
+    ) {
       tail.messages.push({ id: opts.originMessageId, senderName: opts.senderName, text: opts.text })
       this.broadcastActivities(opts.channelId, opts.workspaceId)
       return tail.runId
@@ -2231,6 +2419,7 @@ export class ChannelService {
       agentOwnerId: meta.ownerAccountId,
       invokerId: opts.invokerId,
       originMessageId: opts.originMessageId,
+      ...(opts.threadRootId ? { threadRootId: opts.threadRootId } : {}),
       hopCount: opts.hopCount,
       visitedAgents: new Set(opts.visitedAgents),
       messages: [{ id: opts.originMessageId, senderName: opts.senderName, text: opts.text }],
@@ -2342,21 +2531,33 @@ export class ChannelService {
         ? await this.buildAgentReadonlyProjection(job.agentId, job.agentOwnerId, channel.workspace_id)
         : ''
 
-    // 群聊对话流独立隔离：仅读取当前群聊公开且未撤回消息，绝不将群聊消息写回 Agent 的 1v1 主工作台
-    const historyRows = db
-      .prepare(
-        `SELECT * FROM (
-           SELECT * FROM channel_messages
-           WHERE channel_id = ? AND ephemeral_to = '' AND deleted_at = 0
-           ORDER BY seq DESC
-           LIMIT ?
-         ) ORDER BY seq ASC`,
-      )
-      .all(job.channelId, MAX_CHANNEL_HISTORY_MESSAGES) as MessageRow[]
+    // 群聊对话流独立隔离：若在讨论串（Thread）中召唤，仅聚焦该讨论串根消息及串内回复，避免主群闲聊干扰；绝不自动写回 1v1 主工作台
+    const historyRows = job.threadRootId
+      ? (db
+          .prepare(
+            `SELECT * FROM (
+               SELECT * FROM channel_messages
+               WHERE channel_id = ? AND ephemeral_to = '' AND deleted_at = 0
+                 AND (id = ? OR thread_root_id = ?)
+               ORDER BY seq DESC
+               LIMIT ?
+             ) ORDER BY seq ASC`,
+          )
+          .all(job.channelId, job.threadRootId, job.threadRootId, MAX_CHANNEL_HISTORY_MESSAGES) as MessageRow[])
+      : (db
+          .prepare(
+            `SELECT * FROM (
+               SELECT * FROM channel_messages
+               WHERE channel_id = ? AND thread_root_id = '' AND ephemeral_to = '' AND deleted_at = 0
+               ORDER BY seq DESC
+               LIMIT ?
+             ) ORDER BY seq ASC`,
+          )
+          .all(job.channelId, MAX_CHANNEL_HISTORY_MESSAGES) as MessageRow[])
 
     const channelSystemPrompt = [
       meta.systemPrompt ? `${meta.systemPrompt.trim()}\n` : '',
-      `你当前在 BIU 聊天「#${channel.name}」中，你的名字是「${meta.name}」（归属人：${ownerName}）。`,
+      `你当前在 BIU 聊天「#${channel.name}」${job.threadRootId ? '的一个聚焦讨论串（Thread）' : ''}中，你的名字是「${meta.name}」（归属人：${ownerName}）。`,
       channel.topic ? `主题：${channel.topic}` : '',
       `人类成员：${humanNames.join('、') || '（无）'}`,
       `群内 Agent：${agentNames.join('、') || meta.name}`,
@@ -2518,12 +2719,13 @@ export class ChannelService {
     if (!finalText) finalText = '（已完成操作）'
     this.pushRunEvent(job, state, { ts: Date.now(), kind: 'done', text: finalText })
 
-    // Slack IM 风格：执行完毕后一次性把完整消息气泡投递进群聊流（携带 replyToId 与 traceId）
+    // Slack IM 风格：执行完毕后一次性把完整消息气泡投递进群聊流（携带 replyToId、threadRootId 与 traceId）
     const replyMsg = this.insertMessage({
       channelId: job.channelId,
       senderType: 'agent',
       senderId: job.agentId,
       replyToId: job.originMessageId,
+      ...(job.threadRootId ? { threadRootId: job.threadRootId } : {}),
       text: finalText,
       traceId: job.runId,
     })
@@ -2535,7 +2737,7 @@ export class ChannelService {
       finishedAt: Date.now(),
     })
 
-    // 受控 Agent-to-Agent 接力（Handoff）：上限 MAX_CHANNEL_HANDOFF_HOPS 跳，透传原始人类 invokerId
+    // 受控 Agent-to-Agent 接力（Handoff）：上限 MAX_CHANNEL_HANDOFF_HOPS 跳，透传原始人类 invokerId 与 threadRootId
     if (job.hopCount < MAX_CHANNEL_HANDOFF_HOPS) {
       const nextVisited = new Set([...job.visitedAgents, job.agentId])
       const peerAgents = this.listMembers(job.channelId, job.agentOwnerId)
@@ -2549,6 +2751,7 @@ export class ChannelService {
           agentId: targetAgentId,
           invokerId: job.invokerId,
           originMessageId: replyMsg.id,
+          ...(job.threadRootId ? { threadRootId: job.threadRootId } : {}),
           senderName: meta.name,
           text: finalText,
           hopCount: job.hopCount + 1,
@@ -3078,15 +3281,35 @@ export function registerChannelRoutes(ctx: Context, resolveLlm: (sessionId?: str
       const body = (await route.json()) as {
         text?: string
         replyToId?: string
+        threadRootId?: string
         mentions?: ChannelMention[]
         attachments?: ChannelAttachment[]
       }
       route.send(200, service.sendMessage(route.params.id, {
         text: body?.text ?? '',
         replyToId: body?.replyToId,
+        threadRootId: body?.threadRootId,
         mentions: body?.mentions,
         attachments: body?.attachments,
       }))
+    } catch (error) {
+      sendError(route, error)
+    }
+  })
+
+  ctx.http.route('GET', '/api/channels/:id/threads/:rootMsgId', (route) => {
+    try {
+      route.send(200, service.getThread(route.params.id, route.params.rootMsgId))
+    } catch (error) {
+      sendError(route, error)
+    }
+  })
+
+  ctx.http.route('POST', '/api/channels/:id/summarize', async (route) => {
+    try {
+      const body = (await route.json().catch(() => ({}))) as { unreadOnly?: boolean }
+      const result = await service.summarizeChannel(route.params.id, { unreadOnly: Boolean(body?.unreadOnly) })
+      route.send(200, result)
     } catch (error) {
       sendError(route, error)
     }

@@ -10,12 +10,14 @@ import {
   BellSlashIcon,
   BookmarkIcon,
   BookmarkSquareIcon,
+  ChatBubbleLeftRightIcon,
   CheckIcon,
   ChevronDoubleLeftIcon,
   ChevronDoubleRightIcon,
   ChevronRightIcon,
   ClockIcon,
   DocumentIcon,
+  DocumentPlusIcon,
   EyeIcon,
   FaceSmileIcon,
   HashtagIcon,
@@ -62,6 +64,7 @@ import {
   loadChannelDetail,
   loadChannelMessagesAround,
   loadChannelPins,
+  loadChannelThread,
   loadOlderChannelMessages,
   loadSavedChannelMessages,
   markChannelRead,
@@ -70,9 +73,11 @@ import {
   recallChannelMessage,
   removeChannelMember,
   renameChannel,
+  saveChannelContentAsPage,
   searchChannelMessages,
   sendChannelMessage,
   setActiveChannelId,
+  summarizeChannel,
   syncChannelToAgent,
   toggleChannelPinMessage,
   toggleChannelReaction,
@@ -336,6 +341,16 @@ export const ChannelStage = memo(function ChannelStage({
   const [searching, setSearching] = useState(false)
   const [highlightedMsgId, setHighlightedMsgId] = useState<string | null>(null)
   const [reactPickerMsgId, setReactPickerMsgId] = useState<string | null>(null)
+  const [activeThreadRootId, setActiveThreadRootId] = useState<string | null>(null)
+  const [summaryModal, setSummaryModal] = useState<{
+    open: boolean
+    loading: boolean
+    summary: string
+    messageCount: number
+    scopeLabel: string
+    error: string
+  }>({ open: false, loading: false, summary: '', messageCount: 0, scopeLabel: '近期消息', error: '' })
+  const [savedPageNotice, setSavedPageNotice] = useState<{ id: string; title: string } | null>(null)
   const [typingTick, setTypingTick] = useState(0)
   const [agentCard, setAgentCard] = useState<ChannelMemberView | null>(null)
   const [mentionQuery, setMentionQuery] = useState<string | null>(null)
@@ -371,6 +386,7 @@ export const ChannelStage = memo(function ChannelStage({
     setUnreadDividerSeq(null)
     setPendingNewCount(0)
     setEditingMsgId(null)
+    setActiveThreadRootId(null)
     setAttachments([])
     nearBottomRef.current = true
     prevMsgCountRef.current = 0
@@ -466,6 +482,72 @@ export const ChannelStage = memo(function ChannelStage({
     setSavedModalOpen(true)
     void loadSavedChannelMessages().then(setSavedMessages)
   }, [])
+
+  const openThread = useCallback(
+    (rootMsgId: string) => {
+      setActiveThreadRootId(rootMsgId)
+      void loadChannelThread(channelId, rootMsgId)
+    },
+    [channelId],
+  )
+
+  const handleSummarize = useCallback(
+    (unreadOnly = false) => {
+      setSummaryModal({
+        open: true,
+        loading: true,
+        summary: '',
+        messageCount: 0,
+        scopeLabel: unreadOnly ? '未读消息' : '近期消息',
+        error: '',
+      })
+      void summarizeChannel(channelId, unreadOnly)
+        .then((res) => {
+          setSummaryModal({
+            open: true,
+            loading: false,
+            summary: res.summary,
+            messageCount: res.messageCount,
+            scopeLabel: res.scopeLabel,
+            error: '',
+          })
+        })
+        .catch((err) => {
+          setSummaryModal((prev) => ({
+            ...prev,
+            loading: false,
+            error: err instanceof Error ? err.message : String(err),
+          }))
+        })
+    },
+    [channelId],
+  )
+
+  const handleSaveMessageAsPage = useCallback(
+    async (msg: ChannelMessageView) => {
+      setError('')
+      try {
+        const chTitle = channel?.name || '聊天'
+        const title = `${chTitle} · ${msg.senderName} 的发言沉淀`
+        let md = `> 来源：聊天「#${chTitle}」 · 发送人：${msg.senderName}\n\n${msg.text}\n`
+        if (msg.threadSummary && msg.threadSummary.replyCount > 0) {
+          const thread = await loadChannelThread(channelId, msg.id)
+          if (thread?.replies.length) {
+            md += `\n## 讨论串回复（${thread.replies.length} 条）\n\n`
+            for (const r of thread.replies) {
+              if (r.deletedAt) continue
+              md += `- **${r.senderName}**：${r.text}\n`
+            }
+          }
+        }
+        const created = await saveChannelContentAsPage(title, md)
+        setSavedPageNotice(created)
+      } catch (err) {
+        setError(err instanceof Error ? err.message : String(err))
+      }
+    },
+    [channel?.name, channelId],
+  )
 
   // 进入频道后捕获一次未读游标用于渲染「以下是新消息」分割线，并上报已读
   useEffect(() => {
@@ -932,6 +1014,17 @@ export const ChannelStage = memo(function ChannelStage({
         <div className="chat-view-header-right">
           <button
             type="button"
+            className="inline-flex h-[var(--biu-size-control-md)] cursor-pointer items-center gap-1 rounded-[6px] border-0 bg-transparent px-2 text-[12px] font-medium text-(--biu-color-text-muted) transition-colors hover:bg-(--biu-color-bg-hover) hover:text-(--biu-color-text)"
+            title="AI 总结本聊天近期/未读要点"
+            aria-label="总结聊天要点"
+            data-testid="channel-summarize-btn"
+            onClick={() => handleSummarize(false)}
+          >
+            <SparklesIcon className="size-3.5 shrink-0" />
+            <span>总结</span>
+          </button>
+          <button
+            type="button"
             className={`inline-flex h-[var(--biu-size-control-md)] cursor-pointer items-center gap-1 rounded-[6px] border-0 bg-transparent px-2 text-[12px] font-medium transition-colors hover:bg-(--biu-color-bg-hover) hover:text-(--biu-color-text)${searchOpen ? ' bg-(--biu-color-bg-hover) text-(--biu-color-text)' : ' text-(--biu-color-text-muted)'}`}
             title="搜索本聊天记录"
             aria-label="搜索聊天记录"
@@ -992,6 +1085,37 @@ export const ChannelStage = memo(function ChannelStage({
           ) : null}
         </div>
       </header>
+
+      {/* 一键存为 BIU 页面的成功提示条 */}
+      {savedPageNotice ? (
+        <div
+          className="flex items-center justify-between gap-3 border-b border-emerald-500/30 bg-emerald-500/10 px-4 py-1.5 text-[12px] text-emerald-400"
+          data-testid="channel-saved-page-toast"
+        >
+          <span className="truncate">已保存为页面「{savedPageNotice.title}」</span>
+          <div className="flex shrink-0 items-center gap-2">
+            <button
+              type="button"
+              className="cursor-pointer border-0 bg-transparent p-0 font-medium text-emerald-300 underline"
+              onClick={() => {
+                const targetId = savedPageNotice.id
+                setSavedPageNotice(null)
+                navigate(`/database/pages/record/${encodeURIComponent(targetId)}`)
+              }}
+            >
+              打开页面
+            </button>
+            <button
+              type="button"
+              className="cursor-pointer border-0 bg-transparent p-0 text-emerald-300/80 hover:text-emerald-200"
+              aria-label="关闭提示"
+              onClick={() => setSavedPageNotice(null)}
+            >
+              ×
+            </button>
+          </div>
+        </div>
+      ) : null}
 
       {/* 群内聊天记录搜索条 */}
       {searchOpen ? (
@@ -1330,6 +1454,29 @@ export const ChannelStage = memo(function ChannelStage({
                                   ))}
                                 </div>
                               ) : null}
+
+                              {msg.threadSummary && msg.threadSummary.replyCount > 0 ? (
+                                <button
+                                  type="button"
+                                  data-testid={`channel-thread-bar-${msg.id}`}
+                                  className="mt-2 inline-flex cursor-pointer items-center gap-2 rounded-md border border-(--biu-color-border-subtle) bg-(--biu-color-bg-subtle) px-2.5 py-1 text-[12px] text-(--biu-color-text-muted) transition-colors hover:bg-(--biu-color-bg-hover) hover:text-(--biu-color-text)"
+                                  onClick={() => openThread(msg.id)}
+                                >
+                                  <ChatBubbleLeftRightIcon className="size-3.5 shrink-0 text-(--biu-color-icon-active)" />
+                                  <span className="font-medium text-(--biu-color-text)">
+                                    {msg.threadSummary.replyCount} 条回复
+                                  </span>
+                                  {msg.threadSummary.participantNames.length > 0 ? (
+                                    <span className="max-w-[180px] truncate text-[11.5px] text-(--biu-color-text-subtle)">
+                                      {msg.threadSummary.participantNames.join('、')}
+                                    </span>
+                                  ) : null}
+                                  <span className="text-[11px] text-(--biu-color-text-subtle) tabular-nums">
+                                    {formatSentAt(msg.threadSummary.lastReplyAt)}
+                                  </span>
+                                  <ChevronRightIcon className="size-3.5 shrink-0" />
+                                </button>
+                              ) : null}
                             </>
                           )}
 
@@ -1444,6 +1591,16 @@ export const ChannelStage = memo(function ChannelStage({
                                 <button
                                   type="button"
                                   className="inline-flex shrink-0 cursor-pointer items-center gap-1 rounded-md border border-transparent bg-transparent px-1.5 py-0.5 text-(length:--biu-chat-ui-font-size) leading-none text-(--biu-color-text-subtle) opacity-0 transition-opacity hover:bg-(--biu-color-bg-hover) hover:text-(--biu-color-text) group-hover:opacity-100"
+                                  title="在讨论串（Thread）中展开聚焦回复"
+                                  data-testid={`channel-msg-thread-${msg.id}`}
+                                  onClick={() => openThread(msg.id)}
+                                >
+                                  <ChatBubbleLeftRightIcon className="size-3" />
+                                  <span>话题</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  className="inline-flex shrink-0 cursor-pointer items-center gap-1 rounded-md border border-transparent bg-transparent px-1.5 py-0.5 text-(length:--biu-chat-ui-font-size) leading-none text-(--biu-color-text-subtle) opacity-0 transition-opacity hover:bg-(--biu-color-bg-hover) hover:text-(--biu-color-text) group-hover:opacity-100"
                                   onClick={() => {
                                     setReplyTo(msg)
                                     inputRef.current?.focus()
@@ -1451,6 +1608,15 @@ export const ChannelStage = memo(function ChannelStage({
                                 >
                                   <ArrowUturnLeftIcon className="size-3" />
                                   <span>回复</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  className="inline-flex shrink-0 cursor-pointer items-center gap-1 rounded-md border border-transparent bg-transparent px-1.5 py-0.5 text-(length:--biu-chat-ui-font-size) leading-none text-(--biu-color-text-subtle) opacity-0 transition-opacity hover:bg-(--biu-color-bg-hover) hover:text-(--biu-color-text) group-hover:opacity-100"
+                                  title="一键存为 BIU 页面"
+                                  data-testid={`channel-msg-to-page-${msg.id}`}
+                                  onClick={() => void handleSaveMessageAsPage(msg)}
+                                >
+                                  <DocumentPlusIcon className="size-3" />
                                 </button>
                                 <button
                                   type="button"
@@ -1829,8 +1995,115 @@ export const ChannelStage = memo(function ChannelStage({
               </ChatDockStack>
             </div>
           </div>
+          {activeThreadRootId ? (
+            <ChannelThreadPanel
+              channelId={channelId}
+              rootMsgId={activeThreadRootId}
+              members={members}
+              resolveAvatar={resolveAvatar}
+              onClose={() => setActiveThreadRootId(null)}
+            />
+          ) : null}
         </div>
       </div>
+
+      {/* AI 聊天要点总结弹窗 */}
+      {summaryModal.open
+        ? createPortal(
+            <div
+              className="biu-float-overlay"
+              onClick={() => setSummaryModal((prev) => ({ ...prev, open: false }))}
+              data-testid="channel-summary-modal"
+            >
+              <div
+                className="biu-float scfg-float !w-[min(560px,calc(100vw-32px))]"
+                role="dialog"
+                aria-modal="true"
+                aria-label="AI 聊天要点总结"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="biu-float-head scfg-head">
+                  <div className="flex items-center gap-2">
+                    <SparklesIcon className="size-4 text-(--biu-color-icon-active)" />
+                    <h2 className="biu-float-title scfg-title">
+                      聊天要点总结 · {summaryModal.scopeLabel}
+                      {summaryModal.messageCount > 0 ? `（${summaryModal.messageCount} 条）` : ''}
+                    </h2>
+                  </div>
+                  <button
+                    type="button"
+                    className="biu-float-close"
+                    aria-label="关闭"
+                    onClick={() => setSummaryModal((prev) => ({ ...prev, open: false }))}
+                  >
+                    <XMarkIcon className="size-4 shrink-0" />
+                  </button>
+                </div>
+                <div className="scfg-body space-y-3">
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant={summaryModal.scopeLabel === '近期消息' ? 'default' : 'secondary'}
+                      className="h-7 px-2.5 text-[12px]"
+                      disabled={summaryModal.loading}
+                      onClick={() => handleSummarize(false)}
+                    >
+                      总结近期消息
+                    </Button>
+                    <Button
+                      variant={summaryModal.scopeLabel === '未读消息' ? 'default' : 'secondary'}
+                      className="h-7 px-2.5 text-[12px]"
+                      disabled={summaryModal.loading}
+                      onClick={() => handleSummarize(true)}
+                    >
+                      仅总结未读
+                    </Button>
+                  </div>
+                  {summaryModal.loading ? (
+                    <div className="py-6 text-center text-[13px] text-(--biu-color-text-subtle)">正在提炼聊天要点…</div>
+                  ) : summaryModal.error ? (
+                    <div className="scfg-error">{summaryModal.error}</div>
+                  ) : (
+                    <>
+                      <div className="max-h-[52vh] overflow-y-auto rounded-lg border border-(--biu-color-border-subtle) bg-(--biu-color-bg-subtle) p-3 text-[13px]">
+                        <MarkdownBody text={summaryModal.summary} />
+                      </div>
+                      <div className="flex items-center justify-end gap-2">
+                        <Button
+                          variant="secondary"
+                          className="h-8 px-3 text-[12px]"
+                          onClick={() => void navigator.clipboard?.writeText(summaryModal.summary)}
+                        >
+                          复制摘要
+                        </Button>
+                        <Button
+                          className="h-8 px-3 text-[12px]"
+                          data-testid="channel-summary-save-page"
+                          onClick={() => {
+                            const title = `${channel?.name || '聊天'} · ${summaryModal.scopeLabel}总结`
+                            void saveChannelContentAsPage(title, summaryModal.summary)
+                              .then((created) => {
+                                setSummaryModal((prev) => ({ ...prev, open: false }))
+                                setSavedPageNotice(created)
+                              })
+                              .catch((err) =>
+                                setSummaryModal((prev) => ({
+                                  ...prev,
+                                  error: err instanceof Error ? err.message : String(err),
+                                })),
+                              )
+                          }}
+                        >
+                          存为页面
+                        </Button>
+                      </div>
+                    </>
+                  )}
+                </div>
+              </div>
+            </div>,
+            document.body,
+          )
+        : null}
 
       {/* 图片大图预览 Lightbox */}
       {lightboxImage
@@ -2430,5 +2703,199 @@ function ChannelMembersModal({
       </div>
     </div>,
     document.body,
+  )
+}
+
+function ChannelThreadPanel({
+  channelId,
+  rootMsgId,
+  members,
+  resolveAvatar,
+  onClose,
+}: {
+  channelId: string
+  rootMsgId: string
+  members: ChannelMemberView[]
+  resolveAvatar: (accountId?: string, serverAvatar?: string) => string | undefined
+  onClose: () => void
+}) {
+  const thread = useChannelStore((s) => s.threads[rootMsgId])
+  const [text, setText] = useState('')
+  const [sending, setSending] = useState(false)
+  const [error, setError] = useState('')
+  const listRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    void loadChannelThread(channelId, rootMsgId)
+  }, [channelId, rootMsgId])
+
+  useEffect(() => {
+    const el = listRef.current
+    if (!el) return
+    el.scrollTop = el.scrollHeight
+  }, [thread?.replies.length])
+
+  const sendReply = async (event?: FormEvent) => {
+    event?.preventDefault()
+    const body = text.trim()
+    if (!body || sending) return
+    setSending(true)
+    setError('')
+    try {
+      await sendChannelMessage(channelId, {
+        text: body,
+        threadRootId: rootMsgId,
+      })
+      setText('')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setSending(false)
+    }
+  }
+
+  const agentHint = members.filter((m) => m.memberType === 'agent').map((m) => `@${m.name}`).slice(0, 2).join(' ')
+
+  return (
+    <aside
+      className="flex h-full w-[min(380px,42vw)] shrink-0 flex-col border-l border-(--biu-color-border-subtle) bg-(--biu-color-bg)"
+      data-testid="channel-thread-panel"
+      aria-label="讨论串"
+    >
+      <div className="flex h-11 shrink-0 items-center justify-between border-b border-(--biu-color-border-subtle) px-3">
+        <div className="flex items-center gap-1.5 text-[13px] font-semibold text-(--biu-color-text)">
+          <ChatBubbleLeftRightIcon className="size-4 text-(--biu-color-icon-active)" />
+          <span>讨论串</span>
+          {thread ? (
+            <span className="text-[11.5px] font-normal text-(--biu-color-text-subtle)">
+              {thread.replies.length} 条回复
+            </span>
+          ) : null}
+        </div>
+        <button
+          type="button"
+          className="inline-flex size-7 cursor-pointer items-center justify-center rounded-md border-0 bg-transparent text-(--biu-color-text-muted) hover:bg-(--biu-color-bg-hover)"
+          title="关闭讨论串"
+          aria-label="关闭讨论串"
+          onClick={onClose}
+        >
+          <XMarkIcon className="size-4" />
+        </button>
+      </div>
+
+      <div ref={listRef} className="min-h-0 flex-1 space-y-3 overflow-y-auto p-3">
+        {!thread ? (
+          <div className="py-8 text-center text-[12.5px] text-(--biu-color-text-subtle)">加载讨论串中…</div>
+        ) : (
+          <>
+            {/* 根消息 */}
+            <div className="rounded-lg border border-(--biu-color-border) bg-(--biu-color-bg-subtle) p-2.5">
+              <div className="mb-1 flex items-center gap-1.5 text-[12px] text-(--biu-color-text-muted)">
+                {thread.root.senderType === 'agent' ? (
+                  <SidebarMascot
+                    size={16}
+                    sessionId={thread.root.senderId}
+                    identity={resolveSessionMascot(thread.root.senderId, thread.root.senderMascot)}
+                    animate={false}
+                    title=""
+                  />
+                ) : (
+                  <MemberAvatar
+                    avatar={resolveAvatar(thread.root.senderId, thread.root.senderAvatar)}
+                    seed={thread.root.senderId}
+                    size={16}
+                  />
+                )}
+                <span className="font-medium text-(--biu-color-text)">{thread.root.senderName}</span>
+                <span className="ml-auto text-[11px] tabular-nums">{formatSentAt(thread.root.createdAt)}</span>
+              </div>
+              <div className="text-[13px] text-(--biu-color-text)">
+                <MarkdownBody text={formatChannelMessageMarkdown(thread.root.text, thread.root.mentions)} />
+              </div>
+            </div>
+
+            {thread.replies.length > 0 ? (
+              <div className="flex items-center gap-2 text-[11px] text-(--biu-color-text-subtle)">
+                <span className="h-px flex-1 bg-(--biu-color-border-subtle)" />
+                <span>{thread.replies.length} 条回复</span>
+                <span className="h-px flex-1 bg-(--biu-color-border-subtle)" />
+              </div>
+            ) : (
+              <div className="py-2 text-center text-[12px] text-(--biu-color-text-subtle)">
+                还没有回复。在此处回复不会打断主聊天流，@Agent 也仅聚焦当前话题。
+              </div>
+            )}
+
+            {thread.replies.map((reply) => (
+              <div
+                key={reply.id}
+                data-testid={`channel-thread-reply-${reply.id}`}
+                className="rounded-lg border border-(--biu-color-border-subtle) bg-(--biu-color-bg-subtle)/60 p-2.5"
+              >
+                <div className="mb-1 flex items-center gap-1.5 text-[12px] text-(--biu-color-text-muted)">
+                  {reply.senderType === 'agent' ? (
+                    <SidebarMascot
+                      size={16}
+                      sessionId={reply.senderId}
+                      identity={resolveSessionMascot(reply.senderId, reply.senderMascot)}
+                      animate={false}
+                      title=""
+                    />
+                  ) : (
+                    <MemberAvatar
+                      avatar={resolveAvatar(reply.senderId, reply.senderAvatar)}
+                      seed={reply.senderId}
+                      size={16}
+                    />
+                  )}
+                  <span className="font-medium text-(--biu-color-text)">{reply.senderName}</span>
+                  <span className="ml-auto text-[11px] tabular-nums">{formatSentAt(reply.createdAt)}</span>
+                </div>
+                {reply.deletedAt ? (
+                  <div className="text-[12.5px] italic text-(--biu-color-text-subtle)">此消息已撤回</div>
+                ) : (
+                  <div className="text-[13px] text-(--biu-color-text)">
+                    <MarkdownBody text={formatChannelMessageMarkdown(reply.text, reply.mentions)} />
+                  </div>
+                )}
+              </div>
+            ))}
+          </>
+        )}
+      </div>
+
+      <form
+        onSubmit={(e) => void sendReply(e)}
+        className="shrink-0 border-t border-(--biu-color-border-subtle) p-2.5"
+      >
+        {error ? <div className="mb-1.5 text-[11.5px] text-(--biu-color-danger)">{error}</div> : null}
+        <div className="flex items-end gap-1.5 rounded-lg border border-(--biu-color-border) bg-(--biu-color-bg-subtle) px-2.5 py-1.5">
+          <textarea
+            rows={2}
+            value={text}
+            data-testid="channel-thread-input"
+            placeholder={agentHint ? `在讨论串中回复…（可 ${agentHint}）` : '在讨论串中回复…'}
+            className="min-w-0 flex-1 resize-none border-0 bg-transparent text-[13px] text-(--biu-color-text) outline-none placeholder:text-(--biu-color-text-placeholder)"
+            onChange={(e) => setText(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
+                e.preventDefault()
+                void sendReply()
+              }
+            }}
+          />
+          <button
+            type="submit"
+            disabled={!text.trim() || sending}
+            data-testid="channel-thread-send"
+            className="composer-send shrink-0"
+            aria-label="发送讨论串回复"
+            title="发送"
+          >
+            <ArrowUpIcon className="size-3.5" aria-hidden />
+          </button>
+        </div>
+      </form>
+    </aside>
   )
 }

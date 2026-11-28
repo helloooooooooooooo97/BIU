@@ -143,6 +143,18 @@ export interface ChannelSavedMessageView {
   message: ChannelMessageView
 }
 
+export interface ChannelThreadSummary {
+  replyCount: number
+  lastReplyAt: number
+  participantNames: string[]
+}
+
+export interface ChannelThreadPayload {
+  channelId: string
+  root: ChannelMessageView
+  replies: ChannelMessageView[]
+}
+
 export interface ChannelMessageView {
   id: string
   channelId: string
@@ -154,6 +166,8 @@ export interface ChannelMessageView {
   senderMascot?: SessionMascot
   replyToId: string
   replyPreview?: ChannelMessageReplyPreview | null
+  threadRootId?: string
+  threadSummary?: ChannelThreadSummary
   text: string
   mentions: ChannelMention[]
   attachments?: ChannelAttachment[]
