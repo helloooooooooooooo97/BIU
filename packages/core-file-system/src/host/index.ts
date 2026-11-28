@@ -70,7 +70,7 @@ import { type SharedViewDef } from '../share-view-match.ts'
 import { FileSystemAssets, collectAssetNames, assetNamesFromMarkdown, assetNamesFromHtml } from './assets-store.ts'
 import { tagsCollection, parseStampRecordId } from './tags-collection.ts'
 import { trashCollection } from './trash-collection.ts'
-import { runWorkspaceAssetGc } from './asset-gc-run.ts'
+import { runWorkspaceAssetGc, type AssetGcNoticeSink } from './asset-gc-run.ts'
 import { ContentTurnService } from './content-turn-service.ts'
 import {
   DatabaseAccessPolicy,
@@ -101,6 +101,7 @@ import {
   DATA_COLLECTION_PATH,
   EDITOR_BLOCKS_COLLECTION_PATH,
   MCP_COLLECTION_PATH,
+  NOTICES_COLLECTION_PATH,
   PAGES_COLLECTION_PATH,
   PLUGINS_COLLECTION_PATH,
   SKILLS_COLLECTION_PATH,
@@ -311,10 +312,10 @@ function listDecorateNeed(wanted: string[] | null | undefined): ListDecorateNeed
   }
 }
 
-function pickListedFields(row: DbRecord, keys: string[]): DbRecord {
+function pickListedFields(row: DbRecord, keys: string[], schema?: CollectionSchema): DbRecord {
   const next: DbRecord = { id: row.id }
   for (const key of keys) {
-    if (key === 'path' || key === 'kind') continue
+    if (key === 'path' || (key === 'kind' && !schema?.fields.kind)) continue
     if (parseTagFlatColumnKey(key)) {
       next[key] = readTagFieldValue(row, key)
       continue
@@ -1185,6 +1186,14 @@ export class DatabaseService extends Service implements Database {
                 tenant.accountId || undefined,
               )
             }
+            if (targetPath === NOTICES_COLLECTION_PATH || targetPath.startsWith(`${NOTICES_COLLECTION_PATH}/`)) {
+              http?.broadcast?.(
+                'notices/change',
+                { ts: Date.now(), ...(tenant.workspaceId ? { workspaceId: tenant.workspaceId } : {}) },
+                tenant.workspaceId || undefined,
+                tenant.accountId || undefined,
+              )
+            }
           }
         }
       }
@@ -1545,13 +1554,13 @@ export class DatabaseService extends Service implements Database {
             total: pushed.total,
             offset,
             limit,
-            items: slice.map((row): DbRecord & { path: string; kind: 'record' } => {
+            items: slice.map((row): DbRecord & { path: string; kind: unknown } => {
               const value = withoutContent(spec, row)
-              const picked = columnKeys ? pickListedFields(value, columnKeys) : value
+              const picked = columnKeys ? pickListedFields(value, columnKeys, schema) : value
               return {
+                kind: 'record',
                 ...picked,
                 path: `${spec.path}/${row.id}`,
-                kind: 'record',
               }
             }),
           }
@@ -1579,13 +1588,13 @@ export class DatabaseService extends Service implements Database {
         total,
         offset,
         limit,
-        items: slice.map((row): DbRecord & { path: string; kind: 'record' } => {
+        items: slice.map((row): DbRecord & { path: string; kind: unknown } => {
           const value = withoutContent(spec, row)
-          const picked = columnKeys ? pickListedFields(value, columnKeys) : value
+          const picked = columnKeys ? pickListedFields(value, columnKeys, schema) : value
           return {
+            kind: 'record',
             ...picked,
             path: `${spec.path}/${row.id}`,
-            kind: 'record',
           }
         }),
       }
@@ -2777,9 +2786,9 @@ export function apply(ctx: Context) {
   }))))
   const sqlitePath = biuSqlitePath()
   const gcHooks = () => {
-    let notices: { push: (input: { kind: 'session'; title: string; body: string; sourceKey: string }) => unknown } | undefined
+    let notices: AssetGcNoticeSink | undefined
     try {
-      notices = ctx.get('notices') as typeof notices
+      notices = ctx.get('notices') as AssetGcNoticeSink | undefined
     } catch {
       notices = undefined
     }

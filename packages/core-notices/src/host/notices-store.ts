@@ -32,6 +32,8 @@ export type NoticeInput = {
   accountId?: string
   workspaceId?: string
   content?: unknown
+  /** 已读同来源且标题/摘要/内容未变化时不重复新建未读通知（用于周期性状态提醒，如附件 GC 候选）。 */
+  dedupeRead?: boolean
 }
 
 const MAX_NOTICES = 80
@@ -141,6 +143,23 @@ export class NoticesStore {
       this.flush()
       return unread
     }
+    const body = input.body?.trim() || ''
+    if (input.dedupeRead) {
+      let latest: NoticeRow | null = null
+      for (const item of this.rows) {
+        if (item.sourceKey !== sourceKey || !this.matchesTenant(item, targetScope)) continue
+        if (!latest || item.updatedAt > latest.updatedAt) latest = item
+      }
+      if (
+        latest &&
+        latest.read &&
+        latest.title === title &&
+        latest.body === body &&
+        JSON.stringify(latest.content ?? null) === JSON.stringify(input.content ?? null)
+      ) {
+        return null
+      }
+    }
     const now = Date.now()
     const existing = new Set(this.rows.map((item) => item.id))
     let id = allocateRecordId()
@@ -148,7 +167,7 @@ export class NoticesStore {
     const row: NoticeRow = {
       id,
       title,
-      body: input.body?.trim() || '',
+      body,
       kind: input.kind,
       read: false,
       href: input.href?.trim() || '',

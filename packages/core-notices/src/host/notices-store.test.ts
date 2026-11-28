@@ -135,3 +135,44 @@ test('object notice content persists to disk and updateBySource updates all appr
     rmSync(dir, { recursive: true, force: true })
   }
 })
+
+test('dedupeRead suppresses duplicate unread notices when read notice content is unchanged', () => {
+  const store = new NoticesStore().open(':memory:')
+  const files = [{ name: 'orphan.png', href: '/api/db/file/orphan.png', image: true }]
+  const first = store.push({
+    kind: 'system',
+    title: '有 1 个附件没人用了',
+    body: '页面和记录都不再用到下面这些文件。',
+    sourceKey: 'asset-gc:candidates',
+    content: files,
+    dedupeRead: true,
+  })!
+  assert.equal(first.read, false)
+  store.update(first.id, { read: true })
+
+  // 内容与标题未变化时不再重复弹出未读
+  const dup = store.push({
+    kind: 'system',
+    title: '有 1 个附件没人用了',
+    body: '页面和记录都不再用到下面这些文件。',
+    sourceKey: 'asset-gc:candidates',
+    content: files,
+    dedupeRead: true,
+  })
+  assert.equal(dup, null)
+  assert.equal(store.list().length, 1)
+  assert.equal(store.list()[0]?.read, true)
+
+  // 候选集合发生变化时再创建新的未读提醒
+  const changed = store.push({
+    kind: 'system',
+    title: '有 2 个附件没人用了',
+    body: '页面和记录都不再用到下面这些文件。',
+    sourceKey: 'asset-gc:candidates',
+    content: [...files, { name: 'orphan2.png', href: '/api/db/file/orphan2.png', image: true }],
+    dedupeRead: true,
+  })
+  assert.ok(changed)
+  assert.equal(changed.read, false)
+  assert.equal(store.list().length, 2)
+})

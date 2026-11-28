@@ -17,11 +17,12 @@ export type NoticeFileCard = {
 
 export type AssetGcNoticeSink = {
   push: (input: {
-    kind: 'session'
+    kind: 'system' | 'session'
     title: string
     body: string
     sourceKey: string
     content?: NoticeFileCard[]
+    dedupeRead?: boolean
   }) => unknown
 }
 
@@ -46,8 +47,16 @@ function notify(
   body: string,
   sourceKey: string,
   content?: NoticeFileCard[],
+  dedupeRead = false,
 ) {
-  hooks.notices?.push({ kind: 'session', title, body, sourceKey, ...(content?.length ? { content } : {}) })
+  hooks.notices?.push({
+    kind: 'system',
+    title,
+    body,
+    sourceKey,
+    ...(content?.length ? { content } : {}),
+    ...(dedupeRead ? { dedupeRead: true } : {}),
+  })
 }
 
 const IMAGE_EXT = new Set(['.png', '.jpg', '.jpeg', '.gif', '.webp', '.svg'])
@@ -109,6 +118,7 @@ export async function runWorkspaceAssetGc(hooks: AssetGcHooks, opts?: { now?: nu
       `页面和记录都不再用到下面这些文件。还会再留 ${CANDIDATE_DAYS} 天，到时才删。`,
       'asset-gc:candidates',
       assetNoticeFiles(hooks.db, candidates.map((row) => row.name)),
+      true,
     )
   }
   return { ...result, candidates }

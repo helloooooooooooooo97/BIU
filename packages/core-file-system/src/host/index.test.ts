@@ -4019,3 +4019,60 @@ test('db_update and db_create validate tag attribute types and /tags enriches no
   assert.deepEqual(byKey.get('标签组'), ['A'])
   assert.equal(byKey.get('pr'), 'https://example.com')
 })
+
+test('list preserves schema kind field on /notices and update marks read + broadcasts notices/change', async () => {
+  const ctx = new Context()
+  const broadcasts: Array<{ type: string; payload: unknown }> = []
+  class HttpStub extends Service {
+    constructor(c: Context) {
+      super(c, 'http')
+    }
+    broadcast(type: string, payload: unknown) {
+      broadcasts.push({ type, payload })
+    }
+  }
+  new HttpStub(ctx)
+  const db = new DatabaseService(ctx)
+  const rows = [
+    { id: 'n1', title: '有 1 个附件没人用了', body: '残留文件', kind: 'system', read: false, href: '', createdAt: 100, updatedAt: 100 },
+  ]
+  db.register({
+    id: 'notices',
+    path: '/notices',
+    records: { update: true, create: false, delete: false },
+    schema: {
+      columns: ['title', 'kind', 'read', 'body', 'href', 'updatedAt', 'createdAt'],
+      fields: {
+        title: { type: 'string' },
+        body: { type: 'string' },
+        kind: { type: 'select', enum: ['approval', 'task', 'session', 'channel', 'system'] },
+        read: { type: 'boolean', writable: true },
+        href: { type: 'string' },
+      },
+    },
+    list: async () => [...rows],
+    get: async (id) => rows.find((r) => r.id === id) ?? null,
+    update: async (id, patch) => {
+      const target = rows.find((r) => r.id === id)!
+      if (patch.read !== undefined) target.read = Boolean(patch.read)
+      return { ...target }
+    },
+  })
+
+  const listed = await db.list('/notices', undefined, {
+    limit: 20,
+    columns: ['id', 'title', 'body', 'kind', 'read', 'href', 'createdAt', 'updatedAt'],
+  })
+  assert.equal(listed.kind, 'collection')
+  if (listed.kind !== 'collection') return
+  assert.equal(listed.items[0]?.kind, 'system')
+  assert.equal(listed.items[0]?.read, false)
+
+  const updated = await db.update('/notices/n1', { read: true })
+  assert.equal(updated.value.read, true)
+  await Promise.resolve()
+  assert.equal(
+    broadcasts.some((evt) => evt.type === 'notices/change'),
+    true,
+  )
+})
