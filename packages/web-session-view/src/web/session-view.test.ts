@@ -1587,3 +1587,94 @@ test('optimistic user/message with negative seq stays at the bottom after persis
   assert.equal(events.at(-1)?.type, 'user/message')
   assert.equal((events.at(-1) as { text?: string })?.text, 'new optimistic')
 })
+
+test('newSession binds cloud project atomically and refreshes list before load without dropping into ungrouped', async () => {
+  const calls: Array<{ method: string; url: string; body?: unknown }> = []
+  let sessions: Array<{
+    id: string
+    title: string
+    eventCount: number
+    updatedAt: number
+    project?: { name: string; path: string; boundAt: number }
+  }> = [{ id: 's-old', title: '旧会话', eventCount: 1, updatedAt: 1 }]
+
+  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = String(input)
+    const method = init?.method ?? 'GET'
+    const body = typeof init?.body === 'string' ? JSON.parse(init.body) : undefined
+    calls.push({ method, url, body })
+    if (url.endsWith('/api/agents') && method === 'POST') {
+      const bound = { name: 'hello', path: '/workspace/hello', boundAt: 99 }
+      sessions = [{ id: 's-proj', title: '新代理', eventCount: 1, updatedAt: 100, project: bound }, ...sessions]
+      return { ok: true, status: 201, json: async () => ({ id: 's-proj', project: bound }) } as Response
+    }
+    if (url.endsWith('/api/agents') && method === 'GET') {
+      return { ok: true, status: 200, json: async () => ({ sessions }) } as Response
+    }
+    if (url.includes('/api/agents/s-proj?turns=')) {
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          id: 's-proj',
+          project: { name: 'hello', path: '/workspace/hello', boundAt: 99 },
+          events: [{ type: 'session/open', version: 1, seq: 0, ts: 100 }],
+          hasMore: false,
+          totalTurns: 0,
+        }),
+      } as Response
+    }
+    if (url.includes('/api/approvals')) {
+      return { ok: true, status: 200, json: async () => ({ mode: 'auto', pending: [] }) } as Response
+    }
+    return { ok: false, status: 404, json: async () => ({}) } as Response
+  }) as typeof fetch
+
+  const ctx = new Context()
+  await ctx.plugin(sessionView)
+  const view = ctx.sessionView as SessionViewService
+  const id = await view.newSession({ projectPath: '/workspace/hello', createProject: true })
+  assert.equal(id, 's-proj')
+  assert.equal(view.get().sessionId, 's-proj')
+  assert.equal(view.get().project?.path, '/workspace/hello')
+  assert.equal(view.get().sessions.find((s) => s.id === 's-proj')?.project?.path, '/workspace/hello')
+  const post = calls.find((c) => c.method === 'POST' && c.url.endsWith('/api/agents'))
+  assert.deepEqual(post?.body, { projectPath: '/workspace/hello', createProject: true })
+  assert.equal(calls.some((c) => c.method === 'PUT' && c.url.includes('/project')), false)
+})
+
+test('newSession rolls back newly created session if legacy PUT project bind fails', async () => {
+  const calls: Array<{ method: string; url: string; body?: unknown }> = []
+  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = String(input)
+    const method = init?.method ?? 'GET'
+    const body = typeof init?.body === 'string' ? JSON.parse(init.body) : undefined
+    calls.push({ method, url, body })
+    if (url.endsWith('/api/agents') && method === 'POST') {
+      // Simulate older server that ignores projectPath on POST
+      return { ok: true, status: 201, json: async () => ({ id: 's-orphan' }) } as Response
+    }
+    if (url.endsWith('/api/agents/s-orphan/project') && method === 'PUT') {
+      return { ok: false, status: 400, json: async () => ({ error: 'invalid cloud path' }) } as Response
+    }
+    if (url.endsWith('/api/agents/s-orphan') && method === 'DELETE') {
+      return { ok: true, status: 200, json: async () => ({ ok: true }) } as Response
+    }
+    if (url.endsWith('/api/agents') && method === 'GET') {
+      return { ok: true, status: 200, json: async () => ({ sessions: [] }) } as Response
+    }
+    if (url.includes('/api/approvals')) {
+      return { ok: true, status: 200, json: async () => ({ mode: 'auto', pending: [] }) } as Response
+    }
+    return { ok: false, status: 404, json: async () => ({}) } as Response
+  }) as typeof fetch
+
+  const ctx = new Context()
+  await ctx.plugin(sessionView)
+  const view = ctx.sessionView as SessionViewService
+  await assert.rejects(
+    () => view.newSession({ projectPath: '/workspace/hello', createProject: true }),
+    /invalid cloud path/,
+  )
+  assert.equal(calls.some((c) => c.method === 'DELETE' && c.url.endsWith('/api/agents/s-orphan')), true)
+})

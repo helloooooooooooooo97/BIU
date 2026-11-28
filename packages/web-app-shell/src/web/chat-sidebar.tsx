@@ -16,6 +16,7 @@ import { useActiveWorkspaceLocation } from './shell-chrome.tsx'
 import {
   bindSessionView,
   buildSidebarSections,
+  folderNameFromPath,
   sessionAppPath,
   useSidebarCollapseStore,
   type SessionListItem,
@@ -49,6 +50,24 @@ const sessionRowMainProps = {
   className: sessionRowMainClass,
   'data-dock-tip-at': 'e',
 } as const
+
+export function resolveSidebarGroupProjectPath(
+  group: Pick<SessionSidebarGroup, 'kind' | 'label' | 'path'>,
+  isCloudSpace: boolean,
+): string | undefined {
+  if (group.kind === 'ungrouped') return undefined
+  const raw = group.path?.trim()
+  if (!raw) return undefined
+  if (!isCloudSpace) return raw
+  if (raw === '/workspace' || raw.startsWith('/workspace/')) return raw
+  // 云端空间里若历史分组还带着宿主机路径（如 /Users/.../hello），自动落到个人隔离目录 /workspace/<folder>
+  const name = (group.label || folderNameFromPath(raw))
+    .trim()
+    .replace(/[/\\:\0\x00-\x1f]/g, '')
+    .replace(/^\.+/, '')
+    .slice(0, 100)
+  return name ? `/workspace/${name}` : '/workspace'
+}
 
 type ChatMemberInfo = { id: string; name: string; avatar?: string }
 
@@ -381,11 +400,16 @@ export const ChatSidebar = memo(function ChatSidebar({
   )
 
   const createChat = useCallback(
-    (opts: { projectPath?: string } = {}) => {
-      void sessionView.newSession(opts).then((id) => {
-        popoverClose?.()
-        openSessionPath(id)
-      })
+    (opts: { projectPath?: string; createProject?: boolean } = {}) => {
+      void sessionView
+        .newSession(opts)
+        .then((id) => {
+          popoverClose?.()
+          openSessionPath(id)
+        })
+        .catch((error) => {
+          console.warn('[chat-sidebar] failed to create session', error)
+        })
     },
     [openSessionPath, popoverClose, sessionView],
   )
@@ -532,7 +556,8 @@ export const ChatSidebar = memo(function ChatSidebar({
                               aria-label={addLabel}
                               onClick={(event) => {
                                 event.stopPropagation()
-                                createChat(group.path ? { projectPath: group.path } : {})
+                                const projectPath = resolveSidebarGroupProjectPath(group, isCloudSpace)
+                                createChat(projectPath ? { projectPath, createProject: isCloudSpace } : {})
                               }}
                             >
                               <PlusIcon {...chromeIcon} />
