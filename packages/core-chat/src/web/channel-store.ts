@@ -839,8 +839,36 @@ function upsertChannelMessage(message: ChannelMessageView, isUpdateOrSelf = fals
           [rootId]: { ...existingThread, replies: nextReplies },
         }
       }
-      // 乐观更新主消息流里 root 的回复计数
+      // 乐观更新主消息流里 root 的回复计数与侧栏子话题列表
       let nextDetails = prev.details
+      let nextChannels = prev.channels
+      if (!message.ephemeralTo) {
+        const rootMsg =
+          existingThread?.root ??
+          detail?.messages.find((m) => m.id === rootId)
+        const rootPreview = (rootMsg?.text ?? '')
+          .replace(/[#>*`[\]()]/g, ' ')
+          .replace(/\s+/g, ' ')
+          .trim()
+        const threadTitle = rootPreview
+          ? rootPreview.length > 28
+            ? `${rootPreview.slice(0, 28)}…`
+            : rootPreview
+          : '讨论串'
+        nextChannels = prev.channels.map((c) => {
+          if (c.id !== message.channelId) return c
+          const prevThreads = c.threads ?? []
+          const existsInList = prevThreads.some((t) => t.rootId === rootId)
+          const nextThreads = existsInList
+            ? prevThreads.map((t) =>
+                t.rootId === rootId
+                  ? { ...t, replyCount: t.replyCount + (existingThread?.replies.some((r) => r.id === message.id) ? 0 : 1), lastReplyAt: Math.max(t.lastReplyAt, message.createdAt) }
+                  : t,
+              )
+            : [{ rootId, title: threadTitle, replyCount: 1, lastReplyAt: message.createdAt }, ...prevThreads]
+          return { ...c, threads: nextThreads.sort((a, b) => b.lastReplyAt - a.lastReplyAt).slice(0, 12) }
+        })
+      }
       if (detail && !message.ephemeralTo && !isUpdateOrSelf) {
         nextDetails = {
           ...prev.details,
@@ -864,7 +892,7 @@ function upsertChannelMessage(message: ChannelMessageView, isUpdateOrSelf = fals
           },
         }
       }
-      return { ...prev, threads: nextThreads, details: nextDetails }
+      return { ...prev, channels: nextChannels, threads: nextThreads, details: nextDetails }
     }
 
     const existed = detail ? detail.messages.some((m) => m.id === message.id) : false

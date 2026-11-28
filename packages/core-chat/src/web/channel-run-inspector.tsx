@@ -57,10 +57,10 @@ export const ChannelRunInspector = memo(function ChannelRunInspector() {
   }
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col overflow-y-auto p-3 text-[13px]" data-testid="channel-run-inspector">
-      <div className="mb-3 flex items-center gap-2.5 rounded-lg border border-(--biu-color-border-subtle) bg-(--biu-color-bg-subtle) p-2.5">
+    <div className="flex min-h-0 flex-1 flex-col gap-2.5 overflow-y-auto p-3 text-[13px]" data-testid="channel-run-inspector">
+      <div className="flex items-center gap-2.5 rounded-[var(--biu-radius-lg)] bg-(--biu-color-bg-subtle) p-3">
         <SidebarMascot
-          size={28}
+          size={26}
           sessionId={run.agentId}
           identity={resolveSessionMascot(run.agentId, run.agentMascot)}
           busy={run.status === 'running' || run.status === 'queued'}
@@ -69,19 +69,19 @@ export const ChannelRunInspector = memo(function ChannelRunInspector() {
         />
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-1.5">
-            <span className="truncate font-semibold">{run.agentName}</span>
-            <span className="rounded bg-(--biu-color-bg-muted) px-1.5 py-0.5 text-[10px] text-(--biu-color-text-muted)">
+            <span className="truncate font-semibold text-(--biu-color-text)">{run.agentName}</span>
+            <span className="shrink-0 whitespace-nowrap rounded bg-(--biu-color-bg-muted) px-1.5 py-0.5 text-[10.5px] text-(--biu-color-text-muted)">
               {ROLE_BADGE[run.viewerRole]}
             </span>
           </div>
-          <div className="text-[11.5px] text-(--biu-color-text-subtle)">
-            由 {run.invokerName} 触发 · 归属 {run.agentOwnerName} · 状态：{run.status}
+          <div className="mt-0.5 truncate text-[11.5px] text-(--biu-color-text-subtle)">
+            由 {run.invokerName} 触发 · 归属 {run.agentOwnerName} · {run.status}
           </div>
         </div>
         {run.canCancel ? (
           <button
             type="button"
-            className="inline-flex items-center gap-1 rounded border border-red-500/40 px-2 py-1 text-[11px] text-red-400 hover:bg-red-500/10"
+            className="inline-flex shrink-0 cursor-pointer items-center gap-1 rounded-md border-0 bg-(--biu-color-wash-rose) px-2 py-1 text-[11.5px] text-(--biu-color-danger) hover:opacity-90"
             onClick={() => void cancelChannelRun(run.channelId, run.id)}
           >
             <StopCircleIcon className="size-3.5" />
@@ -91,75 +91,77 @@ export const ChannelRunInspector = memo(function ChannelRunInspector() {
       </div>
 
       {mergedStream.thinking ? (
-        <div className="mb-3 rounded-lg border border-(--biu-color-border-subtle) bg-(--biu-color-bg-subtle) p-2.5">
-          <div className="mb-1 text-[11px] font-semibold text-(--biu-color-text-subtle)">思考过程</div>
-          <pre className="whitespace-pre-wrap font-sans text-[12px] leading-relaxed text-(--biu-color-text-muted)">
+        <details open className="rounded-[var(--biu-radius-lg)] bg-(--biu-color-bg-subtle) p-3">
+          <summary className="cursor-pointer select-none text-[11.5px] font-medium text-(--biu-color-text-subtle)">
+            思考过程
+          </summary>
+          <pre className="mt-2 whitespace-pre-wrap font-sans text-[12px] leading-relaxed text-(--biu-color-text-muted)">
             {mergedStream.thinking}
           </pre>
-        </div>
+        </details>
       ) : null}
 
       {mergedStream.text ? (
-        <div className="mb-3 rounded-lg border border-(--biu-color-border-subtle) bg-(--biu-color-bg-subtle) p-2.5">
-          <div className="mb-1 text-[11px] font-semibold text-(--biu-color-text-subtle)">实时输出</div>
+        <div className="rounded-[var(--biu-radius-lg)] bg-(--biu-color-bg-subtle) p-3">
+          <div className="mb-1.5 text-[11.5px] font-medium text-(--biu-color-text-subtle)">实时输出</div>
           <pre className="whitespace-pre-wrap font-sans text-[12.5px] leading-relaxed text-(--biu-color-text)">
             {mergedStream.text}
           </pre>
         </div>
       ) : null}
 
-      <div className="space-y-2">
+      <div className="space-y-1.5">
         {run.events
           .filter((ev) => ev.kind !== 'delta' && ev.kind !== 'thinking')
           .map((ev, idx) => (
             <div
               key={`${ev.ts}-${idx}`}
-              className="rounded-lg border border-(--biu-color-border-subtle) bg-(--biu-color-bg-subtle) p-2 text-[12px]"
+              className="rounded-[var(--biu-radius-md)] bg-(--biu-color-bg-subtle) px-3 py-2 text-[12px]"
             >
               {ev.kind === 'tool_call' ? (
-                <div>
-                  <div className="flex items-center gap-1.5 font-medium">
-                    <WrenchScrewdriverIcon className="size-3.5 opacity-75" />
-                    <span className="font-mono">{ev.toolName}</span>
-                  </div>
+                <details>
+                  <summary className="flex cursor-pointer items-center gap-1.5 font-medium text-(--biu-color-text)">
+                    <WrenchScrewdriverIcon className="size-3.5 shrink-0 opacity-75" />
+                    <span className="truncate font-mono">{ev.toolName}</span>
+                  </summary>
                   {ev.args ? (
-                    <pre className="mt-1 max-h-36 overflow-auto rounded bg-(--biu-color-bg) p-1.5 font-mono text-[11px] text-(--biu-color-text-muted)">
+                    <pre className="mt-2 max-h-36 overflow-auto rounded bg-(--biu-color-bg-code) p-2 font-mono text-[11px] text-(--biu-color-text-muted)">
                       {JSON.stringify(ev.args, null, 2)}
                     </pre>
                   ) : null}
-                </div>
+                </details>
               ) : ev.kind === 'tool_result' ? (
-                <div>
-                  <div className="flex items-center gap-1.5 font-medium">
+                <details>
+                  <summary className="flex cursor-pointer items-center gap-1.5 font-medium text-(--biu-color-text)">
                     {ev.ok ? (
-                      <CheckCircleIcon className="size-3.5 text-emerald-500" />
+                      <CheckCircleIcon className="size-3.5 shrink-0 text-emerald-500" />
                     ) : (
-                      <XCircleIcon className="size-3.5 text-red-400" />
+                      <XCircleIcon className="size-3.5 shrink-0 text-(--biu-color-danger)" />
                     )}
-                    <span className="font-mono">{ev.toolName}</span>
-                  </div>
+                    <span className="truncate font-mono">{ev.toolName}</span>
+                  </summary>
                   {ev.detail ? (
-                    <pre className="mt-1 max-h-40 overflow-auto whitespace-pre-wrap rounded bg-(--biu-color-bg) p-1.5 font-mono text-[11px] text-(--biu-color-text-muted)">
+                    <pre className="mt-2 max-h-40 overflow-auto whitespace-pre-wrap rounded bg-(--biu-color-bg-code) p-2 font-mono text-[11px] text-(--biu-color-text-muted)">
                       {ev.detail}
                     </pre>
                   ) : null}
-                </div>
+                </details>
               ) : ev.kind === 'approval' ? (
                 <div className="flex flex-wrap items-center gap-2">
-                  <ShieldCheckIcon className="size-4 text-amber-400" />
+                  <ShieldCheckIcon className="size-4 shrink-0 text-amber-400" />
                   <span>{ev.text}</span>
                   {run.viewerRole === 'owner' && ev.approvalId && run.status === 'waiting_approval' ? (
                     <div className="ml-auto flex gap-1.5">
                       <button
                         type="button"
-                        className="rounded bg-emerald-600 px-2 py-0.5 text-[11px] text-white"
+                        className="cursor-pointer rounded border-0 bg-emerald-600 px-2 py-0.5 text-[11px] text-white"
                         onClick={() => void decideChannelApproval(ev.approvalId!, true)}
                       >
                         批准
                       </button>
                       <button
                         type="button"
-                        className="rounded border border-(--biu-color-border) px-2 py-0.5 text-[11px]"
+                        className="cursor-pointer rounded border-0 bg-(--biu-color-bg-muted) px-2 py-0.5 text-[11px] text-(--biu-color-text)"
                         onClick={() => void decideChannelApproval(ev.approvalId!, false)}
                       >
                         拒绝
@@ -175,7 +177,7 @@ export const ChannelRunInspector = memo(function ChannelRunInspector() {
       </div>
 
       {run.error ? (
-        <div className="mt-3 rounded-md border border-red-500/40 bg-red-500/10 p-2 text-[12px] text-red-400">
+        <div className="rounded-[var(--biu-radius-md)] bg-(--biu-color-wash-rose) px-3 py-2 text-[12px] text-(--biu-color-danger)">
           {run.error}
         </div>
       ) : null}

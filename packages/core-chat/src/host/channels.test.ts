@@ -1180,6 +1180,14 @@ describe('Slack-style Group Channels: RBAC, Mention Dispatch, Per-Invoker Queue,
       assert.equal(thread.replies[1]!.senderType, 'agent')
       assert.equal(thread.replies[1]!.threadRootId, rootMsg.id)
 
+      // 2.5 侧边栏摘要自动附带活跃子讨论串列表（供左侧展开/收起二级节点）
+      const listed = asUser(alice.id, () => svc.listChannels())
+      const summaryThreads = listed.find((c) => c.id === chId)?.threads ?? []
+      assert.equal(summaryThreads.length, 1)
+      assert.equal(summaryThreads[0]!.rootId, rootMsg.id)
+      assert.equal(summaryThreads[0]!.replyCount, 2)
+      assert.ok(summaryThreads[0]!.title.includes('数据库分库方案'))
+
       // 3. AI 总结聊天要点
       const summarized = await asUser(alice.id, () => svc.summarizeChannel(chId))
       assert.ok(summarized.messageCount >= 4)

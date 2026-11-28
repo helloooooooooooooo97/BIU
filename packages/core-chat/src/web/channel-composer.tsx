@@ -13,8 +13,8 @@ import {
 import {
   ArrowUpIcon,
   ArrowUturnLeftIcon,
+  AtSymbolIcon,
   DocumentIcon,
-  PaperClipIcon,
   PlusIcon,
   UserGroupIcon,
 } from '@heroicons/react/16/solid'
@@ -91,6 +91,7 @@ export type ChannelComposerHandle = {
 
 export type ChannelComposerProps = {
   channelId: string
+  threadRootId?: string | null
   isDm: boolean
   members: ChannelMemberView[]
   resolveAvatar: (accountId?: string, serverAvatar?: string) => string | undefined
@@ -133,9 +134,10 @@ function collectClipboardFiles(clipboard: DataTransfer | null | undefined): File
 
 export const ChannelComposer = memo(
   forwardRef<ChannelComposerHandle, ChannelComposerProps>(function ChannelComposer(
-    { channelId, isDm, members, resolveAvatar, replyTo, onClearReplyTo, onError, pick },
+    { channelId, threadRootId, isDm, members, resolveAvatar, replyTo, onClearReplyTo, onError, pick },
     ref,
   ) {
+    const draftKey = threadRootId ? `${channelId}:thread:${threadRootId}` : channelId
     const location = useLocation()
     const formRef = useRef<HTMLFormElement>(null)
     const fileInputRef = useRef<HTMLInputElement>(null)
@@ -184,11 +186,16 @@ export const ChannelComposer = memo(
 
     const placeholderText = useMemo(() => {
       const hasAgents = members.some((m) => m.memberType === 'agent')
+      if (threadRootId) {
+        return hasAgents
+          ? '在讨论串中回复… 输入 @ 提及成员、Agent 或引用页面'
+          : '在讨论串中回复… 输入 @ 提及成员或引用页面'
+      }
       if (isDm) return '发送私聊消息… 输入 @ 引用页面或粘贴截图'
       return hasAgents
         ? '发送消息… 输入 @ 提及成员、Agent 或引用页面'
         : '发送消息… 输入 @ 提及成员或引用页面'
-    }, [isDm, members])
+    }, [isDm, members, threadRootId])
     const placeholderRef = useRef(placeholderText)
     placeholderRef.current = placeholderText
 
@@ -586,11 +593,11 @@ export const ChannelComposer = memo(
       }
     }, [attachments.length, hasExternalChips, scheduleCanSubmit])
 
-    // 按 channelId 隔离并持久化草稿（含 @ 芯片与 Pick 芯片）
+    // 按 draftKey（频道或子话题）隔离并持久化草稿（含 @ 芯片与 Pick 芯片）
     useEffect(() => {
       if (!composerEditorReady(editor)) return
       const prevId = activeDraftChannelRef.current
-      const switching = Boolean(prevId && prevId !== channelId)
+      const switching = Boolean(prevId && prevId !== draftKey)
       flushDraftTimer()
       if (switching && prevId) {
         const prevPacked = serializeChannelComposer(editor)
@@ -600,10 +607,10 @@ export const ChannelComposer = memo(
           clearChannelDraft(prevId)
         }
       }
-      activeDraftChannelRef.current = channelId
-      if (!channelId) return
+      activeDraftChannelRef.current = draftKey
+      if (!draftKey) return
 
-      const draft = readChannelDraft(channelId)
+      const draft = readChannelDraft(draftKey)
       const keep = !switching ? (pick?.refs.slice() ?? []) : []
       restoringDraftRef.current = true
       try {
@@ -636,7 +643,7 @@ export const ChannelComposer = memo(
         focusComposerEditor(editor as unknown as Parameters<typeof focusComposerEditor>[0])
       }
       // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [channelId, editor])
+    }, [draftKey, editor])
 
     // 同步全局 ⌘L Pick 拾取芯片进入编辑器
     useEffect(() => {
@@ -684,7 +691,7 @@ export const ChannelComposer = memo(
       }
       flushDraftTimer()
       runComposerCommands(editorRef.current, (ed) => ed.commands.clearContent(true))
-      clearChannelDraft(channelId)
+      clearChannelDraft(draftKey)
       pick?.clear()
       pickKeysRef.current = new Set()
       canSubmitRef.current = false
@@ -695,7 +702,7 @@ export const ChannelComposer = memo(
       setMentionTrigger(null)
       setExpanded(false)
       onClearReplyTo()
-    }, [channelId, flushDraftTimer, onClearReplyTo, pick, revokeAllPreviewUrls])
+    }, [draftKey, flushDraftTimer, onClearReplyTo, pick, revokeAllPreviewUrls])
 
     const handleSend = useCallback(async () => {
       if (sending || uploadingFiles > 0) return
@@ -712,6 +719,7 @@ export const ChannelComposer = memo(
         await sendChannelMessage(channelId, {
           text: body,
           ...(replyTo ? { replyToId: replyTo.id } : {}),
+          ...(threadRootId ? { threadRootId } : {}),
           mentions: packed.mentions,
           ...(attachments.length > 0 ? { attachments } : {}),
         })
@@ -721,7 +729,7 @@ export const ChannelComposer = memo(
       } finally {
         setSending(false)
       }
-    }, [attachments, channelId, clearInput, onError, replyTo, sending, uploadingFiles])
+    }, [attachments, channelId, clearInput, onError, replyTo, sending, threadRootId, uploadingFiles])
 
     const onFormSubmit = (event: FormEvent) => {
       event.preventDefault()
@@ -917,11 +925,10 @@ export const ChannelComposer = memo(
             <button
               type="button"
               className="composer-plus"
-              title="提及成员、Agent 或引用页面 (@)"
-              aria-label="提及成员或 Agent"
-              data-testid="channel-mention-btn"
-              onMouseDown={(e) => e.preventDefault()}
-              onClick={openMentionPicker}
+              title="上传图片或文件（也支持粘贴或拖拽）"
+              aria-label="上传图片或文件"
+              data-testid="channel-upload-btn"
+              onClick={() => fileInputRef.current?.click()}
             >
               <PlusIcon className="size-4" />
             </button>
@@ -929,12 +936,13 @@ export const ChannelComposer = memo(
             <button
               type="button"
               className="composer-plus"
-              title="上传图片或文件（也支持粘贴或拖拽）"
-              aria-label="上传图片或文件"
-              data-testid="channel-upload-btn"
-              onClick={() => fileInputRef.current?.click()}
+              title="提及成员、Agent 或引用页面 (@)"
+              aria-label="提及成员或 Agent"
+              data-testid="channel-mention-btn"
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={openMentionPicker}
             >
-              <PaperClipIcon className="size-3.5" />
+              <AtSymbolIcon className="size-3.5" />
             </button>
           </div>
 

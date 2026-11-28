@@ -43,6 +43,7 @@ import {
   type ChannelRunStatus,
   type ChannelSavedMessageView,
   type ChannelSearchHit,
+  type ChannelSidebarThreadItem,
   type ChannelSummary,
   type ChannelThreadPayload,
   type ChannelThreadSummary,
@@ -871,6 +872,7 @@ export class ChannelService {
         displayName = peerName
       }
     }
+    const sidebarThreads = this.listSidebarThreads(row.id)
     return {
       id: row.id,
       workspaceId: row.workspace_id,
@@ -894,7 +896,52 @@ export class ChannelService {
       lastReadSeq,
       muted: Boolean(viewerMember?.muted),
       pinned: Boolean(viewerMember?.pinned),
+      ...(sidebarThreads.length > 0 ? { threads: sidebarThreads } : {}),
     }
+  }
+
+  private listSidebarThreads(channelId: string): ChannelSidebarThreadItem[] {
+    const rows = this.db()
+      .prepare(
+        `SELECT
+           r.thread_root_id AS root_id,
+           COUNT(*) AS reply_count,
+           MAX(r.created_at) AS last_reply_at,
+           root.text AS root_text,
+           root.attachments_json AS root_attachments
+         FROM channel_messages r
+         JOIN channel_messages root ON root.id = r.thread_root_id
+         WHERE r.channel_id = ? AND r.thread_root_id != '' AND r.ephemeral_to = '' AND r.deleted_at = 0
+         GROUP BY r.thread_root_id
+         ORDER BY last_reply_at DESC
+         LIMIT 12`,
+      )
+      .all(channelId) as Array<{
+      root_id: string
+      reply_count: number
+      last_reply_at: number
+      root_text?: string
+      root_attachments?: string
+    }>
+    return rows.map((r) => {
+      const cleanLine = String(r.root_text ?? '')
+        .replace(/[#>*`[\]()]/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim()
+      let title = cleanLine.slice(0, 28)
+      if (!title) {
+        const atts = safeJsonParse<ChannelAttachment[]>(r.root_attachments, [])
+        title = atts[0]?.name ? `[附件] ${atts[0].name.slice(0, 20)}` : '讨论串'
+      } else if (cleanLine.length > 28) {
+        title = `${title}…`
+      }
+      return {
+        rootId: r.root_id,
+        title,
+        replyCount: Number(r.reply_count ?? 0),
+        lastReplyAt: Number(r.last_reply_at ?? 0),
+      }
+    })
   }
 
   listChannels(): ChannelSummary[] {
@@ -1896,6 +1943,8 @@ export class ChannelService {
             const rootView = this.hydrateMessage(rootRow, undefined, ch.workspace_id)
             this.broadcastToChannel(input.channelId, ch.workspace_id, 'channel/message-updated', { message: rootView })
           }
+          const updatedSummary = this.toSummary(ch)
+          this.broadcastToChannel(input.channelId, ch.workspace_id, 'channel/updated', { channel: updatedSummary })
         } else if (input.senderType === 'account' || input.senderType === 'agent') {
           const actorForNaming = input.senderType === 'account' ? input.senderId : ch.created_by
           this.maybeScheduleAutoName(input.channelId, ch, actorForNaming)
