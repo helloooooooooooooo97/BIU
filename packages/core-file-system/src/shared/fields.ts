@@ -264,6 +264,8 @@ export function listProjectionKeys(opts: {
   add(opts.schema?.labelField ?? 'title')
   add('emoji')
   add('mascot')
+  if (opts.schema?.fields.avatar) add('avatar')
+  if (opts.schema?.fields.avatar && opts.schema?.fields.status) add('status')
   add(declaredParentField(opts.schema))
   add(parseGroupByKey(opts.groupBy).fieldKey)
   add('parentChain')

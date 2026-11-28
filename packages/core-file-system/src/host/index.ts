@@ -284,6 +284,8 @@ function listedColumnKeys(requested: unknown, labelField: string, schema?: Colle
   }
   for (const key of actionWhenKeys(schema)) add(key)
   if (schema?.fields.builtin) add('builtin')
+  if (schema?.fields.avatar) add('avatar')
+  if (schema?.fields.avatar && schema?.fields.status) add('status')
   return keys
 }
 

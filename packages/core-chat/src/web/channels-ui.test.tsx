@@ -5,7 +5,7 @@ import { cleanup, fireEvent, render, waitFor } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { ChannelSidebarSections } from './channel-sidebar.tsx'
 import { ChannelStage } from './channel-view.tsx'
-import { MemberDmAction } from './members-chrome.tsx'
+import { MemberDmAction, MemberIcon, membersChrome } from './members-chrome.tsx'
 import { resetChannelStore } from './channel-store.ts'
 
 beforeEach(() => {
@@ -366,6 +366,18 @@ test('ChannelStage reuses 1v1 chat card/composer/float styles and syncs workspac
     assert.ok(imgs.includes(bobAvatar), 'peer avatar in header/message must match workspace avatar')
     assert.ok(imgs.includes(aliceAvatar), 'self avatar in message must match workspace avatar')
     assert.equal(view.container.querySelector('[data-ai-avatar="mesh"]'), null)
+
+    // 我发的消息在右侧且头像在右边；他人发的消息在左侧且头像在左边
+    const rows = [...view.container.querySelectorAll('[data-testid="channel-message"]')]
+    assert.equal(rows.length, 2)
+    const otherRow = rows[0]!
+    const selfRow = rows[1]!
+    assert.equal(otherRow.getAttribute('data-self'), 'false')
+    assert.ok(otherRow.className.includes('justify-start'))
+    assert.equal(otherRow.firstElementChild?.getAttribute('data-testid'), 'channel-msg-avatar-left')
+    assert.equal(selfRow.getAttribute('data-self'), 'true')
+    assert.ok(selfRow.className.includes('justify-end'))
+    assert.equal(selfRow.lastElementChild?.getAttribute('data-testid'), 'channel-msg-avatar-right')
   })
 
   // 打开「群成员与 Agent」弹窗：必须使用统一 .biu-float-overlay / .scfg-float 且头像一致
@@ -375,4 +387,25 @@ test('ChannelStage reuses 1v1 chat card/composer/float styles and syncs workspac
   const modalImgs = [...modal.querySelectorAll('img')].map((el) => el.getAttribute('src'))
   assert.ok(modalImgs.includes(aliceAvatar))
   assert.ok(modalImgs.includes(bobAvatar))
+})
+
+test('membersChrome Icon renders workspace avatar with green dot for online members and no dot when offline', () => {
+  const chrome = membersChrome()
+  assert.equal(chrome.Icon, MemberIcon)
+
+  const onlineAvatar = 'data:image/svg+xml;utf8,online-97'
+  const onlineView = render(
+    <MemberIcon record={{ id: 'acc-97', title: '97', avatar: onlineAvatar, status: 'online' }} />,
+  )
+  assert.equal(onlineView.getByTestId('member-row-avatar-acc-97').getAttribute('data-online'), 'true')
+  assert.ok(onlineView.container.querySelector(`img[src="${onlineAvatar}"]`))
+  assert.ok(onlineView.getByTestId('member-online-dot-acc-97'))
+  onlineView.unmount()
+
+  const offlineView = render(
+    <MemberIcon record={{ id: 'acc-offline', title: 'Bob', avatar: '', status: 'active' }} />,
+  )
+  assert.equal(offlineView.getByTestId('member-row-avatar-acc-offline').getAttribute('data-online'), 'false')
+  assert.ok(offlineView.container.querySelector('[data-ai-avatar="mesh"]'))
+  assert.equal(offlineView.queryByTestId('member-online-dot-acc-offline'), null)
 })

@@ -1,11 +1,48 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { ChatBubbleLeftRightIcon, TrashIcon } from '@heroicons/react/16/solid'
+import { AiAvatar } from '@biu/biu-ui/ai-avatar'
 import { actionTone } from '@biu/biu-ui/tag-chip'
 import type { CollectionChrome } from '@biu/type-file-system/ui'
 import type { CollectionActionInfo, DbRecord } from '@biu/type-file-system'
 import { channelAppPath } from '@biu/web-session-view'
 import { openOrCreateDm } from './channel-store.ts'
+
+export function MemberIcon({ record, size = 18 }: { record: DbRecord; size?: number }) {
+  const memberId = String(record.id ?? '').trim()
+  const avatar = typeof record.avatar === 'string' ? record.avatar.trim() : ''
+  const online = record.status === 'online'
+  const dotSize = Math.max(6, Math.round(size * 0.38))
+
+  return (
+    <span
+      className="relative inline-grid shrink-0 place-items-center"
+      style={{ width: size, height: size }}
+      data-testid={memberId ? `member-row-avatar-${memberId}` : 'member-row-avatar'}
+      data-online={online ? 'true' : 'false'}
+    >
+      {avatar ? (
+        <img
+          src={avatar}
+          alt=""
+          className="rounded-full object-cover"
+          style={{ width: size, height: size }}
+        />
+      ) : (
+        <AiAvatar seed={memberId || 'biu-ai'} size={size} className="rounded-full" />
+      )}
+      {online ? (
+        <span
+          className="pointer-events-none absolute right-0 bottom-0 rounded-full bg-emerald-500 ring-[1.5px] ring-(--biu-color-bg)"
+          style={{ width: dotSize, height: dotSize }}
+          title="在线"
+          aria-label="在线"
+          data-testid={memberId ? `member-online-dot-${memberId}` : 'member-online-dot'}
+        />
+      ) : null}
+    </span>
+  )
+}
 
 export function MemberDmAction({
   actions = [],
@@ -72,6 +109,7 @@ export function MemberDmAction({
 
 export function membersChrome(): CollectionChrome {
   return {
+    Icon: MemberIcon,
     Actions: MemberDmAction,
   }
 }
