@@ -96,6 +96,7 @@ import {
 import { stripMentionLabels } from '../mention-markup.ts'
 import {
   AGENTS_COLLECTION_PATH,
+  CHANNELS_COLLECTION_PATH,
   COMMENTS_COLLECTION_PATH,
   DATA_COLLECTION_PATH,
   EDITOR_BLOCKS_COLLECTION_PATH,
@@ -917,7 +918,8 @@ export class DatabaseService extends Service implements Database {
     const actorSuffix =
       spec.path === SKILLS_COLLECTION_PATH ||
       spec.path === MCP_COLLECTION_PATH ||
-      spec.path === WORKSPACE_MEMBERS_COLLECTION_PATH
+      spec.path === WORKSPACE_MEMBERS_COLLECTION_PATH ||
+      spec.path === CHANNELS_COLLECTION_PATH
         ? `\t${resolveScopedWorkspaceId(this.ctx)}\t${currentAccountId()}`
         : ''
     const key = `${spec.path}\t${query.trash ? 1 : 0}\t${q}\t${overlay ? 1 : 0}\t${JSON.stringify(query.filter ?? {})}\t${(query.ids ?? []).join(',')}${actorSuffix}`
@@ -929,7 +931,8 @@ export class DatabaseService extends Service implements Database {
     const actorSuffix =
       spec.path === SKILLS_COLLECTION_PATH ||
       spec.path === MCP_COLLECTION_PATH ||
-      spec.path === WORKSPACE_MEMBERS_COLLECTION_PATH
+      spec.path === WORKSPACE_MEMBERS_COLLECTION_PATH ||
+      spec.path === CHANNELS_COLLECTION_PATH
         ? `\t${resolveScopedWorkspaceId(this.ctx)}\t${currentAccountId()}`
         : ''
     const key = `${spec.path}\t${load.trash ? 1 : 0}\t${load.q ?? ''}\t${overlay ? 1 : 0}\t${JSON.stringify(load.filter ?? {})}\t${(load.ids ?? []).join(',')}${actorSuffix}`
@@ -976,8 +979,8 @@ export class DatabaseService extends Service implements Database {
     overlay: boolean,
   ) {
     const load = specListQuery(query)
-    // /views 本身在 SavedViewsStore 内存中，条数极少且高频改名/共享，不走 visibleCache 避免任何脏缓存
-    if (spec.path === VIEWS_COLLECTION_PATH) {
+    // /views 与 /channels 均在各自实时存储内高频变动，不走 visibleCache 避免脏读
+    if (spec.path === VIEWS_COLLECTION_PATH || spec.path === CHANNELS_COLLECTION_PATH) {
       return this.visibleSortedCollectionRowsNow(spec, query, sortField, sortDir, sorts, overlay)
     }
     const actor = this.authorization()?.currentActor()

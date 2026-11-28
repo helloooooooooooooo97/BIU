@@ -5,6 +5,7 @@ import { type Action as PermissionAction, type AuthorizationService } from '@biu
 import { isRegisteredBuiltinPlugin } from '@biu/host-account/store'
 import type { CollectionSpec, DbRecord } from '@biu/type-file-system'
 import {
+  CHANNELS_COLLECTION_PATH,
   COMMENTS_COLLECTION_PATH,
   DATA_COLLECTION_PATH,
   EDITOR_BLOCKS_COLLECTION_PATH,
@@ -357,6 +358,7 @@ export class DatabaseAccessPolicy {
       return rows
     }
     return rows.filter((row) => {
+      if (collection === CHANNELS_COLLECTION_PATH) return true
       if (isBuiltinPluginRow(collection, row as { builtin?: unknown })) {
         return action === 'resource:read' || action === 'resource:list'
       }
@@ -526,6 +528,7 @@ export class DatabaseAccessPolicy {
       if (rbac) throw new Error(`unknown record: ${spec.path}/${id}`)
       return
     }
+    if (spec.path === CHANNELS_COLLECTION_PATH) return
     const target = resolveScopeTarget(spec.path, id, record)
     if (!isRecordInWorkspace(membership, target.collection, target.id)) {
       throw new Error(`unknown record: ${spec.path}/${id}`)

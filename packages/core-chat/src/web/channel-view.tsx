@@ -1403,11 +1403,27 @@ export const ChannelStage = memo(function ChannelStage({
                             ) : (
                               <span
                                 className={`inline-flex min-w-0 items-center gap-1.5${isSelf ? ' flex-row-reverse' : ''}`}
-                                title={msg.senderName}
+                                title={msg.viaAgentName ? `${msg.senderName}（由 ${msg.viaAgentName} 代发）` : msg.senderName}
                                 data-testid="channel-msg-avatar"
                               >
                                 <MemberAvatar avatar={accountAvatar} seed={msg.senderId} size={16} />
                                 <span className="truncate font-medium">{msg.senderName}</span>
+                                {msg.viaAgentId ? (
+                                  <span
+                                    className="inline-flex shrink-0 items-center gap-1 rounded-full border border-(--biu-color-border-subtle) bg-(--biu-color-bg) px-1.5 py-0.5 text-[11px] font-normal text-(--biu-color-text-muted)"
+                                    title={`由 Agent「${msg.viaAgentName || msg.viaAgentId}」代发`}
+                                    data-testid="channel-msg-via-agent"
+                                  >
+                                    <SidebarMascot
+                                      size={13}
+                                      sessionId={msg.viaAgentId}
+                                      identity={resolveSessionMascot(msg.viaAgentId, msg.viaAgentMascot)}
+                                      animate={false}
+                                      title=""
+                                    />
+                                    <span className="max-w-[110px] truncate">{msg.viaAgentName || msg.viaAgentId}</span>
+                                  </span>
+                                ) : null}
                               </span>
                             )}
 
@@ -2502,6 +2518,22 @@ function ChannelThreadPanel({
                   />
                 )}
                 <span className="font-medium text-(--biu-color-text)">{thread.root.senderName}</span>
+                {thread.root.viaAgentId ? (
+                  <span
+                    className="inline-flex shrink-0 items-center gap-1 rounded-full border border-(--biu-color-border-subtle) bg-(--biu-color-bg) px-1.5 py-0.5 text-[11px] font-normal text-(--biu-color-text-muted)"
+                    title={`由 Agent「${thread.root.viaAgentName || thread.root.viaAgentId}」代发`}
+                    data-testid="channel-msg-via-agent"
+                  >
+                    <SidebarMascot
+                      size={12}
+                      sessionId={thread.root.viaAgentId}
+                      identity={resolveSessionMascot(thread.root.viaAgentId, thread.root.viaAgentMascot)}
+                      animate={false}
+                      title=""
+                    />
+                    <span className="max-w-[96px] truncate">{thread.root.viaAgentName || thread.root.viaAgentId}</span>
+                  </span>
+                ) : null}
                 <span className="ml-auto text-[11px] tabular-nums">{formatSentAt(thread.root.createdAt)}</span>
               </div>
               <div className="text-[13px] text-(--biu-color-text)">
@@ -2544,6 +2576,22 @@ function ChannelThreadPanel({
                     />
                   )}
                   <span className="font-medium text-(--biu-color-text)">{reply.senderName}</span>
+                  {reply.viaAgentId ? (
+                    <span
+                      className="inline-flex shrink-0 items-center gap-1 rounded-full border border-(--biu-color-border-subtle) bg-(--biu-color-bg) px-1.5 py-0.5 text-[11px] font-normal text-(--biu-color-text-muted)"
+                      title={`由 Agent「${reply.viaAgentName || reply.viaAgentId}」代发`}
+                      data-testid="channel-msg-via-agent"
+                    >
+                      <SidebarMascot
+                        size={12}
+                        sessionId={reply.viaAgentId}
+                        identity={resolveSessionMascot(reply.viaAgentId, reply.viaAgentMascot)}
+                        animate={false}
+                        title=""
+                      />
+                      <span className="max-w-[96px] truncate">{reply.viaAgentName || reply.viaAgentId}</span>
+                    </span>
+                  ) : null}
                   <span className="ml-auto text-[11px] tabular-nums">{formatSentAt(reply.createdAt)}</span>
                 </div>
                 {reply.deletedAt ? (

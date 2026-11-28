@@ -79,7 +79,7 @@ export class ApprovalsService extends Service {
       const delegatedGroupCall = Boolean(
         actor?.type === 'agent' && actor.roomContext && actor.invokerId && actor.invokerId !== actor.delegatedBy,
       )
-      if (!needsApproval(req.name, this.mode, delegatedGroupCall)) return req
+      if (!needsApproval(req, this.mode, delegatedGroupCall)) return req
       const id = crypto.randomUUID()
       const tenant = currentTenantScope()
       // 群聊跨人调用 Agent 触发敏感工具时，审批强绑定给 Agent Owner（delegatedBy），他人无法代点允许
@@ -175,11 +175,19 @@ export class ApprovalsService extends Service {
   }
 }
 
-function needsApproval(name: string, mode: 'auto' | 'hold', delegatedGroupCall = false) {
+function isChannelSendAction(req: ToolRequest): boolean {
+  if (req.name !== 'db_action') return false
+  const rawPath = String(req.args?.path ?? '').trim()
+  const action = String(req.args?.action ?? '').trim()
+  return (rawPath.startsWith('/channels/') || rawPath === '/channels') && action === 'send'
+}
+
+function needsApproval(req: ToolRequest, mode: 'auto' | 'hold', delegatedGroupCall = false) {
+  const { name } = req
   if (name === 'db_delete') return true
-  if (delegatedGroupCall) return sensitive(name) || name.startsWith('mcp_')
+  if (delegatedGroupCall) return sensitive(name) || name.startsWith('mcp_') || isChannelSendAction(req)
   if (mode === 'auto') return false
-  return sensitive(name)
+  return sensitive(name) || isChannelSendAction(req)
 }
 
 function sensitive(name: string) {

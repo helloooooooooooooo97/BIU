@@ -3,6 +3,7 @@ export const DATA_COLLECTION_PATH = '/data'
 export const VIEWS_COLLECTION_PATH = '/views'
 export const TAGS_COLLECTION_PATH = '/tags'
 export const NOTICES_COLLECTION_PATH = '/notices'
+export const CHANNELS_COLLECTION_PATH = '/channels'
 export const EDITOR_BLOCKS_COLLECTION_PATH = '/editor-blocks'
 export const PAGE_BLOCKS_COLLECTION_PATH = EDITOR_BLOCKS_COLLECTION_PATH
 export const PAGES_COLLECTION_PATH = '/pages'

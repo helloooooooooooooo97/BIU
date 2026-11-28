@@ -103,6 +103,9 @@ export interface ChannelMessageMeta {
   agentId?: string
   invokerId?: string
   invokerName?: string
+  /** Agent 经文件系统替当前用户代发消息时记录该 Agent 身份（消息同时展示用户与该 Agent）。 */
+  viaAgentId?: string
+  viaAgentName?: string
 }
 
 export interface ChannelMessageReplyPreview {
@@ -164,6 +167,10 @@ export interface ChannelMessageView {
   senderName: string
   senderAvatar?: string
   senderMascot?: SessionMascot
+  /** 若消息由用户的 Agent 通过文件系统代发，同时展示该 Agent 的身份与头像。 */
+  viaAgentId?: string
+  viaAgentName?: string
+  viaAgentMascot?: SessionMascot
   replyToId: string
   replyPreview?: ChannelMessageReplyPreview | null
   threadRootId?: string
