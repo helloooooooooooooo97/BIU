@@ -1190,4 +1190,80 @@ describe('Slack-style Group Channels: RBAC, Mention Dispatch, Per-Invoker Queue,
       rmSync(dir, { recursive: true, force: true })
     }
   })
+
+  it('upgrades legacy channel tables missing thread_root_id and new columns before creating indexes', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'biu-channels-legacy-upgrade-'))
+    const db = openAndMigrateBiu(join(dir, 'biu.sqlite'))
+    // 模拟旧版存量数据库：channel_messages 缺少 thread_root_id/attachments_json/pinned_at 等新列
+    db.exec(`
+      DROP TABLE IF EXISTS channel_message_reactions;
+      DROP TABLE IF EXISTS channel_saved_messages;
+      DROP TABLE IF EXISTS channel_messages;
+      DROP TABLE IF EXISTS channel_members;
+      DROP TABLE IF EXISTS channels;
+      CREATE TABLE channels (
+        id TEXT PRIMARY KEY,
+        workspace_id TEXT NOT NULL DEFAULT '',
+        name TEXT NOT NULL,
+        topic TEXT NOT NULL DEFAULT '',
+        access_mode TEXT NOT NULL DEFAULT 'private',
+        created_by TEXT NOT NULL DEFAULT '',
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL
+      );
+      CREATE TABLE channel_members (
+        channel_id TEXT NOT NULL,
+        member_type TEXT NOT NULL,
+        member_id TEXT NOT NULL,
+        role TEXT NOT NULL DEFAULT 'member',
+        added_by TEXT NOT NULL DEFAULT '',
+        added_at INTEGER NOT NULL,
+        PRIMARY KEY (channel_id, member_type, member_id)
+      );
+      CREATE TABLE channel_messages (
+        id TEXT PRIMARY KEY,
+        channel_id TEXT NOT NULL,
+        seq INTEGER NOT NULL,
+        sender_type TEXT NOT NULL,
+        sender_id TEXT NOT NULL,
+        reply_to_id TEXT NOT NULL DEFAULT '',
+        text TEXT NOT NULL DEFAULT '',
+        mentions_json TEXT NOT NULL DEFAULT '[]',
+        trace_id TEXT NOT NULL DEFAULT '',
+        ephemeral_to TEXT NOT NULL DEFAULT '',
+        meta_json TEXT NOT NULL DEFAULT '{}',
+        created_at INTEGER NOT NULL
+      );
+    `)
+    const store = new CollabStore(db)
+    const alice = store.register('Alice', Date.now(), 'pass123456', 'alice@example.com')
+    const ws = store.createWorkspace(alice.id, 'Legacy WS')
+    const fakeCtx = {
+      get: (key: string) => (key === 'account' ? { store } : undefined),
+      account: { store },
+      sessions: { peekSummary: () => null },
+      tools: { schemas: () => [], invoke: async () => ({ ok: true }) },
+      http: { broadcast: () => undefined, broadcastAccount: () => undefined },
+      effect: () => undefined,
+    } as unknown as Context
+    const svc = new ChannelService(
+      fakeCtx,
+      () => ({ chat: async () => ({ content: 'ok', toolCalls: [] }) }),
+      { db },
+    )
+    const asUser = <T>(acc: string, fn: () => T) => runWithAccount(acc, () => runWithRequestWorkspace(ws.id, fn))
+    try {
+      const created = asUser(alice.id, () => svc.createChannel({ name: '升级后的新聊天' }))
+      assert.equal(created.channel.name, '升级后的新聊天')
+      const m1 = asUser(alice.id, () => svc.sendMessage(created.channel.id, { text: '首条消息' })).message
+      const reply = asUser(alice.id, () =>
+        svc.sendMessage(created.channel.id, { text: '讨论串回复', threadRootId: m1.id }),
+      ).message
+      assert.equal(reply.threadRootId, m1.id)
+    } finally {
+      svc.dispose()
+      db.close()
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
 })

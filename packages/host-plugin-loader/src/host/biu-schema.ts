@@ -509,7 +509,6 @@ CREATE TABLE IF NOT EXISTS channels (
   updated_at INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS channels_workspace_updated ON channels(workspace_id, updated_at DESC);
-CREATE INDEX IF NOT EXISTS channels_dm_key ON channels(workspace_id, dm_key);
 
 CREATE TABLE IF NOT EXISTS channel_members (
   channel_id TEXT NOT NULL,
@@ -548,7 +547,6 @@ CREATE TABLE IF NOT EXISTS channel_messages (
 );
 CREATE UNIQUE INDEX IF NOT EXISTS channel_messages_channel_seq ON channel_messages(channel_id, seq);
 CREATE INDEX IF NOT EXISTS channel_messages_ephemeral ON channel_messages(channel_id, ephemeral_to, seq);
-CREATE INDEX IF NOT EXISTS channel_messages_thread ON channel_messages(channel_id, thread_root_id, seq);
 
 CREATE TABLE IF NOT EXISTS channel_message_reactions (
   channel_id TEXT NOT NULL,
@@ -726,10 +724,37 @@ export function ensurePagesPerfIndexes(db: DatabaseSync) {
   `)
 }
 
+/** 幂等确保聊天相关表、新增列与索引就绪（先建表、再补齐旧库缺失列、最后建依赖新列的索引）。 */
+export function ensureChannelsSchema(db: DatabaseSync) {
+  db.exec(CREATE_CHANNELS_SQL)
+  const addColumnIfMissing = (table: string, col: string, ddl: string) => {
+    if (!hasTable(db, table)) return
+    if (tableColumnNames(db, table).includes(col)) return
+    db.exec(`ALTER TABLE ${table} ADD COLUMN ${col} ${ddl}`)
+  }
+  addColumnIfMissing('channels', 'kind', `TEXT NOT NULL DEFAULT 'channel'`)
+  addColumnIfMissing('channels', 'dm_key', `TEXT NOT NULL DEFAULT ''`)
+  addColumnIfMissing('channel_members', 'context_mode', `TEXT NOT NULL DEFAULT 'summary'`)
+  addColumnIfMissing('channel_members', 'last_read_seq', `INTEGER NOT NULL DEFAULT 0`)
+  addColumnIfMissing('channel_members', 'muted', `INTEGER NOT NULL DEFAULT 0`)
+  addColumnIfMissing('channel_members', 'pinned', `INTEGER NOT NULL DEFAULT 0`)
+  addColumnIfMissing('channel_messages', 'attachments_json', `TEXT NOT NULL DEFAULT '[]'`)
+  addColumnIfMissing('channel_messages', 'thread_root_id', `TEXT NOT NULL DEFAULT ''`)
+  addColumnIfMissing('channel_messages', 'pinned_at', `INTEGER NOT NULL DEFAULT 0`)
+  addColumnIfMissing('channel_messages', 'pinned_by', `TEXT NOT NULL DEFAULT ''`)
+  addColumnIfMissing('channel_messages', 'edited_at', `INTEGER NOT NULL DEFAULT 0`)
+  addColumnIfMissing('channel_messages', 'deleted_at', `INTEGER NOT NULL DEFAULT 0`)
+  db.exec(`
+    CREATE INDEX IF NOT EXISTS channels_dm_key ON channels(workspace_id, dm_key);
+    CREATE INDEX IF NOT EXISTS channel_messages_thread ON channel_messages(channel_id, thread_root_id, seq);
+  `)
+}
+
 function applyLatestSchemaPatches(db: DatabaseSync) {
   rebuildPageBlockCollectionKeys(db)
   dropLegacyEditorColumns(db)
   ensurePagesPerfIndexes(db)
+  ensureChannelsSchema(db)
 }
 
 export function createLatestSchema(db: DatabaseSync) {
