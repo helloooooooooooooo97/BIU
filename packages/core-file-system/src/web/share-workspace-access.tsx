@@ -97,33 +97,18 @@ export function WorkspaceAccess({
   const [policy, setPolicy] = useState<{
     allowExternalShare: boolean
     allowAgentEditShare: boolean
-    allowAgentManagerShare: boolean
   }>({
     allowExternalShare: true,
     allowAgentEditShare: true,
-    allowAgentManagerShare: false,
   })
-  const [pendingManagerGrant, setPendingManagerGrant] = useState<{
-    label: string
-    run: () => Promise<unknown>
-  } | null>(null)
-  const agentInternalRoleOptions: ReadonlyArray<{ value: ShareRole; label: string; hint: string }> = [
-    { value: 'viewer', label: '可查看', hint: '查看聊天记录，可 Fork 为自己的代理' },
-    ...(policy.allowAgentEditShare
-      ? [{ value: 'editor' as ShareRole, label: '可编辑', hint: '可重命名与调整配置，但不能直接对话' }]
-      : []),
-    ...(policy.allowAgentManagerShare
-      ? [{ value: 'manager' as ShareRole, label: '可管理（高风险）', hint: '直接接管代理对话与执行，等同在工作区运行该代理' }]
-      : []),
-  ]
-  const agentExternalRoleOptions: ReadonlyArray<{ value: ShareRole; label: string; hint: string }> = [
+  const agentRoleOptions: ReadonlyArray<{ value: ShareRole; label: string; hint: string }> = [
     { value: 'viewer', label: '可查看', hint: '查看聊天记录，可 Fork 为自己的代理' },
     ...(policy.allowAgentEditShare
       ? [{ value: 'editor' as ShareRole, label: '可编辑', hint: '可重命名与调整配置，但不能直接对话' }]
       : []),
   ]
-  const effectiveRoleOptions = isAgentCollection ? agentInternalRoleOptions : ROLE_OPTIONS
-  const effectiveExternalRoleOptions = isAgentCollection ? agentExternalRoleOptions : ROLE_OPTIONS
+  const effectiveRoleOptions = isAgentCollection ? agentRoleOptions : ROLE_OPTIONS
+  const effectiveExternalRoleOptions = isAgentCollection ? agentRoleOptions : ROLE_OPTIONS
   const effectiveMemberDefaultRoleOptions = isAgentCollection
     ? [
         { value: 'viewer' as const, label: '可查看', hint: '查看聊天记录，可 Fork 为自己的代理' },
@@ -159,7 +144,6 @@ export function WorkspaceAccess({
       policy?: {
         allowExternalShare?: boolean
         allowAgentEditShare?: boolean
-        allowAgentManagerShare?: boolean
       }
       inheritance?: {
         mode?: 'inherit' | 'custom'
@@ -181,18 +165,11 @@ export function WorkspaceAccess({
       const nextPolicy = {
         allowExternalShare: data.policy.allowExternalShare !== false,
         allowAgentEditShare: data.policy.allowAgentEditShare !== false,
-        allowAgentManagerShare: Boolean(data.policy.allowAgentManagerShare),
       }
       setPolicy(nextPolicy)
       if (isAgentCollection) {
-        setRole((prev) => {
-          if (prev === 'manager' && !nextPolicy.allowAgentManagerShare) {
-            return nextPolicy.allowAgentEditShare ? 'editor' : 'viewer'
-          }
-          if (prev === 'editor' && !nextPolicy.allowAgentEditShare) return 'viewer'
-          return prev
-        })
-        setExternalRole((prev) => (prev === 'editor' && !nextPolicy.allowAgentEditShare ? 'viewer' : prev))
+        setRole((prev) => (prev === 'editor' && !nextPolicy.allowAgentEditShare ? 'viewer' : prev === 'manager' ? 'viewer' : prev))
+        setExternalRole((prev) => (prev === 'editor' && !nextPolicy.allowAgentEditShare ? 'viewer' : prev === 'manager' ? 'viewer' : prev))
       }
     }
     setInheritance({
@@ -422,18 +399,6 @@ export function WorkspaceAccess({
     />
   )
 
-  function confirmOrRunAgentGrant(
-    targetRole: string,
-    targetLabel: string,
-    action: () => Promise<unknown>,
-  ) {
-    if (isAgentCollection && targetRole === 'manager') {
-      setPendingManagerGrant({ label: targetLabel, run: action })
-      return
-    }
-    void action()
-  }
-
   const internalCount = internalPeople.length + memberViews.length
   const externalCount = externalPeople.length
 
@@ -525,76 +490,7 @@ export function WorkspaceAccess({
           style={{ fontSize: 12, color: 'var(--biu-color-text-muted)', marginTop: 4, lineHeight: 1.5 }}
           data-testid="fsdb-share-agent-roles-hint"
         >
-          代理权限：<strong>可查看</strong>可查看记录并 Fork；<strong>可编辑</strong>可改名与调整配置但不能对话；
-          {policy.allowAgentManagerShare
-            ? <><strong>可管理</strong>将直接接管代理对话与执行（高风险）。</>
-            : <>「可管理」默认关闭，可在设置 → 工作区 → 权限中开启。</>}
-        </div>
-      ) : null}
-      {isAgentCollection && role === 'manager' ? (
-        <div
-          data-testid="fsdb-agent-manager-warning"
-          role="alert"
-          style={{
-            marginTop: 8,
-            padding: '8px 10px',
-            borderRadius: 8,
-            fontSize: 12,
-            lineHeight: 1.5,
-            background: 'color-mix(in srgb, var(--biu-color-danger, #ef4444) 12%, transparent)',
-            border: '1px solid color-mix(in srgb, var(--biu-color-danger, #ef4444) 38%, transparent)',
-            color: 'var(--biu-color-text)',
-          }}
-        >
-          <strong>高风险提示：</strong>授予代理「可管理」后，对方可直接向该代理发消息并触发工具执行，相当于直接在该代理的工作区中运行操作（最危险的权限）。如只需复用或改配置，建议改为「可查看（可 Fork）」或「可编辑」。
-        </div>
-      ) : null}
-      {pendingManagerGrant ? (
-        <div
-          data-testid="fsdb-agent-manager-confirm"
-          role="alertdialog"
-          aria-label="确认授予代理可管理权限"
-          style={{
-            marginTop: 8,
-            padding: '10px 12px',
-            borderRadius: 8,
-            fontSize: 12,
-            lineHeight: 1.5,
-            background: 'color-mix(in srgb, var(--biu-color-danger, #ef4444) 14%, transparent)',
-            border: '1px solid color-mix(in srgb, var(--biu-color-danger, #ef4444) 48%, transparent)',
-            display: 'flex',
-            flexDirection: 'column',
-            gap: 8,
-          }}
-        >
-          <div>
-            <strong>确认向「{pendingManagerGrant.label}」授予代理「可管理」权限？</strong>
-            <div style={{ marginTop: 4, opacity: 0.9 }}>
-              对方将直接接管此代理，可直接发消息并调用代理的工具与工作区权限。请确认对方完全可信。
-            </div>
-          </div>
-          <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-            <button
-              type="button"
-              className="fsdb-share-copy"
-              onClick={() => setPendingManagerGrant(null)}
-            >
-              取消
-            </button>
-            <button
-              type="button"
-              className="fsdb-share-publish"
-              data-testid="fsdb-agent-manager-confirm-ok"
-              style={{ background: 'var(--biu-color-danger, #dc2626)', color: '#fff' }}
-              onClick={() => {
-                const pending = pendingManagerGrant
-                setPendingManagerGrant(null)
-                void pending.run()
-              }}
-            >
-              确认授予（高风险）
-            </button>
-          </div>
+          代理权限：<strong>可查看</strong>可查看记录并 Fork 为自己的代理；<strong>可编辑</strong>可改名与调整配置，仅创建者本人可直接对话与操作。
         </div>
       ) : null}
       {statusNotice ? (
@@ -722,7 +618,7 @@ export function WorkspaceAccess({
                     minMenuWidth={208}
                     onChange={(next) => {
                       if (next !== row.role) {
-                        confirmOrRunAgentGrant(next, row.name, () => grant({ email: row.email }, 'internal', next))
+                        void grant({ email: row.email }, 'internal', next)
                       }
                     }}
                   />
@@ -760,7 +656,7 @@ export function WorkspaceAccess({
                     minMenuWidth={208}
                     onChange={(next) => {
                       if (next !== row.role) {
-                        confirmOrRunAgentGrant(next, row.name, () => grant({ memberViewId: row.id }, 'internal', next))
+                        void grant({ memberViewId: row.id }, 'internal', next)
                       }
                     }}
                   />
@@ -852,13 +748,10 @@ export function WorkspaceAccess({
             <button type="button" className="fsdb-share-publish" disabled={!selectedTarget} data-testid="fsdb-share-member-add" onClick={() => {
               if (!selectedTarget) return
               if (selectedTarget.kind === 'member_view') {
-                const action = () =>
-                  selectedTarget.isLocked
-                    ? grant({ memberViewId: selectedTarget.id }, 'internal')
-                    : grantUnlockedMemberViewSnapshot(selectedTarget.id, selectedTarget.name)
-                confirmOrRunAgentGrant(role, selectedTarget.name, action)
+                if (selectedTarget.isLocked) void grant({ memberViewId: selectedTarget.id }, 'internal')
+                else void grantUnlockedMemberViewSnapshot(selectedTarget.id, selectedTarget.name)
               } else {
-                confirmOrRunAgentGrant(role, selectedTarget.name, () => grant({ email: selectedTarget.email }, 'internal'))
+                void grant({ email: selectedTarget.email }, 'internal')
               }
             }}>添加</button>
           </div>

@@ -1362,7 +1362,7 @@ export function apply(ctx: Context) {
       return null
     }
     if (!canManageSession(id)) {
-      route.send(403, { error: '需要「可管理」权限才能直接与该代理对话或操作；可点击 Fork 复制为自己的代理' })
+      route.send(403, { error: '只有代理创建者本人可直接对话或操作此代理；可点击 Fork 复制为自己的代理' })
       return null
     }
     return record

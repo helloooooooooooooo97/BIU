@@ -406,14 +406,14 @@ test('notices stays personal-only while mcp supports standard 3-state sharing', 
   assert.equal(auth.authorize(actor(bob.id), 'resource:update', mcpRec).allowed, true)
 })
 
-test('agents support viewer/editor/manager tiers gated by workspace permission policy and external share switches', () => {
+test('agents support viewer and editor tiers only, block manager sharing, and respect external share switches', () => {
   const { store, auth, workspace, ada, bob, actor } = setup()
   const asAda = <T>(op: () => T) => runWithAccount(ada.id, () => runWithRequestWorkspace(workspace.id, op))
   const agentRec = { type: 'record' as const, workspaceId: workspace.id, collection: '/agents', recordId: 'ag-1' }
 
   auth.attach(actor(ada.id), agentRec, { accessMode: 'private' })
 
-  // 1. Default policy: viewer (read/fork) & editor (rename/config update, no manage/chat) allowed; manager blocked by default
+  // 1. Viewer (read/fork) & Editor (rename/config update, cannot chat/manage) are supported
   asAda(() => store.shareWithEmail(ada.id, '/agents', 'ag-1', bob.email, 'viewer', 'internal'))
   assert.equal(auth.authorize(actor(bob.id), 'resource:read', agentRec).allowed, true)
   assert.equal(auth.authorize(actor(bob.id), 'resource:update', agentRec).allowed, false)
@@ -422,26 +422,16 @@ test('agents support viewer/editor/manager tiers gated by workspace permission p
   asAda(() => store.shareWithEmail(ada.id, '/agents', 'ag-1', bob.email, 'editor', 'internal'))
   assert.equal(auth.authorize(actor(bob.id), 'resource:update', agentRec).allowed, true)
   assert.equal(auth.authorize(actor(bob.id), 'resource:manage-permissions', agentRec).allowed, false)
+  // Only the agent owner retains direct manage/chat permission
   assert.equal(auth.authorize(actor(ada.id), 'resource:manage-permissions', agentRec).allowed, true)
 
+  // 2. Granting manager on /agents is always rejected (others cannot chat/execute via someone else's agent)
   assert.throws(
     () => asAda(() => store.shareWithEmail(ada.id, '/agents', 'ag-1', bob.email, 'manager', 'internal')),
-    /未开启「允许将代理分享为可管理」/,
+    /代理不支持授予「可管理」权限/,
   )
 
-  // 2. Enabling workspace allowAgentManagerShare unlocks manager tier for internal collaborators
-  asAda(() => store.updateWorkspacePermissions(ada.id, workspace.id, { allowAgentManagerShare: true }))
-  asAda(() => store.shareWithEmail(ada.id, '/agents', 'ag-1', bob.email, 'manager', 'internal'))
-  const mgrDecision = auth.authorize(actor(bob.id), 'resource:manage-permissions', agentRec)
-  assert.equal(mgrDecision.allowed, true)
-  assert.equal(mgrDecision.effectiveRole, 'manager')
-
-  // Turning allowAgentManagerShare back off immediately clamps existing manager grants down to editor
-  asAda(() => store.updateWorkspacePermissions(ada.id, workspace.id, { allowAgentManagerShare: false }))
-  assert.equal(auth.authorize(actor(bob.id), 'resource:manage-permissions', agentRec).allowed, false)
-  assert.equal(auth.authorize(actor(bob.id), 'resource:update', agentRec).allowed, true)
-
-  // Turning off allowEditShare clamps down to viewer
+  // Turning off allowEditShare clamps existing editor grants down to viewer
   asAda(() => store.updateWorkspacePermissions(ada.id, workspace.id, { collections: { '/agents': { allowEditShare: false } } }))
   assert.equal(auth.authorize(actor(bob.id), 'resource:update', agentRec).allowed, false)
   assert.equal(auth.authorize(actor(bob.id), 'resource:read', agentRec).allowed, true)
