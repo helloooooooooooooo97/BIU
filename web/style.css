@@ -3318,7 +3318,7 @@ body {
   gap: 4px;
   border: 0;
   height: 22px;
-  border-radius: var(--biu-radius-xl);
+  border-radius: var(--biu-radius-full);
   padding: 0 var(--biu-pad-chip-x);
   background: color-mix(in srgb, var(--biu-tag) 22%, transparent);
   color: var(--biu-tag);

@@ -94,13 +94,13 @@ export const RecordActions = memo(function RecordActions({
         <button
           key={action.id}
           type="button"
-          className={`tasks-icon-btn${action.tone === 'danger' ? ' is-danger' : ''}`}
+          className={`fsdb-action-btn${action.tone === 'danger' ? ' is-danger' : ''}`}
           aria-label={`${action.label} ${labelOf(row)}`}
-          data-dock-tip={action.label}
           disabled={busy}
           onClick={run}
         >
           {glyph}
+          <span>{action.label}</span>
         </button>
       )
     }),

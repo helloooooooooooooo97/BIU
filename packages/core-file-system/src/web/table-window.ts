@@ -6,7 +6,7 @@ export const TABLE_VIEWPORT_OVERSCAN = 12
 export const TABLE_WINDOW_VIEWPORT_FALLBACK = 560
 export const TABLE_COL_PX = 120
 export const TABLE_COL_PIN_PX = 240
-export const TABLE_COL_ACTIONS_PX = 72
+export const TABLE_COL_ACTIONS_PX = 148
 export const TABLE_COL_OVERSCAN = 1
 export const TABLE_COL_VIEWPORT_FALLBACK = 624
 

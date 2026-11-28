@@ -67,7 +67,7 @@ export function pagesCollection(store: PagesStore, index: PageBlocksIndex): Coll
     actions: [
       {
         id: 'add-child',
-        label: '添加子页面',
+        label: '添加',
         for: 'both',
         placement: ['row', 'detail'],
         requiredAction: 'resource:create',

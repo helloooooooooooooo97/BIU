@@ -473,6 +473,7 @@ export function ActionCell({
   onRun?: () => void
 }) {
   const label = field.label || fieldKey
+  const glyph = actionIcon(fieldActionId(fieldKey, field), { fallback: false })
   return (
     <button
       type="button"
@@ -483,7 +484,8 @@ export function ActionCell({
         onRun?.()
       }}
     >
-      {label}
+      {glyph}
+      <span>{label}</span>
     </button>
   )
 }
