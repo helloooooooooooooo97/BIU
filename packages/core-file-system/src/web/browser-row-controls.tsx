@@ -1,6 +1,7 @@
 import { memo, type ReactNode } from 'react'
 import { CheckIcon } from '@heroicons/react/16/solid'
 import { BoolBox } from '@biu/biu-ui/bool-box'
+import { actionTone } from '@biu/biu-ui/tag-chip'
 import type { CollectionActionInfo, CollectionSchema, DbRecord } from '@biu/type-file-system'
 import type { CollectionChrome } from '@biu/type-file-system/ui'
 import { actionIcon, placedActions, visibleActions } from './fsdb-cells.tsx'
@@ -95,6 +96,7 @@ export const RecordActions = memo(function RecordActions({
           key={action.id}
           type="button"
           className={`fsdb-action-btn${action.tone === 'danger' ? ' is-danger' : ''}`}
+          style={{ ['--biu-tag' as string]: actionTone(action.id, action.tone) }}
           aria-label={`${action.label} ${labelOf(row)}`}
           disabled={busy}
           onClick={run}

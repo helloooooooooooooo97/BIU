@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { test } from 'vitest'
 import assert from 'node:assert/strict'
-import { TAG_TONES, tagTone } from './tag-chip.tsx'
+import { actionTone, TAG_TONES, tagTone } from './tag-chip.tsx'
 
 test('tagTone is stable and stays in the shared palette', () => {
   assert.equal(tagTone('dp'), tagTone('dp'))
@@ -37,4 +37,13 @@ test('TagChip ships the tinted chip markup', () => {
   assert.equal(TAG_TONES.includes('var(--biu-color-ink-orange)' as (typeof TAG_TONES)[number]), true)
   assert.equal(TAG_TONES.includes('var(--biu-color-ink-green)' as (typeof TAG_TONES)[number]), true)
   assert.equal(TAG_TONES.includes('var(--biu-color-ink-red)' as (typeof TAG_TONES)[number]), true)
+})
+
+test('actionTone maps actions into the shared tag ink palette', () => {
+  assert.equal(actionTone('delete', 'danger'), 'var(--biu-color-ink-red)')
+  assert.equal(actionTone('add-child'), 'var(--biu-color-ink-blue)')
+  assert.equal(actionTone('enable'), 'var(--biu-color-ink-green)')
+  assert.equal(actionTone('disable'), 'var(--biu-color-ink-orange)')
+  assert.equal(actionTone('rename'), 'var(--biu-color-ink-purple)')
+  assert.equal(TAG_TONES.includes(actionTone('custom-act') as (typeof TAG_TONES)[number]), true)
 })

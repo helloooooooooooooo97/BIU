@@ -18,6 +18,7 @@ import {
   TableCellsIcon,
 } from '@heroicons/react/16/solid'
 import { ConfirmDialog, TagChip, TagChips } from '@biu/biu-ui'
+import { actionTone } from '@biu/biu-ui/tag-chip'
 import { SidebarMascot, resolveSessionMascot } from '@biu/public-mascot'
 import { TrashGlyph } from '@biu/web-session-view/trash-glyph'
 import { actionVisibleToUser } from '@biu/type-file-system'
@@ -358,6 +359,7 @@ function HitActions({ hit }: { hit: SearchHit }) {
             key={action.id}
             type="button"
             className={`shell-search-hit-action${action.tone === 'danger' ? ' is-danger' : ''}`}
+            style={{ ['--biu-tag' as string]: actionTone(action.id, action.tone) }}
             aria-label={action.label}
             onClick={(event) => {
               event.preventDefault()
