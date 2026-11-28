@@ -47,7 +47,7 @@ function sortGroupSessions(group: SessionSidebarGroup) {
   group.updatedAt = group.sessions.reduce((max, item) => Math.max(max, sessionActivityAt(item)), 0)
 }
 
-/** 按绑定文件夹 path 分组；无 path 归入 Ungrouped（空也保留该组，方便直接新建会话）。 */
+/** 按绑定文件夹 path 分组；无 path 归入未分组，未分组下没有会话时不展示该组。 */
 export function groupSessionsByProject(sessions: SessionListItem[]): SessionSidebarGroup[] {
   const map = new Map<string, SessionSidebarGroup>()
   for (const item of sessions) {
@@ -66,16 +66,6 @@ export function groupSessionsByProject(sessions: SessionListItem[]): SessionSide
       map.set(key, group)
     }
     group.sessions.push(item)
-  }
-
-  if (!map.has(UNGROUPED_PROJECT_KEY)) {
-    map.set(UNGROUPED_PROJECT_KEY, {
-      key: UNGROUPED_PROJECT_KEY,
-      label: '未分组',
-      sessions: [],
-      updatedAt: 0,
-      kind: 'ungrouped',
-    })
   }
 
   const groups = [...map.values()]
@@ -103,7 +93,7 @@ export interface SidebarSection {
 /**
  * 两板块并存：收藏 / 项目，自上而下。
  * - 收藏区：所有 pinned 会话（直接携带，不嵌套分组）；无则省去该 section。
- * - 项目区：按绑定 folder path 分组（未绑定归「未分组」，没有会话也保留这一组）。
+ * - 项目区：按绑定 folder path 分组（未绑定归「未分组」，无未分组会话时不展示该组）。
  */
 export function buildSidebarSections(sessions: SessionListItem[]): SidebarSection[] {
   const sections: SidebarSection[] = []
