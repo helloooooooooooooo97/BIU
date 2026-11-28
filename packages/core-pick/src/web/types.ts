@@ -1,5 +1,22 @@
 import { editorHostFromNode } from './editor-host.ts'
 
+export type PickRangeCell = {
+  /** 记录路径，如 /pages/p002。 */
+  path?: string
+  /** 记录 id。 */
+  id: string
+  /** 记录标题。 */
+  title?: string
+  /** db_update 字段名。 */
+  field: string
+  /** 列名 / 属性标签。 */
+  label?: string
+  /** 字段类型。 */
+  type?: string
+  /** 单元格当前文本值。 */
+  text?: string
+}
+
 export type PickRef = {
   kind: string
   id: string
@@ -29,6 +46,8 @@ export type PickRef = {
   field?: string
   /** 单元格对应的属性类型，芯片图标跟表头一致。 */
   type?: string
+  /** 表格矩形多格选区合并后的完整单元格结构化数据。 */
+  cells?: PickRangeCell[]
 }
 
 export function pickKey(ref: PickRef) {
@@ -59,6 +78,7 @@ export function dedupePicks(refs: PickRef[]): PickRef[] {
       ...(ref.plugin || prev.plugin ? { plugin: ref.plugin || prev.plugin } : {}),
       ...(ref.field || prev.field ? { field: ref.field || prev.field } : {}),
       ...(ref.type || prev.type ? { type: ref.type || prev.type } : {}),
+      ...(ref.cells?.length || prev.cells?.length ? { cells: ref.cells?.length ? ref.cells : prev.cells } : {}),
       ...locusFields(ref.start_line != null ? ref : prev),
       ...sourceFields(ref.path || ref.name ? ref : prev),
       ...(ref.element || prev.element ? { element: ref.element || prev.element } : {}),
@@ -93,6 +113,7 @@ function pickPayload(ref: PickRef) {
   if (ref.element) data.element = ref.element
   if (ref.field) data.field = ref.field
   if (ref.type) data.type = ref.type
+  if (ref.cells?.length) data.cells = ref.cells
   return data
 }
 
@@ -350,6 +371,44 @@ export function textPickFromSelection(
   return withPickLocus(withHostSource(base, anchor), locus)
 }
 
+const MAX_RANGE_CELLS = 200
+
+function normalizeRangeCells(raw: unknown): PickRangeCell[] | undefined {
+  let list: unknown = raw
+  if (typeof raw === 'string' && raw.trim()) {
+    try {
+      list = JSON.parse(raw)
+    } catch {
+      return undefined
+    }
+  }
+  if (!Array.isArray(list) || !list.length) return undefined
+  const out: PickRangeCell[] = []
+  for (const item of list) {
+    if (out.length >= MAX_RANGE_CELLS) break
+    if (!item || typeof item !== 'object') continue
+    const rec = item as Record<string, unknown>
+    const id = String(rec.id ?? '').trim()
+    const field = String(rec.field ?? '').trim()
+    if (!id || !field) continue
+    const path = String(rec.path ?? '').trim()
+    const title = String(rec.title ?? '').trim()
+    const label = String(rec.label ?? '').trim()
+    const type = String(rec.type ?? '').trim()
+    const text = typeof rec.text === 'string' ? rec.text : ''
+    out.push({
+      ...(path ? { path } : {}),
+      id,
+      ...(title ? { title } : {}),
+      field,
+      ...(label ? { label } : {}),
+      ...(type ? { type } : {}),
+      ...(text ? { text } : {}),
+    })
+  }
+  return out.length ? out : undefined
+}
+
 export function pickChipAttrs(ref: PickRef) {
   return {
     kind: ref.kind,
@@ -369,6 +428,7 @@ export function pickChipAttrs(ref: PickRef) {
     element: ref.element ?? null,
     field: ref.field ?? null,
     type: ref.type ?? null,
+    cells: ref.cells?.length ? ref.cells : null,
   }
 }
 
@@ -383,6 +443,7 @@ export function pickRefFromAttrs(attrs: Record<string, unknown>): PickRef | null
   const text = typeof attrs.text === 'string' ? attrs.text.trim() : ''
   const selection = typeof attrs.selection === 'string' ? attrs.selection.trim() : ''
   const insert = Number(attrs.insert)
+  const cells = normalizeRangeCells(attrs.cells)
   return {
     kind,
     id,
@@ -393,6 +454,7 @@ export function pickRefFromAttrs(attrs: Record<string, unknown>): PickRef | null
     ...(String(attrs.plugin ?? '').trim() ? { plugin: String(attrs.plugin).trim() } : {}),
     ...(String(attrs.field ?? '').trim() ? { field: String(attrs.field).trim() } : {}),
     ...(String(attrs.type ?? '').trim() ? { type: String(attrs.type).trim() } : {}),
+    ...(cells ? { cells } : {}),
     ...locusFields({
       start_line: Number.isInteger(start) && start >= 1 ? start : undefined,
       end_line: Number.isInteger(end) && end >= 1 ? end : undefined,

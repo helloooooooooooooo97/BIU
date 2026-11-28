@@ -3455,6 +3455,7 @@ export function CollectionBrowser({
     sheet,
     embed,
     collectionPath,
+    collectionLabel: title,
     activeViewId,
     detailId,
     schema,

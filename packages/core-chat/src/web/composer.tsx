@@ -7,7 +7,17 @@ import { EditorContent, useEditor } from '@tiptap/react'
 import Placeholder from '@tiptap/extension-placeholder'
 import type { SlotProps } from '@biu/web-slots'
 import { bindSessionView, type SessionViewService } from '@biu/web-session-view'
-import { filePickFromPath, pickKey, textPickFromPlain, usePickState, type PickService } from '@biu/core-pick/web'
+import {
+  consumePlainPasteIntent,
+  filePickFromPath,
+  isPlainPasteHotkey,
+  markPlainPasteIntent,
+  pickKey,
+  readPickClipboard,
+  textPickFromPlain,
+  usePickState,
+  type PickService,
+} from '@biu/core-pick/web'
 import { HeadlessDismiss } from '@biu/biu-ui'
 import { composerDocExtensions } from './composer-kit.ts'
 import {
@@ -459,6 +469,7 @@ export const ChatComposer = memo(function ChatComposer(props: SlotProps) {
         'aria-label': '会话输入',
       },
       handlePaste(_view, event) {
+        const plainOnly = consumePlainPasteIntent()
         const images = collectClipboardImages(event.clipboardData)
         if (images.length) {
           event.preventDefault()
@@ -466,6 +477,14 @@ export const ChatComposer = memo(function ChatComposer(props: SlotProps) {
           return true
         }
         const raw = event.clipboardData?.getData('text/plain') ?? ''
+        if (plainOnly) return false
+        const copiedPicks = readPickClipboard(event.clipboardData, raw)
+        if (copiedPicks?.length) {
+          event.preventDefault()
+          if (editorRef.current) insertPickChips(editorRef.current, copiedPicks)
+          else live.current.pick?.addMany(copiedPicks)
+          return true
+        }
         if (raw.trim().length < COMPOSER_PASTE_PICK_CHARS) return false
         const ref = textPickFromPlain(live.current.route, raw)
         if (!ref) return false
@@ -483,6 +502,10 @@ export const ChatComposer = memo(function ChatComposer(props: SlotProps) {
         return false
       },
       handleKeyDown(_view, event) {
+        if (isPlainPasteHotkey(event)) {
+          markPlainPasteIntent()
+          return false
+        }
         const mentionOpen =
           typeof document !== 'undefined' && document.querySelector('[data-testid="page-mention"]')
         if (

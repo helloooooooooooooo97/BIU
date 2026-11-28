@@ -4,6 +4,7 @@ import { afterEach, beforeEach, test, vi } from 'vitest'
 import { act, cleanup, fireEvent, render, waitFor } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { Editor } from '@tiptap/core'
+import { clearPickClipboard, rememberPickClipboard } from '@biu/core-pick/web'
 import { ChannelComposer } from './channel-composer.tsx'
 import {
   channelComposerExtensions,
@@ -464,6 +465,79 @@ test('ChannelComposer previews pasted image via local blob URL and revokes it on
   } finally {
     URL.createObjectURL = origCreate
     URL.revokeObjectURL = origRevoke
+  }
+})
+
+test('pasting copied table range inserts merged chip while Cmd+Shift+V falls back to plain text', async () => {
+  clearPickClipboard()
+  const fetchMock = vi.fn(async () => new Response(JSON.stringify({ items: [] }), { status: 200 }))
+  vi.stubGlobal('fetch', fetchMock)
+
+  const rangeRef = {
+    kind: 'page',
+    id: 'range:demo',
+    label: '页面 · 2 行 × 2 列',
+    title: '页面 · 2 行 × 2 列',
+    path: '/pages',
+    route: '/database/pages',
+    text: '架构文档\t进行中\n发布清单\t已完成',
+    cells: [
+      { path: '/pages/p1', id: 'p1', title: '架构文档', field: 'title', label: '标题', type: 'string', text: '架构文档' },
+      { path: '/pages/p1', id: 'p1', title: '架构文档', field: 'status', label: '状态', type: 'select', text: '进行中' },
+      { path: '/pages/p2', id: 'p2', title: '发布清单', field: 'title', label: '标题', type: 'string', text: '发布清单' },
+      { path: '/pages/p2', id: 'p2', title: '发布清单', field: 'status', label: '状态', type: 'select', text: '已完成' },
+    ],
+  }
+  rememberPickClipboard(rangeRef.text, [rangeRef])
+
+  try {
+    const view = render(
+      <MemoryRouter initialEntries={['/channels/ch-1']}>
+        <ChannelComposer
+          channelId="ch-1"
+          isDm={false}
+          members={MEMBERS}
+          resolveAvatar={() => undefined}
+          replyTo={null}
+          onClearReplyTo={() => {}}
+          onError={() => {}}
+        />
+      </MemoryRouter>,
+    )
+
+    const input = await waitFor(() => view.getByTestId('channel-composer-input'))
+
+    // 1. 普通 ⌘V 粘贴 -> 自动插入合并的选区芯片
+    await act(async () => {
+      fireEvent.paste(input, {
+        clipboardData: {
+          items: [],
+          files: [],
+          getData: (type: string) => (type === 'text/plain' ? rangeRef.text : ''),
+        },
+      })
+    })
+
+    await waitFor(() => {
+      const chips = view.container.querySelectorAll('[data-pick-chip]')
+      assert.equal(chips.length, 1)
+      assert.match(chips[0]?.textContent ?? '', /页面 · 2 行 × 2 列/)
+    })
+
+    // 2. ⌘⇧V 纯文本粘贴 -> 不再触发额外芯片插入（交由原生纯文本处理）
+    await act(async () => {
+      fireEvent.keyDown(input, { key: 'v', metaKey: true, shiftKey: true })
+      fireEvent.paste(input, {
+        clipboardData: {
+          items: [],
+          files: [],
+          getData: (type: string) => (type === 'text/plain' ? rangeRef.text : ''),
+        },
+      })
+    })
+    assert.equal(view.container.querySelectorAll('[data-pick-chip]').length, 1)
+  } finally {
+    clearPickClipboard()
   }
 })
 

@@ -9,8 +9,9 @@ import type {
 import type { CollectionSchema, DbRecord, FieldSpec } from '@biu/type-file-system'
 import type { CellPopState } from './browser-cell-renderer.tsx'
 import { cellUsesPop } from './cell-pop.tsx'
+import { rememberPickClipboard } from '@biu/core-pick/web'
 import { parseTagFlatColumnKey, readTagFlatValue, resolveFieldType, tagSourceKey } from './fields.ts'
-import { fieldPickId } from './pick-dom.ts'
+import { buildTableSelectionPicks } from './table-pick.ts'
 import { tableCursorFromCell, type TableSelectionModel } from './table-cell-selection.ts'
 import { bindTableDragScroll, tableVertScroller } from './table-drag-scroll.ts'
 import {
@@ -67,6 +68,7 @@ export type BrowserTableNavOptions = {
   sheet: boolean
   embed: boolean
   collectionPath: string
+  collectionLabel?: string
   activeViewId: string | null
   detailId: string | null
   schema?: CollectionSchema
@@ -127,6 +129,7 @@ export function createBrowserTableNav(opts: BrowserTableNavOptions) {
     sheet,
     embed,
     collectionPath,
+    collectionLabel,
     activeViewId,
     detailId,
     schema,
@@ -583,45 +586,44 @@ export function createBrowserTableNav(opts: BrowserTableNavOptions) {
       : cellPop || cellPickRef.current
         ? [cellPop ?? cellPickRef.current!]
         : []
-    const picks = cursors.flatMap((cursor) => {
-      if (cursor.key === 'actions') return []
-      const row = findPaintedRow(cursor.id)
-      const col = columns.find((item) => item.key === cursor.key)
-      if (!row || !col) return []
-      const stored = cellValueText(row, cursor.key, col.field)
-      const isFocus =
-        cellPickRef.current?.id === cursor.id &&
-        cellPickRef.current.key === cursor.key &&
-        (!cursor.rowKey || cellPickRef.current.rowKey === cursor.rowKey)
-      const draft =
-        isFocus && (live instanceof HTMLInputElement || live instanceof HTMLTextAreaElement)
-          ? live.value
-          : isFocus && live instanceof HTMLElement && live.isContentEditable
-            ? live.innerText
-            : ''
-      const sel = typeof window !== 'undefined' ? window.getSelection() : null
-      const selected = isFocus && sel && !sel.isCollapsed ? sel.toString().trim() : ''
-      const inCell = Boolean(
-        live instanceof Element && live.closest('.fsdb-cell-pop, td.is-cell-on, .tasks-table'),
-      )
-      const text = (isFocus && inCell ? draft.trim() : '') || stored
-      const path = recordPathOf(row)
-      const title = labelOf(row)
-      const label = col.field.label ?? cursor.key
-      return [
-        {
-          kind: recordKind,
-          id: fieldPickId(row.id, cursor.key),
-          label,
-          route: typeof window === 'undefined' ? '' : window.location.pathname,
-          ...(path ? { path } : {}),
-          ...(title ? { title } : {}),
+    const picks = buildTableSelectionPicks({
+      cursors,
+      recordKind,
+      collectionPath,
+      collectionLabel,
+      route: typeof window === 'undefined' ? '' : window.location.pathname,
+      readCell: (cursor) => {
+        const row = findPaintedRow(cursor.id)
+        const col = columns.find((item) => item.key === cursor.key)
+        if (!row || !col) return null
+        const stored = cellValueText(row, cursor.key, col.field)
+        const isFocus =
+          cellPickRef.current?.id === cursor.id &&
+          cellPickRef.current.key === cursor.key &&
+          (!cursor.rowKey || cellPickRef.current.rowKey === cursor.rowKey)
+        const draft =
+          isFocus && (live instanceof HTMLInputElement || live instanceof HTMLTextAreaElement)
+            ? live.value
+            : isFocus && live instanceof HTMLElement && live.isContentEditable
+              ? live.innerText
+              : ''
+        const sel = typeof window !== 'undefined' ? window.getSelection() : null
+        const selected = isFocus && sel && !sel.isCollapsed ? sel.toString().trim() : ''
+        const inCell = Boolean(
+          live instanceof Element && live.closest('.fsdb-cell-pop, td.is-cell-on, .tasks-table'),
+        )
+        const text = (isFocus && inCell ? draft.trim() : '') || stored
+        return {
+          id: row.id,
+          path: recordPathOf(row),
+          title: labelOf(row),
           field: cursor.key,
+          label: col.field.label ?? cursor.key,
           type: resolveFieldType(col.field),
-          ...(text ? { text } : {}),
+          text,
           ...(inCell && selected ? { selection: selected } : {}),
-        },
-      ]
+        }
+      },
     })
     if (!picks.length) return false
     void import('@biu/core-pick/web').then((mod) => {
@@ -725,7 +727,29 @@ export function createBrowserTableNav(opts: BrowserTableNavOptions) {
       return { text, raw, fieldType: kind, fieldKey: cursor.key, readonly, empty }
     })
     if (!payload) return false
+    const copiedPicks = buildTableSelectionPicks({
+      cursors,
+      recordKind,
+      collectionPath,
+      collectionLabel,
+      route: typeof window === 'undefined' ? '' : window.location.pathname,
+      readCell: (cursor) => {
+        const row = findPaintedRow(cursor.id)
+        const col = columns.find((item) => item.key === cursor.key)
+        if (!row || !col) return null
+        return {
+          id: row.id,
+          path: recordPathOf(row),
+          title: labelOf(row),
+          field: cursor.key,
+          label: col.field.label ?? cursor.key,
+          type: resolveFieldType(col.field),
+          text: cellValueText(row, cursor.key, col.field),
+        }
+      },
+    })
     rememberTableClipboard(payload)
+    rememberPickClipboard(payload.plain, copiedPicks)
     writeClipboardText(payload.plain)
     return true
   }
