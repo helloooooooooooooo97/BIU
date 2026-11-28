@@ -3,15 +3,18 @@ import { createPortal } from 'react-dom'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import {
   ArrowRightStartOnRectangleIcon,
+  BellIcon,
   BellSlashIcon,
   BookmarkIcon,
   ChatBubbleLeftRightIcon,
+  CheckIcon,
   ChevronRightIcon,
   EyeSlashIcon,
   HashtagIcon,
   LockClosedIcon,
   MagnifyingGlassIcon,
   PlusIcon,
+  TrashIcon,
   UserGroupIcon,
   XMarkIcon,
 } from '@heroicons/react/16/solid'
@@ -36,8 +39,10 @@ import {
 } from '../shared/channel-types.ts'
 import {
   createChannel,
+  deleteChannel,
   leaveChannel,
   loadChannels,
+  markChannelRead,
   setChannelThreadFollow,
   updateChannelPreferences,
   useChannelStore,
@@ -147,6 +152,8 @@ export const ChannelSidebarSections = memo(function ChannelSidebarSections({
   const toggleSection = useSidebarCollapseStore((s) => s.toggle)
   const { myAccountId, members } = useWorkspaceMembers()
   const [createOpen, setCreateOpen] = useState(false)
+  const [disbandTarget, setDisbandTarget] = useState<{ id: string; name: string } | null>(null)
+  const [disbanding, setDisbanding] = useState(false)
   const [expandedChannels, setExpandedChannels] = useState<Record<string, boolean>>({})
 
   useEffect(() => {
@@ -201,6 +208,21 @@ export const ChannelSidebarSections = memo(function ChannelSidebarSections({
     },
     [navigate, routeChannelId],
   )
+
+  const handleDisbandChannel = useCallback(async () => {
+    if (!disbandTarget || disbanding) return
+    setDisbanding(true)
+    try {
+      const targetId = disbandTarget.id
+      await deleteChannel(targetId)
+      setDisbandTarget(null)
+      if (routeChannelId === targetId) navigate('/')
+    } catch {
+      /* ignore */
+    } finally {
+      setDisbanding(false)
+    }
+  }, [disbandTarget, disbanding, navigate, routeChannelId])
 
   const handleUnfollowThread = useCallback(
     async (channelId: string, rootId: string) => {
@@ -375,39 +397,61 @@ export const ChannelSidebarSections = memo(function ChannelSidebarSections({
                 const isOwnerOrManager = Boolean(
                   ch.canManage ?? (!myAccountId || ch.createdBy === myAccountId),
                 )
-                const channelMenuItems: SidebarRowMenuItem[] = isDm
-                  ? [
-                      {
-                        id: 'hide',
-                        label: '隐藏对话',
-                        icon: <EyeSlashIcon className="size-4 shrink-0" />,
-                        onSelect: () => void handleHideChannel(ch.id),
-                      },
-                    ]
-                  : isOwnerOrManager
+                const channelMenuItems: SidebarRowMenuItem[] = [
+                  ...(unread > 0
                     ? [
                         {
-                          id: 'hide',
-                          label: '隐藏聊天',
-                          icon: <EyeSlashIcon className="size-4 shrink-0" />,
-                          onSelect: () => void handleHideChannel(ch.id),
+                          id: 'mark-read',
+                          label: '标为已读',
+                          icon: <CheckIcon className="size-4 shrink-0" />,
+                          onSelect: () => void markChannelRead(ch.id),
                         },
                       ]
-                    : [
-                        {
-                          id: 'hide',
-                          label: '隐藏聊天',
-                          icon: <EyeSlashIcon className="size-4 shrink-0" />,
-                          onSelect: () => void handleHideChannel(ch.id),
-                        },
-                        {
-                          id: 'leave',
-                          label: '退出聊天',
-                          icon: <ArrowRightStartOnRectangleIcon className="size-4 shrink-0" />,
-                          danger: true,
-                          onSelect: () => void handleLeaveChannel(ch.id),
-                        },
-                      ]
+                    : []),
+                  {
+                    id: 'pin',
+                    label: ch.pinned ? '取消置顶' : '置顶聊天',
+                    icon: <BookmarkIcon className="size-4 shrink-0" />,
+                    onSelect: () => void updateChannelPreferences(ch.id, { pinned: !ch.pinned }),
+                  },
+                  {
+                    id: 'mute',
+                    label: ch.muted ? '取消免打扰' : '消息免打扰',
+                    icon: ch.muted ? (
+                      <BellIcon className="size-4 shrink-0" />
+                    ) : (
+                      <BellSlashIcon className="size-4 shrink-0" />
+                    ),
+                    onSelect: () => void updateChannelPreferences(ch.id, { muted: !ch.muted }),
+                  },
+                  {
+                    id: 'hide',
+                    label: isDm ? '隐藏对话' : '隐藏聊天',
+                    icon: <EyeSlashIcon className="size-4 shrink-0" />,
+                    onSelect: () => void handleHideChannel(ch.id),
+                  },
+                  ...(!isDm
+                    ? isOwnerOrManager
+                      ? [
+                          {
+                            id: 'disband',
+                            label: '解散聊天',
+                            icon: <TrashIcon className="size-4 shrink-0" />,
+                            danger: true,
+                            onSelect: () => setDisbandTarget({ id: ch.id, name: ch.name }),
+                          },
+                        ]
+                      : [
+                          {
+                            id: 'leave',
+                            label: '退出聊天',
+                            icon: <ArrowRightStartOnRectangleIcon className="size-4 shrink-0" />,
+                            danger: true,
+                            onSelect: () => void handleLeaveChannel(ch.id),
+                          },
+                        ]
+                    : []),
+                ]
                 return (
                   <div key={ch.id} className="min-w-0">
                     <SidebarRow
@@ -567,6 +611,61 @@ export const ChannelSidebarSections = memo(function ChannelSidebarSections({
           }}
         />
       ) : null}
+
+      {disbandTarget && typeof document !== 'undefined'
+        ? createPortal(
+            <div
+              className="biu-float-overlay"
+              role="dialog"
+              aria-modal="true"
+              aria-label="确认解散聊天"
+              data-testid="sidebar-disband-confirm-dialog"
+              onClick={() => {
+                if (!disbanding) setDisbandTarget(null)
+              }}
+            >
+              <div className="biu-float w-[min(400px,92vw)]" onClick={(e) => e.stopPropagation()}>
+                <div className="biu-float-head">
+                  <h2 className="biu-float-title">解散并删除聊天</h2>
+                  <button
+                    type="button"
+                    className="biu-float-close"
+                    title="关闭"
+                    aria-label="关闭"
+                    disabled={disbanding}
+                    onClick={() => setDisbandTarget(null)}
+                  >
+                    <XMarkIcon className="size-4 shrink-0" />
+                  </button>
+                </div>
+                <div className="px-4 py-3 text-[13px] leading-relaxed text-(--biu-color-text-muted)">
+                  确认解散「<span className="font-medium text-(--biu-color-text)">{disbandTarget.name}</span>
+                  」吗？解散后该聊天的所有消息、附件与讨论串将被永久清空，所有成员均无法再查看。
+                </div>
+                <div className="flex items-center justify-end gap-2 px-4 pb-4">
+                  <Button
+                    variant="secondary"
+                    className="h-8 px-3 text-[12.5px]"
+                    disabled={disbanding}
+                    onClick={() => setDisbandTarget(null)}
+                  >
+                    取消
+                  </Button>
+                  <Button
+                    variant="destructive"
+                    className="h-8 px-3 text-[12.5px]"
+                    disabled={disbanding}
+                    data-testid="sidebar-disband-confirm-btn"
+                    onClick={() => void handleDisbandChannel()}
+                  >
+                    {disbanding ? '解散中…' : '确认解散'}
+                  </Button>
+                </div>
+              </div>
+            </div>,
+            document.body,
+          )
+        : null}
     </div>
   )
 })
