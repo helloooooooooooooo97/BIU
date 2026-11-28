@@ -111,12 +111,24 @@ test('ChannelFloatingSidebar collapses to avatar rail, expands on hover, persist
   assert.equal(Boolean(view.queryByTestId('channel-floating-rail')), true)
   assert.equal(Boolean(view.queryByTestId('channel-floating-panel')), false)
 
-  // 鼠标悬停展开悬浮面板，可见所有成员与 Agent
+  // 鼠标悬停展开悬浮面板，可见所有成员与 Agent，且成员在 Agent 上方
   fireEvent.mouseEnter(view.getByTestId('channel-floating-sidebar'))
   assert.equal(Boolean(view.queryByTestId('channel-floating-panel')), true)
+  const humansSection = view.getByTestId('channel-roster-humans-section')
+  const agentsSection = view.getByTestId('channel-roster-agents-section')
+  assert.equal(Boolean(humansSection.compareDocumentPosition(agentsSection) & Node.DOCUMENT_POSITION_FOLLOWING), true)
   assert.equal(Boolean(view.queryByTestId('channel-roster-agent-ag-1')), true)
   assert.equal(Boolean(view.queryByTestId('channel-roster-member-acc-97')), true)
   assert.equal(Boolean(view.queryByTestId('channel-roster-member-acc-lulu')), true)
+
+  // 成员上方搜索框可过滤成员与 Agent
+  const rosterSearch = view.getByTestId('channel-roster-search')
+  fireEvent.change(rosterSearch, { target: { value: 'lulu' } })
+  assert.equal(Boolean(view.queryByTestId('channel-roster-member-acc-lulu')), true)
+  assert.equal(Boolean(view.queryByTestId('channel-roster-member-acc-97')), false)
+  assert.equal(Boolean(view.queryByTestId('channel-roster-agent-ag-1')), false)
+  fireEvent.change(rosterSearch, { target: { value: '' } })
+  assert.equal(Boolean(view.queryByTestId('channel-roster-agent-ag-1')), true)
 
   // 一键 @提及 Agent 与人类成员
   fireEvent.click(view.getByTestId('channel-roster-mention-agent-ag-1'))
@@ -137,7 +149,10 @@ test('ChannelFloatingSidebar collapses to avatar rail, expands on hover, persist
   assert.deepEqual(summarizeCalls, [])
   fireEvent.click(view.getByTestId('channel-summary-generate'))
   assert.deepEqual(summarizeCalls, [true])
-  fireEvent.click(view.getByTestId('channel-quick-search'))
+  // 原「搜索」Tab 已改为「聊天」，且内部保留搜索框
+  const chatTab = view.getByTestId('channel-quick-search')
+  assert.equal(chatTab.textContent?.trim(), '聊天')
+  fireEvent.click(chatTab)
   assert.equal(Boolean(view.queryByTestId('channel-search-input')), true)
   fireEvent.click(view.getByTestId('channel-quick-roster'))
   fireEvent.click(view.getByTestId('channel-roster-dm-acc-lulu'))
