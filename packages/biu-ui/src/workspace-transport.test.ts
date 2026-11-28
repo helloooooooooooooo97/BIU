@@ -108,6 +108,10 @@ describe('WorkspaceTransport direct cloud routing', () => {
       resolveAssetUrl('/api/page/file/doc.pdf?download=1'),
       `https://cloud.biu.example/api/page/file/doc.pdf?download=1&uid=acc_1&ws=ws_cloud_1&exp=${futureExp}&sig=sig_xyz`,
     )
+    assert.equal(
+      resolveAssetUrl('/api/channels/ch_1/uploads/shot.png'),
+      `https://cloud.biu.example/api/channels/ch_1/uploads/shot.png?uid=acc_1&ws=ws_cloud_1&exp=${futureExp}&sig=sig_xyz`,
+    )
     // Non-asset or already-absolute URLs are left untouched
     assert.equal(resolveAssetUrl('https://cdn.other.com/a.png'), 'https://cdn.other.com/a.png')
     assert.equal(resolveAssetUrl('data:image/png;base64,AAA'), 'data:image/png;base64,AAA')

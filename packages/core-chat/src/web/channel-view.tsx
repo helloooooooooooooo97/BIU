@@ -36,6 +36,7 @@ import {
 import { Button } from '@biu/biu-ui'
 import { AiAvatar } from '@biu/biu-ui/ai-avatar'
 import { apiFetch } from '@biu/biu-ui/api-client'
+import { resolveAssetUrl } from '@biu/biu-ui/workspace-transport'
 import { onAppEvents } from '@biu/biu-ui/app-events'
 import { ChatDockStack, ChatStage as BiuChatStage } from '@biu/biu-ui/chat-pane'
 import { useWorkspaceProfile } from '@biu/biu-ui/use-workspace-profile'
@@ -1246,10 +1247,10 @@ export const ChannelStage = memo(function ChannelStage({
                                         type="button"
                                         className="group/img relative cursor-zoom-in overflow-hidden rounded-lg border border-(--biu-color-border-subtle) bg-(--biu-color-bg-subtle) p-0"
                                         title={`点击查看大图：${att.name}`}
-                                        onClick={() => setLightboxImage({ url: att.url, name: att.name })}
+                                        onClick={() => setLightboxImage({ url: resolveAssetUrl(att.url), name: att.name })}
                                       >
                                         <img
-                                          src={att.url}
+                                          src={resolveAssetUrl(att.url)}
                                           alt={att.name}
                                           loading="lazy"
                                           className="block max-h-56 max-w-xs object-contain"
@@ -1258,7 +1259,7 @@ export const ChannelStage = memo(function ChannelStage({
                                     ) : (
                                       <a
                                         key={att.id}
-                                        href={att.url}
+                                        href={resolveAssetUrl(att.url)}
                                         download={att.name}
                                         target="_blank"
                                         rel="noreferrer"
@@ -1829,14 +1830,14 @@ export const ChannelStage = memo(function ChannelStage({
                 onClick={(e) => e.stopPropagation()}
               >
                 <img
-                  src={lightboxImage.url}
+                  src={resolveAssetUrl(lightboxImage.url)}
                   alt={lightboxImage.name}
                   className="max-h-[82vh] max-w-[88vw] rounded-lg object-contain shadow-2xl"
                 />
                 <div className="flex items-center gap-3 text-[12px] text-white/90">
                   <span className="max-w-md truncate">{lightboxImage.name}</span>
                   <a
-                    href={lightboxImage.url}
+                    href={resolveAssetUrl(lightboxImage.url)}
                     download={lightboxImage.name}
                     className="underline hover:text-white"
                   >

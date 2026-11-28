@@ -62,6 +62,9 @@ describe('HMAC short-lived asset tickets', () => {
     assert.equal(isAssetTicketEligiblePath('GET', '/api/page/file/abc.png'), true)
     assert.equal(isAssetTicketEligiblePath('GET', '/api/doc/file/abc.pdf'), true)
     assert.equal(isAssetTicketEligiblePath('GET', '/api/agents/s1/artifacts/out.png'), true)
+    assert.equal(isAssetTicketEligiblePath('GET', '/api/channels/ch-1/uploads/img-1.png'), true)
+
+    assert.equal(isAssetTicketEligiblePath('POST', '/api/channels/ch-1/uploads/img-1.png'), false)
 
     assert.equal(isAssetTicketEligiblePath('PUT', '/api/db/file/abc.png'), false)
     assert.equal(isAssetTicketEligiblePath('POST', '/api/db/file/abc.png'), false)

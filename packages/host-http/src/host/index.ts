@@ -98,7 +98,7 @@ export class PayloadTooLargeError extends Error {
 export function maxBodyBytesForPath(pathname: string): number {
   const configured = Number(process.env.BIU_HTTP_MAX_BODY_BYTES)
   if (Number.isInteger(configured) && configured > 0) return configured
-  if (/\/(artifacts|assets|files|upload|import)(\/|$)/.test(pathname)) return UPLOAD_MAX_BODY_BYTES
+  if (/\/(artifacts|assets|files|uploads?|import)(\/|$)/.test(pathname)) return UPLOAD_MAX_BODY_BYTES
   return DEFAULT_MAX_BODY_BYTES
 }
 

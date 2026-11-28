@@ -378,3 +378,86 @@ test('ChannelComposer collapses long paste into a PickChip and deletes last atta
   })
 })
 
+test('ChannelComposer previews pasted image via local blob URL and revokes it on remove', async () => {
+  const createdUrls: string[] = []
+  const revokedUrls: string[] = []
+  const origCreate = URL.createObjectURL
+  const origRevoke = URL.revokeObjectURL
+  URL.createObjectURL = vi.fn(() => {
+    const u = `blob:test-preview-${createdUrls.length + 1}`
+    createdUrls.push(u)
+    return u
+  })
+  URL.revokeObjectURL = vi.fn((u: string) => {
+    revokedUrls.push(u)
+  })
+
+  try {
+    let uploadedName = ''
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = new URL(String(input), 'http://test.local')
+      if (url.pathname.endsWith('/uploads') && init?.method === 'POST') {
+        uploadedName = url.searchParams.get('name') ?? ''
+        return new Response(
+          JSON.stringify({
+            attachment: {
+              id: 'pasted-1.png',
+              name: uploadedName || 'image.png',
+              mime: 'image/png',
+              size: 16,
+              url: '/api/channels/ch-1/uploads/pasted-1.png',
+              kind: 'image',
+            },
+          }),
+          { status: 200 },
+        )
+      }
+      return new Response(JSON.stringify({ items: [] }), { status: 200 })
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    const view = render(
+      <MemoryRouter initialEntries={['/channels/ch-1']}>
+        <ChannelComposer
+          channelId="ch-1"
+          isDm={false}
+          members={MEMBERS}
+          resolveAvatar={() => undefined}
+          replyTo={null}
+          onClearReplyTo={() => {}}
+          onError={() => {}}
+        />
+      </MemoryRouter>,
+    )
+
+    const input = await waitFor(() => view.getByTestId('channel-composer-input'))
+    const clipFile = new File([new Uint8Array([137, 80, 78, 71])], '', { type: 'image/png' })
+    await act(async () => {
+      fireEvent.paste(input, {
+        clipboardData: {
+          items: [{ kind: 'file', type: 'image/png', getAsFile: () => clipFile }],
+          files: [clipFile],
+          getData: () => '',
+        },
+      })
+    })
+
+    await waitFor(() => {
+      const thumbImg = view.container.querySelector('[data-testid="composer-image-thumbs"] img')
+      assert.equal(thumbImg?.getAttribute('src'), 'blob:test-preview-1')
+    })
+    assert.equal(uploadedName, 'image.png')
+
+    const removeBtn = view.container.querySelector('.composer-image-remove') as HTMLButtonElement
+    assert.ok(removeBtn)
+    fireEvent.click(removeBtn)
+    await waitFor(() => {
+      assert.equal(Boolean(view.queryByTestId('composer-image-thumbs')), false)
+    })
+    assert.deepEqual(revokedUrls, ['blob:test-preview-1'])
+  } finally {
+    URL.createObjectURL = origCreate
+    URL.revokeObjectURL = origRevoke
+  }
+})
+
