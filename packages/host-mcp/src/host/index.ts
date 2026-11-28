@@ -1,3 +1,4 @@
+import { randomBytes } from 'node:crypto'
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { Service, type Context } from 'cordis'
 import { currentAccountId, currentRequestWorkspaceId, currentTenantScope, dataHome, dataPath } from '@biu/host-plugin-loader/data-dir'
@@ -495,6 +496,20 @@ export class McpService extends Service {
     }
   }
 
+  private isRecordTakenByOtherWorkspace(id: string): boolean {
+    if (!this.isTenantIsolated()) return false
+    const wsId = currentRequestWorkspaceId().trim()
+    if (!wsId) return false
+    const account = this.ctx.get('account' as never) as
+      | {
+          store?: {
+            isRecordTakenByOtherWorkspace?: (ws: string, collection: string, recordId: string) => boolean
+          }
+        }
+      | undefined
+    return Boolean(account?.store?.isRecordTakenByOtherWorkspace?.(wsId, '/mcp', id))
+  }
+
   /** 改 id：迁移配置并按需重连。表格里改「服务器」列走这条。 */
   async rename(id: string, nextId: string) {
     const state = this.require(id)
@@ -502,6 +517,9 @@ export class McpService extends Service {
     const wanted = String(nextId ?? '').trim()
     if (wanted === id) return this.row(state)
     if (this.servers.has(wanted)) throw new Error(`mcp server already exists: ${wanted}`)
+    if (this.isRecordTakenByOtherWorkspace(wanted)) {
+      throw new Error(`mcp server already exists: ${wanted}`)
+    }
     const config = normalizeServerConfig(wanted, { ...state.config, id: wanted })
     if (!config) throw new Error(`invalid mcp server id: ${nextId}`)
     const wasConnected = Boolean(state.connection)
@@ -645,7 +663,20 @@ export class McpService extends Service {
   /** 界面「新建」用：先落一行停用的 stdio 草稿，字段在表格里慢慢填。 */
   draft() {
     let id = 'new-server'
-    for (let n = 2; this.servers.has(id); n++) id = `new-server-${n}`
+    if (this.isTenantIsolated()) {
+      let allocated = ''
+      for (let attempt = 0; attempt < 64; attempt++) {
+        const candidate = `new-server-${randomBytes(4).toString('hex')}`
+        if (!this.servers.has(candidate) && !this.isRecordTakenByOtherWorkspace(candidate)) {
+          allocated = candidate
+          break
+        }
+      }
+      if (!allocated) throw new Error('could not allocate mcp draft id')
+      id = allocated
+    } else {
+      for (let n = 2; this.servers.has(id); n++) id = `new-server-${n}`
+    }
     const config = normalizeServerConfig(id, { transport: 'stdio', command: '', enabled: false })
     if (!config) throw new Error(`cannot create mcp draft: ${id}`)
     if (this.isTenantIsolated()) {

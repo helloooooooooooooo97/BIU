@@ -2307,6 +2307,17 @@ export class CollabStore {
     return new Set(rows.map((row) => row.record_id))
   }
 
+  isRecordTakenByOtherWorkspace(workspaceId: string, collection: string, recordId: string): boolean {
+    if (!workspaceId || !collection || !recordId) return false
+    const elsewhere = this.db
+      .prepare(
+        `SELECT 1 FROM resource_policies
+         WHERE collection = ? AND record_id = ? AND workspace_id != ? LIMIT 1`,
+      )
+      .get(collection, recordId, workspaceId)
+    return Boolean(elsewhere)
+  }
+
   attach(
     workspaceId: string,
     collection: string,
@@ -2321,13 +2332,9 @@ export class CollabStore {
     if (collection === '/plugins' && isRegisteredBuiltinPlugin(recordId)) return
     const caller = currentAccountId()
     const recordOwner = caller || owner.owner_id
-    const elsewhere = this.db
-      .prepare(
-        `SELECT workspace_id FROM resource_policies
-         WHERE collection = ? AND record_id = ? AND workspace_id != ? LIMIT 1`,
-      )
-      .get(collection, recordId, workspaceId) as { workspace_id?: string } | undefined
-    if (elsewhere) throw new CollabError('这条记录已经属于另一个空间', 409)
+    if (this.isRecordTakenByOtherWorkspace(workspaceId, collection, recordId)) {
+      throw new CollabError('这条记录已经属于另一个空间', 409)
+    }
     this.authorization.attach(
       { type: 'account', accountId: recordOwner, workspaceId },
       { type: 'record', workspaceId, collection, recordId },

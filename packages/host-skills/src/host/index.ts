@@ -69,6 +69,26 @@ export class SkillsService extends Service {
     })
   }
 
+  private isIdTakenByOtherWorkspace(id: string, fallbackWorkspaceId: string): boolean {
+    const wsId = currentRequestWorkspaceId().trim() || fallbackWorkspaceId
+    if (!wsId) return false
+    const account = this.ctx.get('account' as never) as
+      | {
+          store?: {
+            isRecordTakenByOtherWorkspace?: (ws: string, collection: string, recordId: string) => boolean
+          }
+        }
+      | undefined
+    return Boolean(account?.store?.isRecordTakenByOtherWorkspace?.(wsId, '/skills', id))
+  }
+
+  private canReuseSkillDraft(id: string, fallbackWorkspaceId: string): boolean {
+    const wsId = currentRequestWorkspaceId().trim() || fallbackWorkspaceId
+    const accountId = currentAccountId().trim()
+    if (!wsId || !accountId) return true
+    return this.isSkillOwner(id, wsId, accountId)
+  }
+
   private activeStore(): SkillsStore | null {
     if (getRuntimePolicy().authzMode !== 'rbac') return this.defaultStore
     const rawWorkspaceId = currentRequestWorkspaceId().trim()
@@ -76,7 +96,10 @@ export class SkillsService extends Service {
     const safe = sanitizeSkillWorkspaceId(rawWorkspaceId)
     let store = this.workspaceStores.get(safe)
     if (!store) {
-      store = new SkillsStore(workspaceSkillRoot(safe), safe)
+      store = new SkillsStore(workspaceSkillRoot(safe), safe, {
+        isIdTaken: (id) => this.isIdTakenByOtherWorkspace(id, rawWorkspaceId),
+        canReuseDraft: (id) => this.canReuseSkillDraft(id, rawWorkspaceId),
+      })
       this.workspaceStores.set(safe, store)
     }
     return store

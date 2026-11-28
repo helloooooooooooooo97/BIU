@@ -186,8 +186,12 @@ export function mcpCollection(mcp: McpService): CollectionSpec {
         const draft = mcp.draft()
         // 新建时一般只拿到空对象；带了字段就顺手填上，省一次编辑。
         if (Object.keys(fields).length) {
-          await applyPatch(mcp, draft.id, fields)
-          out.push(require(typeof fields.title === 'string' && fields.title.trim() ? fields.title.trim() : draft.id))
+          try {
+            out.push(await applyPatch(mcp, draft.id, fields))
+          } catch (error) {
+            await mcp.remove(draft.id).catch(() => undefined)
+            throw error
+          }
         } else {
           out.push(require(draft.id))
         }

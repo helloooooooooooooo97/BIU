@@ -1,11 +1,13 @@
 import assert from 'node:assert/strict'
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, test } from 'vitest'
-import { Context } from 'cordis'
-import { runWithAccount, runWithRequestWorkspace } from '@biu/host-plugin-loader/data-dir'
-import { assertSkillSourcePath } from './store.ts'
+import { Context, Service } from 'cordis'
+import { openAndMigrateBiu, runWithAccount, runWithRequestWorkspace } from '@biu/host-plugin-loader/data-dir'
+import { CollabStore } from '@biu/host-account/store'
+import { DatabaseService } from '@biu/core-file-system/host'
+import { assertSkillSourcePath, workspaceSkillRoot } from './store.ts'
 import * as skillsPlugin from './index.ts'
 import type { SkillsService } from './index.ts'
 
@@ -225,4 +227,88 @@ test('host-skills isolates enabled/disabled state per account within the same wo
   asUser('acc-carol', () => {
     assert.throws(() => skills.setEnabled(created.id, true), /permission denied/)
   })
+})
+
+test('host-skills allocates globally unique ids across workspaces and recovers from legacy orphan new-skill.md', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'biu-skills-multi-ws-'))
+  tempDirs.push(root)
+  process.env.BIU_ONLINE = '1'
+  process.env.BIU_DATA_DIR = root
+  process.env.BIU_SKILL_ROOT = join(root, 'skill')
+
+  const ctx = new Context()
+  ctx.provide('tools')
+  ctx.set('tools', { register: () => {} } as never)
+  ctx.provide('http')
+  ctx.set('http', { route: () => {} } as never)
+
+  const db = new DatabaseService(ctx)
+  const collab = new CollabStore(openAndMigrateBiu(join(root, 'biu.sqlite')))
+  class AccountBridge extends Service {
+    store = collab
+    authorization = collab.authorization
+    workspaceLocation = () => 'cloud' as const
+    constructor(inner: Context) {
+      super(inner, 'account')
+    }
+  }
+  await ctx.plugin(AccountBridge)
+  await ctx.plugin(skillsPlugin)
+
+  const ada = collab.register('', Date.now(), 'secret1', 'skill-ada@example.com')
+  const bob = collab.register('', Date.now(), 'secret1', 'skill-bob@example.com')
+  const carol = collab.register('', Date.now(), 'secret1', 'skill-carol@example.com')
+  const wsA = collab.createWorkspace(ada.id, 'Skill WS A')
+  const wsB = collab.createWorkspace(bob.id, 'Skill WS B')
+  collab.addMemberByEmail(ada.id, wsA.id, carol.email)
+  collab.setActive(ada.id, wsA.id)
+  collab.setActive(carol.id, wsA.id)
+  collab.setActive(bob.id, wsB.id)
+
+  const asCtx = <T>(workspaceId: string, accountId: string, fn: () => T) =>
+    runWithRequestWorkspace(workspaceId, () => runWithAccount(accountId, fn))
+
+  // 1. Pre-seed legacy collision: wsA owns /skills/new-skill and wsB has an orphan unattached new-skill.md on disk
+  asCtx(wsA.id, ada.id, () => {
+    collab.attach(wsA.id, '/skills', 'new-skill', Date.now(), { accessMode: 'private' })
+  })
+  const wsBDir = workspaceSkillRoot(wsB.id, root)
+  mkdirSync(wsBDir, { recursive: true })
+  writeFileSync(
+    join(wsBDir, 'new-skill.md'),
+    '---\nname: 新技能\ndescription: ""\nenabled: false\n---\n\n',
+    'utf8',
+  )
+
+  // 2. Bob in wsB clicks 新建 -> skips orphan new-skill.md and succeeds without 409
+  const bobCreated = await asCtx(wsB.id, bob.id, () => db.create('/skills', [{}]))
+  const bobId = String(bobCreated.items[0]!.value.id)
+  assert.match(bobId, /^new-skill-[0-9a-f]{8}$/)
+
+  // 3. Ada in wsA clicks 新建 -> gets her own draft id; clicking again reuses her draft
+  const adaFirst = await asCtx(wsA.id, ada.id, () => db.create('/skills', [{}]))
+  const adaId = String(adaFirst.items[0]!.value.id)
+  assert.match(adaId, /^new-skill-[0-9a-f]{8}$/)
+  assert.notEqual(adaId, bobId)
+
+  const adaSecond = await asCtx(wsA.id, ada.id, () => db.create('/skills', [{}]))
+  assert.equal(String(adaSecond.items[0]!.value.id), adaId)
+
+  // 4. Carol in the SAME workspace wsA clicks 新建 -> gets a distinct draft id (does not hijack Ada's private draft)
+  const carolFirst = await asCtx(wsA.id, carol.id, () => db.create('/skills', [{}]))
+  const carolId = String(carolFirst.items[0]!.value.id)
+  assert.match(carolId, /^new-skill-[0-9a-f]{8}$/)
+  assert.notEqual(carolId, adaId)
+
+  // 5. Same explicit title/slug across two workspaces disambiguates cleanly instead of failing with 409
+  const wsANamed = await asCtx(wsA.id, ada.id, () =>
+    db.create('/skills', [{ title: 'PDF Helper', description: 'Workspace A helper' }]),
+  )
+  assert.equal(String(wsANamed.items[0]!.value.id), 'pdf-helper')
+
+  const wsBNamed = await asCtx(wsB.id, bob.id, () =>
+    db.create('/skills', [{ title: 'PDF Helper', description: 'Workspace B helper' }]),
+  )
+  const wsBNamedId = String(wsBNamed.items[0]!.value.id)
+  assert.match(wsBNamedId, /^pdf-helper-[0-9a-f]{8}$/)
 })
