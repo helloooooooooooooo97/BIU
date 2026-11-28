@@ -347,6 +347,8 @@ test('ChannelStage reuses 1v1 chat card/composer/float styles and syncs workspac
               senderType: 'account',
               senderId: 'acc-alice',
               senderName: 'lulu@qq.com',
+              viaAgentId: 'ag-alice',
+              viaAgentName: '赤板灵',
               replyToId: '',
               text: '收到！',
               mentions: [],
@@ -411,6 +413,9 @@ test('ChannelStage reuses 1v1 chat card/composer/float styles and syncs workspac
       selfRow.querySelector('.user-turn-bar [data-testid="channel-msg-avatar"]')?.className.includes('flex-row-reverse'),
       true,
     )
+    const viaBadge = selfRow.querySelector('[data-testid="channel-msg-via-agent"]')
+    assert.equal(Boolean(viaBadge), true)
+    assert.equal(Boolean(viaBadge?.textContent?.includes('赤板灵')), true)
   })
 
   // 打开「群成员与 Agent」弹窗：必须使用统一 .biu-float-overlay / .scfg-float 且头像一致

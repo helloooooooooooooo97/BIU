@@ -2,6 +2,8 @@ import type { Context } from 'cordis'
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { basename, extname, join } from 'node:path'
 import type { DatabaseSync } from 'node:sqlite'
+import type { CollectionSpec } from '@biu/type-file-system'
+import { channelsCollection } from './channels-collection.ts'
 import { allocateRecordId } from '@biu/type-file-system'
 import type { LlmClient, LlmConfig, LlmMessage } from '@biu/host-llm'
 import {
@@ -1622,6 +1624,17 @@ export class ChannelService {
     }
 
     const meta = safeJsonParse<ChannelMessageMeta>(row.meta_json, {})
+    let viaAgentId: string | undefined
+    let viaAgentName: string | undefined
+    let viaAgentMascot: SessionMascot | undefined
+    if (meta.viaAgentId) {
+      viaAgentId = String(meta.viaAgentId).trim() || undefined
+      if (viaAgentId) {
+        const viaMeta = this.agentMeta(viaAgentId)
+        viaAgentName = (viaMeta.name && viaMeta.name !== viaAgentId ? viaMeta.name : '') || meta.viaAgentName || viaMeta.name
+        viaAgentMascot = viaMeta.mascot
+      }
+    }
     const attachments = safeJsonParse<ChannelAttachment[]>(row.attachments_json, [])
     const editedAt = Number(row.edited_at ?? 0)
     const deletedAt = Number(row.deleted_at ?? 0)
@@ -1646,6 +1659,7 @@ export class ChannelService {
       senderName,
       ...(senderAvatar ? { senderAvatar } : {}),
       ...(senderMascot ? { senderMascot } : {}),
+      ...(viaAgentId ? { viaAgentId, ...(viaAgentName ? { viaAgentName } : {}), ...(viaAgentMascot ? { viaAgentMascot } : {}) } : {}),
       replyToId: row.reply_to_id,
       replyPreview,
       ...(threadRootId ? { threadRootId } : {}),
@@ -2197,7 +2211,17 @@ export class ChannelService {
 
   sendMessage(
     channelId: string,
-    input: { text: string; replyToId?: string; threadRootId?: string; mentions?: ChannelMention[]; attachments?: ChannelAttachment[] },
+    input: {
+      text: string
+      replyToId?: string
+      threadRootId?: string
+      mentions?: ChannelMention[]
+      attachments?: ChannelAttachment[]
+      /** Agent 经文件系统替当前用户代发时传入自身 sessionId，界面会同时显示用户与该 Agent。 */
+      viaAgentId?: string
+      /** Agent 代发时默认不二次唤醒群内其他 Agent，避免递归互唤死循环。 */
+      suppressAgentTrigger?: boolean
+    },
   ): { message: ChannelMessageView; triggeredRunIds: string[] } {
     const { accountId } = this.currentActorIds()
     const channel = this.requireChannelRow(channelId, accountId)
@@ -2244,6 +2268,8 @@ export class ChannelService {
       .map((m) => ({ id: m.memberId, name: m.name }))
     const { agentIds, mentions } = resolveMentionedAgents(text, input.mentions ?? [], channelAgents, channelHumans)
 
+    const viaAgentId = String(input.viaAgentId ?? '').trim()
+    const viaMeta = viaAgentId ? this.agentMeta(viaAgentId) : null
     const message = this.insertMessage({
       channelId,
       senderType: 'account',
@@ -2253,26 +2279,37 @@ export class ChannelService {
       text,
       mentions,
       attachments,
+      ...(viaAgentId
+        ? {
+            meta: {
+              viaAgentId,
+              viaAgentName: viaMeta?.name || viaAgentId,
+            },
+          }
+        : {}),
     })
 
     this.notifyMentionedHumans(channel, message, mentions, channelHumans)
 
-    // 严格 Slack 逻辑：仅显式 @Agent 或 @所有人 时触发回复
+    // 严格 Slack 逻辑：仅显式 @Agent 或 @所有人 时触发回复；Agent 通过文件系统代发时默认不触发链式互唤
     const triggeredRunIds: string[] = []
-    for (const agentId of agentIds) {
-      const runId = this.enqueueAgentRun({
-        channelId,
-        workspaceId: channel.workspace_id,
-        agentId,
-        invokerId: accountId,
-        originMessageId: message.id,
-        ...(threadRootId ? { threadRootId } : {}),
-        senderName: message.senderName,
-        text: text || attachments.map((a) => `[附件: ${a.name}]`).join(' '),
-        hopCount: 0,
-        visitedAgents: new Set(),
-      })
-      if (runId) triggeredRunIds.push(runId)
+    if (!input.suppressAgentTrigger) {
+      for (const agentId of agentIds) {
+        if (viaAgentId && agentId === viaAgentId) continue
+        const runId = this.enqueueAgentRun({
+          channelId,
+          workspaceId: channel.workspace_id,
+          agentId,
+          invokerId: accountId,
+          originMessageId: message.id,
+          ...(threadRootId ? { threadRootId } : {}),
+          senderName: message.senderName,
+          text: text || attachments.map((a) => `[附件: ${a.name}]`).join(' '),
+          hopCount: 0,
+          visitedAgents: new Set(),
+        })
+        if (runId) triggeredRunIds.push(runId)
+      }
     }
 
     return { message, triggeredRunIds }
@@ -2997,6 +3034,10 @@ export function registerChannelRoutes(ctx: Context, resolveLlm: (sessionId?: str
 
   const service = new ChannelService(ctx, resolveLlmClient)
   ctx.effect(() => () => service.dispose(), 'core-chat.channels')
+  ctx.inject(['database'], (inner) => {
+    const db = inner.database as { register: (spec: CollectionSpec) => void }
+    db.register(channelsCollection(service))
+  })
 
   const sendError = (route: { send: (status: number, body: unknown) => void }, error: unknown) => {
     const msg = error instanceof Error ? error.message : String(error)

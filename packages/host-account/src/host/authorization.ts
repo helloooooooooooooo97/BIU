@@ -578,6 +578,22 @@ export class AuthorizationService {
         : { allowed: false, reason: 'INSUFFICIENT_PERMISSION' }
     }
 
+    if (resource.collection === '/channels') {
+      if (action === 'resource:share' || action === 'resource:manage-permissions' || action === 'resource:delete') {
+        return { allowed: false, reason: 'INSUFFICIENT_PERMISSION' }
+      }
+      // 频道级可见性与成员校验已由 ChannelService 严格按 workspace_id + channel_members 隔离
+      const effectiveRole: ResourceRole =
+        membership === 'owner' || membership === 'admin'
+          ? 'manager'
+          : membership === 'viewer' || memberKind === 'guest'
+            ? 'viewer'
+            : 'editor'
+      return roleCoversAction(effectiveRole, action)
+        ? { allowed: true, effectiveRole, source: 'workspace-default' }
+        : { allowed: false, reason: 'INSUFFICIENT_PERMISSION' }
+    }
+
     if (PERSONAL_ONLY_COLLECTIONS.has(resource.collection)) {
       if (action === 'resource:share' || action === 'resource:manage-permissions') {
         return { allowed: false, reason: 'INSUFFICIENT_PERMISSION' }
