@@ -13,6 +13,7 @@ import { getRuntimePolicy, resolveScopedWorkspaceId } from '@biu/host-plugin-loa
 import { getAccountService } from '@biu/host-account'
 import { type Action as PermissionAction, type AuthorizationService } from '@biu/host-account/authorization'
 import { SHARE_ROLE_ENUM, SHARE_SCOPE_ENUM } from '../shared/authz-labels.ts'
+import { retainArchivedSchemaValue } from '../shared/tag-value-compat.ts'
 import { BoundedMap } from '@biu/biu-ui/cache'
 import { Service, type Context } from 'cordis'
 import {
@@ -1739,7 +1740,7 @@ export class DatabaseService extends Service implements Database {
       if (!isEmptySchemaValue(value)) overlay = stamp ? value : this.persistRecordTag(spec, row.id, value, row)
     }
     if (!overlay) return row
-    return { ...row, tag: pruneSchemaValue(overlay, this.tags.list()) }
+    return { ...row, tag: retainArchivedSchemaValue(overlay, this.tags.list()) }
   }
 
   private applyMetaOverlay(spec: CollectionSpec, row: DbRecord): DbRecord {
@@ -1972,8 +1973,10 @@ export class DatabaseService extends Service implements Database {
     const bannerPatch = takeBannerPatch(raw)
     if ('tag' in raw && schema.fields.tag) {
       if (!schema.fields.tag.writable || schema.fields.tag.computed) throw new Error(`field not writable: tag`)
-      raw.tag = coerceTagPatch(raw.tag, normalizeSchemaValue(this.decorateRecord(spec, current).tag), (id) =>
-        this.tags.get(id),
+      raw.tag = coerceTagPatch(
+        raw.tag,
+        normalizeSchemaValue(this.tags.recordTag(spec.path, id) ?? this.decorateRecord(spec, current).tag),
+        (tagId) => this.tags.get(tagId),
       )
     }
     if (!this.collectionCanUpdate(spec)) {

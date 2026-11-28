@@ -8,7 +8,6 @@ import {
   isAssignableRecordId,
   isTagFieldType,
   normalizeSchemaValue,
-  pruneSchemaValue,
   type CollectionListQuery,
   type CollectionSchema,
   type CollectionSchemaPack,
@@ -17,6 +16,7 @@ import {
   type SchemaFieldValue,
   type SchemaPackField,
 } from '@biu/type-file-system'
+import { retainArchivedSchemaValue } from '../shared/tag-value-compat.ts'
 import { parsePageBanner, type PageBanner } from '../page-banner.ts'
 
 export const UPDATE_CONTENT_EXAMPLE =
@@ -278,12 +278,18 @@ export function coerceTagFieldValue(field: SchemaPackField, value: unknown): unk
 
 export function remapTagBag(pack: CollectionSchemaPack | null | undefined, bag: Record<string, unknown>) {
   const out: Record<string, unknown> = {}
+  const removed = new Set<string>()
   const liveFields = pack ? pack.fields.filter((field) => !field.deleted) : []
   for (const [key, value] of Object.entries(bag)) {
     const trimmed = String(key ?? '').trim()
     if (!trimmed) continue
     const spec = findPackField(pack, trimmed)
     if (pack && liveFields.length > 0 && !spec) {
+      // 允许记录拥有者显式清空（null / ""）已归档或已删除的历史字段残留，而不是报错拦住
+      if (tagBagValueEmpty(value)) {
+        removed.add(packFieldKey(pack, trimmed))
+        continue
+      }
       const available = liveFields
         .map((field) => (field.label && field.label !== field.key ? `${field.key}（${field.label}）` : field.key))
         .join('、')
@@ -292,12 +298,13 @@ export function remapTagBag(pack: CollectionSchemaPack | null | undefined, bag: 
     const field = spec?.key ?? packFieldKey(pack, trimmed)
     if (!field) continue
     if (tagBagValueEmpty(value)) {
-      out[field] = ''
+      if (!spec) removed.add(field)
+      else out[field] = ''
       continue
     }
     out[field] = spec ? coerceTagFieldValue(spec, value) : value
   }
-  return out
+  return { out, removed }
 }
 
 export function applyTagBagPatch(
@@ -305,7 +312,10 @@ export function applyTagBagPatch(
   current: Record<string, unknown>,
   bag: Record<string, unknown>,
 ) {
-  return { ...current, ...remapTagBag(pack, bag) }
+  const { out, removed } = remapTagBag(pack, bag)
+  const next = { ...current, ...out }
+  for (const key of removed) delete next[key]
+  return next
 }
 
 export function pruneTagBags(
@@ -315,7 +325,7 @@ export function pruneTagBags(
   const packs = value.tags
     .map((id) => resolvePack(id))
     .filter((pack): pack is CollectionSchemaPack => Boolean(pack))
-  return pruneSchemaValue(value, packs)
+  return retainArchivedSchemaValue(value, packs)
 }
 
 /** 统一校验并归整标签写入。标准形状：{ tags: [id], values: { [id]: { [field]: value } } }，兼容单标签扁平 values，绝不静默丢弃未知属性。 */

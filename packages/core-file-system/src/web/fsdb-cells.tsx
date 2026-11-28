@@ -13,6 +13,7 @@ import {
   Bars3BottomLeftIcon,
   DocumentIcon,
   DocumentTextIcon,
+  ExclamationTriangleIcon,
   LinkIcon,
   PaperClipIcon,
   PhotoIcon,
@@ -28,6 +29,7 @@ import type { CollectionSchema, DbRecord, FieldSpec, FieldType } from '@biu/type
 import { actionVisibleToUser, asAttachmentList, asHttpHref, asImageSrc, asImageSrcList, asPerson, asPersonList, commitAttachments, normalizeSchemaValue } from '@biu/type-file-system'
 import type { CollectionRowViewType, CollectionViewType } from '@biu/type-file-system/ui'
 import {
+  adaptTagFieldValue,
   asStringList,
   enumDisplayLabel,
   formatField,
@@ -423,8 +425,26 @@ export function DefaultCell({
       </TagChips>
     )
   }
+  const adapted = adaptTagFieldValue(field, value)
+  if (adapted.incompatible) {
+    const tip = `原值（${adapted.rawType}）：${adapted.rawPreview}，与当前「${kind}」类型不兼容，原始数据已保留`
+    if (plain) {
+      return (
+        <span className="fsdb-compat-raw" title={tip}>
+          ⚠️ {adapted.rawPreview}
+        </span>
+      )
+    }
+    return (
+      <span className="fsdb-compat-mismatch" data-testid="fsdb-compat-mismatch" title={tip}>
+        <ExclamationTriangleIcon aria-hidden className="size-3 shrink-0" />
+        <span className="fsdb-compat-raw">{adapted.rawPreview}</span>
+      </span>
+    )
+  }
+  const effectiveValue = adapted.value
   if (kind === 'select' || kind === 'multi-select') {
-    const tags = kind === 'multi-select' ? asStringList(value) : String(value ?? '') ? [String(value)] : []
+    const tags = kind === 'multi-select' ? asStringList(effectiveValue) : String(effectiveValue ?? '') ? [String(effectiveValue)] : []
     if (!tags.length) return null
     if (plain) {
       return <span className="fsdb-select-text">{tags.map((tag) => enumDisplayLabel(field, tag)).join('、')}</span>
@@ -438,33 +458,33 @@ export function DefaultCell({
     )
   }
   if (kind === 'boolean') {
-    return <BoolCell on={value === true || value === 'true'} />
+    return <BoolCell on={effectiveValue === true || effectiveValue === 'true'} />
   }
   if (kind === 'person') {
     if (plain) {
-      const text = asPersonList(value)
+      const text = asPersonList(effectiveValue)
         .map((item) => item.name)
         .filter(Boolean)
         .join('、')
       if (!text) return null
       return <span className="fsdb-person-text">{text}</span>
     }
-    return <PersonFace value={value} />
+    return <PersonFace value={effectiveValue} />
   }
   if (kind === 'datetime') {
-    const text = formatField(field, value)
+    const text = formatField(field, effectiveValue)
     if (!text) {
-      if (value != null && value !== '' && value !== 0 && value !== '0' && (typeof value !== 'string' || value.trim())) {
-        return <span className="fsdb-datetime-text" title={String(value)}>⚠️ 无法解析</span>
+      if (effectiveValue != null && effectiveValue !== '' && effectiveValue !== 0 && effectiveValue !== '0' && (typeof effectiveValue !== 'string' || effectiveValue.trim())) {
+        return <span className="fsdb-datetime-text" title={String(effectiveValue)}>⚠️ 无法解析</span>
       }
       return null
     }
     return <span className="fsdb-datetime-text">{text}</span>
   }
   if (kind === 'url' || kind === 'image' || kind === 'attachment' || kind === 'document' || kind === 'file') {
-    return <FilePreview value={value} compact kind={kind} onChange={kind === 'attachment' || kind === 'document' ? onChange : undefined} />
+    return <FilePreview value={effectiveValue} compact kind={kind} onChange={kind === 'attachment' || kind === 'document' ? onChange : undefined} />
   }
-  const text = formatField(field, value)
+  const text = formatField(field, effectiveValue)
   if (!text) return null
   return <span>{text}</span>
 }
