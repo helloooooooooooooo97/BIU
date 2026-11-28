@@ -190,6 +190,7 @@ export const ChannelStage = memo(function ChannelStage({
 }) {
   const navigate = useNavigate()
   const detail = useChannelStore((s) => s.details[channelId])
+  const workspaceProfile = useWorkspaceProfile()
   const resolveAvatar = useLiveWorkspaceAvatars()
   const [loading, setLoading] = useState(false)
   const [text, setText] = useState('')
@@ -485,96 +486,139 @@ export const ChannelStage = memo(function ChannelStage({
                   const isSystemAgent = msg.senderType === 'system' && Boolean(msg.senderId)
                   const approvalMeta = msg.meta?.kind === 'approval' ? msg.meta : null
                   const sentLabel = formatSentAt(msg.createdAt)
+                  const myAccountId = detail?.myAccountId || workspaceProfile.accountId || ''
+                  const isSelf =
+                    msg.senderType === 'account' &&
+                    !isEphemeral &&
+                    Boolean(myAccountId) &&
+                    msg.senderId === myAccountId
                   const accountAvatar =
                     msg.senderType === 'account' ? resolveAvatar(msg.senderId, msg.senderAvatar) : undefined
 
-                  // 1. Agent 正常公开回复：复用 .chat-reply-block / .chat-reply-body / .chat-assistant-body / .chat-reply-actions-row
+                  // 1. Agent 正常公开回复：左侧头像 + 右侧 .chat-reply-block（与 1v1 样式统一）
                   if (isAgent && !isEphemeral) {
                     return (
                       <div
                         key={msg.id}
-                        className="chat-reply-block group"
+                        className="flex w-full items-start justify-start gap-2.5"
                         data-testid="channel-message"
                         data-sender-type="agent"
+                        data-self="false"
                       >
-                        <div className="chat-reply-body">
-                          <div className="flex flex-wrap items-center gap-2 text-(length:--biu-chat-ui-font-size) leading-none text-(--biu-color-text-muted)">
-                            <button
-                              type="button"
-                              className="inline-flex cursor-pointer items-center gap-1.5 border-0 bg-transparent p-0 text-(--biu-color-text) hover:underline"
-                              title="查看 Agent 个人 / 名片"
-                              onClick={() => handleAgentClick(msg.senderId)}
-                            >
-                              <SidebarMascot
-                                size={18}
-                                sessionId={msg.senderId}
-                                identity={resolveSessionMascot(msg.senderId, msg.senderMascot)}
-                                animate={false}
-                                title=""
-                              />
-                              <span className="font-medium">{msg.senderName}</span>
-                            </button>
-                            {msg.replyPreview ? (
-                              <span className="inline-flex max-w-[260px] items-center gap-1 truncate text-(--biu-color-text-subtle)">
-                                <ArrowUturnLeftIcon className="size-3 shrink-0" />
-                                <span className="truncate">
-                                  {msg.replyPreview.senderName}：{msg.replyPreview.text}
-                                </span>
-                              </span>
-                            ) : null}
-                            {sentLabel ? (
-                              <span className="ml-auto inline-flex items-center gap-1 text-(--biu-color-text-subtle) tabular-nums">
-                                <ClockIcon className="size-3" aria-hidden />
-                                <span>{sentLabel}</span>
-                              </span>
-                            ) : null}
-                          </div>
-
-                          <div className="chat-assistant-body">
-                            <MarkdownBody text={msg.text} />
-                          </div>
-                        </div>
-
-                        <div className="chat-reply-actions-row">
-                          <div className="chat-reply-actions" role="group" aria-label="回复操作">
-                            <MessageCopyAction text={msg.text} />
-                            <button
-                              type="button"
-                              className="chat-assistant-action"
-                              title="回复"
-                              aria-label="回复该消息"
-                              onClick={() => {
-                                setReplyTo(msg)
-                                inputRef.current?.focus()
-                              }}
-                            >
-                              <ArrowUturnLeftIcon className="size-3.5" />
-                            </button>
-                            {msg.traceId ? (
+                        <button
+                          type="button"
+                          className="mt-0.5 shrink-0 cursor-pointer border-0 bg-transparent p-0"
+                          title={`查看 ${msg.senderName}`}
+                          aria-label={`查看 ${msg.senderName}`}
+                          data-testid="channel-msg-avatar-left"
+                          onClick={() => handleAgentClick(msg.senderId)}
+                        >
+                          <SidebarMascot
+                            size={28}
+                            sessionId={msg.senderId}
+                            identity={resolveSessionMascot(msg.senderId, msg.senderMascot)}
+                            animate={false}
+                            title=""
+                          />
+                        </button>
+                        <div className="chat-reply-block group min-w-0 max-w-[85%] flex-1">
+                          <div className="chat-reply-body !px-0">
+                            <div className="flex flex-wrap items-center gap-2 text-(length:--biu-chat-ui-font-size) leading-none text-(--biu-color-text-muted)">
                               <button
                                 type="button"
-                                className="inline-flex h-[24px] cursor-pointer items-center gap-0.5 rounded-md border border-transparent bg-transparent px-1.5 text-(length:--biu-chat-ui-font-size) leading-none text-(--biu-color-text-muted) hover:bg-(--biu-color-bg-hover) hover:text-(--biu-color-text)"
-                                data-testid={`channel-msg-trace-${msg.traceId}`}
-                                title="在右侧检查器查看本次回复的执行详情"
-                                onClick={() => openChannelRunTrace(channelId, msg.traceId)}
+                                className="inline-flex cursor-pointer items-center gap-1.5 border-0 bg-transparent p-0 text-(--biu-color-text) hover:underline"
+                                title="查看 Agent 个人 / 名片"
+                                onClick={() => handleAgentClick(msg.senderId)}
                               >
-                                <ChevronRightIcon className="size-3.5" />
-                                <span>Details</span>
+                                <span className="font-medium">{msg.senderName}</span>
                               </button>
-                            ) : null}
+                              {msg.replyPreview ? (
+                                <span className="inline-flex max-w-[260px] items-center gap-1 truncate text-(--biu-color-text-subtle)">
+                                  <ArrowUturnLeftIcon className="size-3 shrink-0" />
+                                  <span className="truncate">
+                                    {msg.replyPreview.senderName}：{msg.replyPreview.text}
+                                  </span>
+                                </span>
+                              ) : null}
+                              {sentLabel ? (
+                                <span className="inline-flex items-center gap-1 text-(--biu-color-text-subtle) tabular-nums">
+                                  <ClockIcon className="size-3" aria-hidden />
+                                  <span>{sentLabel}</span>
+                                </span>
+                              ) : null}
+                            </div>
+
+                            <div className="chat-assistant-body">
+                              <MarkdownBody text={msg.text} />
+                            </div>
+                          </div>
+
+                          <div className="chat-reply-actions-row !px-0">
+                            <div className="chat-reply-actions" role="group" aria-label="回复操作">
+                              <MessageCopyAction text={msg.text} />
+                              <button
+                                type="button"
+                                className="chat-assistant-action"
+                                title="回复"
+                                aria-label="回复该消息"
+                                onClick={() => {
+                                  setReplyTo(msg)
+                                  inputRef.current?.focus()
+                                }}
+                              >
+                                <ArrowUturnLeftIcon className="size-3.5" />
+                              </button>
+                              {msg.traceId ? (
+                                <button
+                                  type="button"
+                                  className="inline-flex h-[24px] cursor-pointer items-center gap-0.5 rounded-md border border-transparent bg-transparent px-1.5 text-(length:--biu-chat-ui-font-size) leading-none text-(--biu-color-text-muted) hover:bg-(--biu-color-bg-hover) hover:text-(--biu-color-text)"
+                                  data-testid={`channel-msg-trace-${msg.traceId}`}
+                                  title="在右侧检查器查看本次回复的执行详情"
+                                  onClick={() => openChannelRunTrace(channelId, msg.traceId)}
+                                >
+                                  <ChevronRightIcon className="size-3.5" />
+                                  <span>Details</span>
+                                </button>
+                              ) : null}
+                            </div>
                           </div>
                         </div>
                       </div>
                     )
                   }
 
-                  // 2. 人类消息 & Ephemeral/系统消息：复用 .chat-user-card + .chat-user-card-body + .user-turn-bar
-                  return (
+                  // 2. 人类消息（自己在右、头像在右；他人在左、头像在左）& Ephemeral/系统消息（左侧）
+                  const avatarNode =
+                    isAgent || isSystemAgent ? (
+                      <button
+                        type="button"
+                        className="mt-0.5 shrink-0 cursor-pointer border-0 bg-transparent p-0"
+                        title={`查看 ${msg.senderName}`}
+                        aria-label={`查看 ${msg.senderName}`}
+                        data-testid={isSelf ? 'channel-msg-avatar-right' : 'channel-msg-avatar-left'}
+                        onClick={() => handleAgentClick(msg.senderId)}
+                      >
+                        <SidebarMascot
+                          size={28}
+                          sessionId={msg.senderId}
+                          identity={resolveSessionMascot(msg.senderId, msg.senderMascot)}
+                          animate={false}
+                          title=""
+                        />
+                      </button>
+                    ) : (
+                      <span
+                        className="mt-0.5 inline-flex shrink-0"
+                        title={msg.senderName}
+                        data-testid={isSelf ? 'channel-msg-avatar-right' : 'channel-msg-avatar-left'}
+                      >
+                        <MemberAvatar avatar={accountAvatar} seed={msg.senderId} size={28} />
+                      </span>
+                    )
+
+                  const cardNode = (
                     <div
-                      key={msg.id}
-                      data-testid={isEphemeral ? 'channel-ephemeral-msg' : 'channel-message'}
-                      data-sender-type={msg.senderType}
-                      className={`chat-user-card group${isEphemeral ? ' opacity-95' : ''}`}
+                      className={`chat-user-card group !w-fit max-w-[78%] min-w-[140px]${isEphemeral ? ' opacity-95' : ''}`}
                     >
                       <div className="chat-user-card-body text-(--biu-color-text)">
                         {msg.replyPreview ? (
@@ -633,20 +677,10 @@ export const ChannelStage = memo(function ChannelStage({
                               className="inline-flex min-w-0 cursor-pointer items-center gap-1.5 border-0 bg-transparent p-0 text-(--biu-color-text-muted) hover:text-(--biu-color-text)"
                               onClick={() => handleAgentClick(msg.senderId)}
                             >
-                              <SidebarMascot
-                                size={16}
-                                sessionId={msg.senderId}
-                                identity={resolveSessionMascot(msg.senderId, msg.senderMascot)}
-                                animate={false}
-                                title=""
-                              />
                               <span className="truncate font-medium">{msg.senderName}</span>
                             </button>
                           ) : (
-                            <span className="inline-flex min-w-0 items-center gap-1.5">
-                              <MemberAvatar avatar={accountAvatar} seed={msg.senderId} size={16} />
-                              <span className="truncate font-medium">{msg.senderName}</span>
-                            </span>
+                            <span className="truncate font-medium">{msg.senderName}</span>
                           )}
 
                           {isEphemeral ? (
@@ -693,6 +727,28 @@ export const ChannelStage = memo(function ChannelStage({
                           ) : null}
                         </div>
                       </div>
+                    </div>
+                  )
+
+                  return (
+                    <div
+                      key={msg.id}
+                      data-testid={isEphemeral ? 'channel-ephemeral-msg' : 'channel-message'}
+                      data-sender-type={msg.senderType}
+                      data-self={isSelf ? 'true' : 'false'}
+                      className={`flex w-full items-start gap-2.5 ${isSelf ? 'justify-end' : 'justify-start'}`}
+                    >
+                      {isSelf ? (
+                        <>
+                          {cardNode}
+                          {avatarNode}
+                        </>
+                      ) : (
+                        <>
+                          {avatarNode}
+                          {cardNode}
+                        </>
+                      )}
                     </div>
                   )
                 })}

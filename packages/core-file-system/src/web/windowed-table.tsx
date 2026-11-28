@@ -317,7 +317,7 @@ type TableBodyProps = {
 
 function rowMetaStamp(node: Extract<TablePaintNode, { kind: 'row' }>, pickMode: boolean) {
   const row = node.row as Record<string, unknown>
-  return `${pickMode ? 1 : 0}\0${node.depth}\0${node.hasKids ? 1 : 0}\0${node.kidCount}\0${node.fold ? 1 : 0}\0${node.treeOn ? 1 : 0}\0${String(row.emoji ?? '')}\0${String(row.icon ?? '')}\0${String(row.mascot ?? '')}`
+  return `${pickMode ? 1 : 0}\0${node.depth}\0${node.hasKids ? 1 : 0}\0${node.kidCount}\0${node.fold ? 1 : 0}\0${node.treeOn ? 1 : 0}\0${String(row.emoji ?? '')}\0${String(row.icon ?? '')}\0${String(row.mascot ?? '')}\0${String(row.avatar ?? '')}\0${String(row.status ?? '')}`
 }
 
 export function rowPaintStamp(node: TablePaintNode, stamps: Map<string, RowStampEntry>) {
