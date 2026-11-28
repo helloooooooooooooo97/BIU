@@ -129,6 +129,15 @@ export function workspaceMembersCollection(
     },
     actions: [
       {
+        id: 'chat',
+        label: '会话',
+        description: '与该空间成员发起或打开 1v1 私聊窗口。',
+        for: 'user',
+        placement: ['row'],
+        requiredAction: 'resource:read',
+        run: (id) => ({ ok: true, targetAccountId: id }),
+      },
+      {
         id: 'invite',
         label: '邀请成员',
         description:
