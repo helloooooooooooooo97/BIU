@@ -662,3 +662,53 @@ test('catalogLockFilters, viewDomainOf, and pickViewForRoute work cleanly with p
   assert.equal(pickViewForRoute([wsView, personalView], '/pages', 'v-personal')?.id, 'v-personal')
   assert.equal(pickViewForRoute([wsView, personalView], '/pages', 'missing')?.id, 'v-ws')
 })
+
+test('local column widths persist across table switches for locked or read-only views', async () => {
+  const store = new Map<string, string>()
+  const prevStorage = globalThis.localStorage
+  Object.defineProperty(globalThis, 'localStorage', {
+    configurable: true,
+    value: {
+      getItem: (k: string) => store.get(k) ?? null,
+      setItem: (k: string, v: string) => { store.set(k, String(v)) },
+      removeItem: (k: string) => { store.delete(k) },
+    },
+  })
+  try {
+    const mod = await import('./view-storage.ts')
+    mod.rememberViews('/plugins', [
+      {
+        id: 'all',
+        name: '全部插件',
+        mode: 'table',
+        sortField: 'title',
+        sortDir: 'asc',
+        filters: {},
+        columns: ['title', 'actions'],
+        locked: true,
+        columnWidths: { title: 220 },
+      },
+    ])
+    mod.persistLocalColumnWidths('/plugins', 'all', { title: 360, actions: 180 })
+    const reloaded = mod.loadViews('/plugins')
+    assert.deepEqual(reloaded[0]?.columnWidths, { title: 360, actions: 180 })
+
+    // Editable views ignore stale local overrides and use server-persisted widths
+    mod.rememberViews('/plugins', [
+      {
+        id: 'all',
+        name: '全部插件',
+        mode: 'table',
+        sortField: 'title',
+        sortDir: 'asc',
+        filters: {},
+        columns: ['title', 'actions'],
+        locked: false,
+        columnWidths: { title: 280 },
+      },
+    ])
+    assert.deepEqual(mod.loadViews('/plugins')[0]?.columnWidths, { title: 280 })
+  } finally {
+    Object.defineProperty(globalThis, 'localStorage', { configurable: true, value: prevStorage })
+  }
+})
