@@ -422,7 +422,7 @@ export const ChannelStage = memo(function ChannelStage({
             className="truncate text-[14px] font-semibold text-(--biu-color-text)"
             data-testid="channel-title"
           >
-            {channel?.name ?? (loading ? '加载中…' : '群聊')}
+            {channel?.name ?? (loading ? '加载中…' : '聊天')}
           </span>
         </div>
 

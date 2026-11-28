@@ -1,9 +1,13 @@
-import { test } from 'vitest'
+import { afterEach, test, vi } from 'vitest'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
+import { createElement } from 'react'
+import { cleanup, fireEvent, render, waitFor } from '@testing-library/react'
+import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import {
   SEARCH_SCOPES,
+  ShellSearchPanel,
   openSearchHit,
   pickRecentHits,
   recordUpdatedAt,
@@ -15,15 +19,22 @@ import {
   isGlobalSearchHotkey,
 } from './shell-search.tsx'
 
+afterEach(() => {
+  cleanup()
+  vi.restoreAllMocks()
+  vi.unstubAllGlobals()
+})
+
 test('search opens inspector collections, not chat or database routes', () => {
   assert.equal(searchCollection('view'), '/views')
   assert.equal(searchCollection('session'), '/agents')
+  assert.equal(searchCollection('member'), '/workspace-members')
   assert.equal(searchCollection('page'), '/pages')
   assert.equal(searchCollection('plugin'), '/plugins')
   assert.equal(searchCollection('tag'), '/tags')
   assert.deepEqual(
     SEARCH_SCOPES.map((item) => item.label),
-    ['视图', '代理', '页面', '插件', '标签'],
+    ['视图', '代理', '成员', '页面', '插件', '标签'],
   )
 })
 
@@ -85,7 +96,7 @@ test('empty search lists every kind by updatedAt instead of skipping remotes', (
   assert.doesNotMatch(src, /if \(!needle && scope === 'all'\) \{\s*setHits\(\[\]\)/)
   assert.match(src, /sort: 'updatedAt'/)
   assert.match(src, /item.id === 'session' \? '\/agents'/)
-  assert.match(src, /空着时视图、代理、页面、插件、标签各按更新时间列最近/)
+  assert.match(src, /空着时视图、代理、成员、页面、插件、标签各按更新时间列最近/)
   assert.doesNotMatch(src, /window\.confirm/)
   assert.match(src, /<ConfirmDialog/)
 })
@@ -184,7 +195,7 @@ test('search hits never show report even if placement is row', () => {
 
 test('search hit actions use collection chrome.Actions when registered', () => {
   const src = readFileSync(resolve(import.meta.dirname, './shell-search.tsx'), 'utf8')
-  assert.match(src, /getDatabaseUi\(\)\?\.chrome\(searchCollection\(hit\.kind\)\)\.Actions/)
+  assert.match(src, /getDatabaseUi\(\)\?\.chrome\(searchCollection\(hit\.kind\)\)\?\.Actions/)
   assert.match(src, /placedRowActions\(hit\.actions\)/)
   assert.match(src, /<Actions/)
   assert.doesNotMatch(src, /if \(next !== record\) setRecord\(next\)/)
@@ -203,4 +214,72 @@ test('opening a session on the left closes search and focuses the composer', () 
   const src = readFileSync(resolve(import.meta.dirname, './shell-search.tsx'), 'utf8')
   assert.match(src, /onClose\(\)\s*if \(side === 'left' && hit\.kind === 'session'\) requestComposerFocus\(\)/)
   assert.doesNotMatch(src, /refocusSearchField/)
+})
+
+test('global search lists workspace members with avatars and pressing Enter opens 1v1 DM chat', async () => {
+  const memberAvatar = 'data:image/svg+xml;utf8,member-97-avatar'
+  const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = new URL(String(input), 'http://test.local')
+    if (url.pathname === '/api/db/list' && url.searchParams.get('path') === '/workspace-members') {
+      return new Response(
+        JSON.stringify({
+          items: [
+            { id: 'acc-97', title: '97', email: '97@example.com', avatar: memberAvatar, updatedAt: 100 },
+          ],
+          schema: { actions: [] },
+        }),
+        { status: 200, headers: { 'content-type': 'application/json' } },
+      )
+    }
+    if (url.pathname === '/api/channels/dm' && init?.method === 'POST') {
+      const body = JSON.parse(String(init.body ?? '{}')) as { targetAccountId?: string }
+      assert.equal(body.targetAccountId, 'acc-97')
+      return new Response(
+        JSON.stringify({ channel: { id: 'dm-with-97' } }),
+        { status: 200, headers: { 'content-type': 'application/json' } },
+      )
+    }
+    return new Response(JSON.stringify({ items: [], schema: { actions: [] } }), { status: 200 })
+  })
+  vi.stubGlobal('fetch', fetchMock)
+
+  let closed = false
+  const view = render(
+    createElement(
+      MemoryRouter,
+      { initialEntries: ['/'] },
+      createElement(
+        Routes,
+        null,
+        createElement(Route, {
+          path: '/',
+          element: createElement(ShellSearchPanel, {
+            sessions: [],
+            onClose: () => {
+              closed = true
+            },
+          }),
+        }),
+        createElement(Route, {
+          path: '/channels/:channelId',
+          element: createElement('div', { 'data-testid': 'channel-route-landed' }, 'dm-landed'),
+        }),
+      ),
+    ),
+  )
+
+  await waitFor(() => {
+    assert.ok(view.getByText('97'))
+  })
+
+  const avatarImg = view.container.querySelector(`img[src="${memberAvatar}"]`)
+  assert.ok(avatarImg, 'member search hit must show real workspace avatar')
+
+  const input = view.getByTestId('shell-search-input')
+  fireEvent.keyDown(input, { key: 'Enter' })
+
+  await waitFor(() => {
+    assert.equal(closed, true)
+    assert.ok(view.getByTestId('channel-route-landed'))
+  })
 })
