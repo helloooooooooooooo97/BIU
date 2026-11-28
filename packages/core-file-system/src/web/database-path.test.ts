@@ -89,7 +89,7 @@ test('members and views are system collections; blocks and comments are index da
   )
   assert.deepEqual(
     publicTables.map((item) => item.path),
-    ['/plugins', '/mcp', '/skills', '/tags'],
+    ['/tags', '/plugins', '/skills', '/mcp'],
   )
 })
 

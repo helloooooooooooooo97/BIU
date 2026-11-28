@@ -93,12 +93,12 @@ const SYSTEM_SIDEBAR_ORDER = [
   TRASH_COLLECTION_PATH,
 ] as const
 
-/** 侧栏「公共数据」：插件、MCP、技能、标签（发布型公共资产）。 */
+/** 侧栏「公共数据」：标签、插件、技能、MCP（发布型公共资产）。 */
 const PUBLIC_COLLECTION_ORDER = [
-  PLUGINS_COLLECTION_PATH,
-  MCP_COLLECTION_PATH,
-  SKILLS_COLLECTION_PATH,
   TAGS_COLLECTION_PATH,
+  PLUGINS_COLLECTION_PATH,
+  SKILLS_COLLECTION_PATH,
+  MCP_COLLECTION_PATH,
 ] as const
 
 /** 全部数据「新建」菜单优先遵循后端下发的集合能力声明（caps.overviewCreate / caps.create / view.sidebar），缺失时回退路径规则。 */
