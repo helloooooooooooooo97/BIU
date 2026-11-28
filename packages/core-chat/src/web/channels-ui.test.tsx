@@ -219,7 +219,14 @@ test('ChannelStage renders IM messages, ephemeral notice, @mention popup, read-o
     assert.ok(view.getByTestId('channel-agent-card'))
 
     // 点击「查看执行详情」→ 打开右侧 Inspector 的 channel-run 标签页
-    fireEvent.click(view.getByTestId('channel-msg-trace-run-1'))
+    await waitFor(() => {
+    const agentRow = view.container.querySelector('[data-testid="channel-message"][data-sender-type="agent"]')
+    assert.ok(agentRow?.querySelector('.chat-user-card')?.className.includes('!w-3/4'))
+    assert.ok(agentRow?.querySelector('.chat-user-card-body .chat-assistant-body'))
+    assert.ok(agentRow?.querySelector('.user-turn-bar [data-testid="channel-msg-avatar"]'))
+    assert.ok(view.getByTestId('channel-msg-trace-run-1'))
+  })
+  fireEvent.click(view.getByTestId('channel-msg-trace-run-1'))
     assert.deepEqual(openedTabs, ['channel-run'])
 
     // 输入 @ 弹出自动补全菜单（含 @所有人、@发布助手）
