@@ -415,4 +415,16 @@ describe('composer dock stacking above sticky user', () => {
     expect(composer).toMatch(/const keep = !switching \? \(pick\?\.refs\.slice\(\) \?\? \[\]\) : \[\]/)
     expect(composer).toMatch(/const targetId = activeDraftSessionRef\.current \?\? live\.current\.sessionView\.get\(\)\.sessionId/)
   })
+
+  it('reserves symmetric horizontal safe gutter in channel stage so the floating avatar rail never covers messages', () => {
+    const css = cssBundle()
+    const channelView = readFileSync(resolve(root, 'packages/core-chat/src/web/channel-view.tsx'), 'utf8')
+    expect(channelView).toMatch(/data-has-floating-rail=/)
+    expect(css).toMatch(
+      /\[data-testid="channel-stage"\] \[data-testid="agent-center"\]\[data-has-floating-rail="true"\] \.chat-stage,\s*\n\[data-testid="channel-stage"\] \[data-testid="agent-center"\]\[data-has-floating-rail="true"\] \.chat-composer-dock\s*\{[^}]*padding-left:\s*max\(var\(--biu-pad-page\),\s*72px\);[^}]*padding-right:\s*max\(var\(--biu-pad-page\),\s*72px\)/s,
+    )
+    expect(css).toMatch(
+      /\[data-testid="channel-stage"\] \[data-testid="agent-center"\]\[data-has-floating-rail="true"\] \.composer-pill\s*\{[^}]*min-width:\s*0/s,
+    )
+  })
 })

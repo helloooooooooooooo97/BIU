@@ -1140,6 +1140,7 @@ export const ChannelStage = memo(function ChannelStage({
       <div
         className={`relative flex min-h-0 w-full flex-1 flex-col overflow-hidden${dragOver ? ' ring-2 ring-inset ring-(--biu-color-icon-active)' : ''}`}
         data-testid="agent-center"
+        data-has-floating-rail={members.length > 0 || floatingTab !== null ? 'true' : undefined}
         onDragOver={(e) => {
           if (e.dataTransfer?.types?.includes('Files')) {
             e.preventDefault()
