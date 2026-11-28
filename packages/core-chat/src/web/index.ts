@@ -1,6 +1,6 @@
 import { createElement, lazy, Suspense, type ComponentType } from 'react'
 import type { Context } from 'cordis'
-import { ChatBubbleLeftRightIcon, CpuChipIcon } from '@heroicons/react/16/solid'
+import { ChatBubbleLeftRightIcon } from '@heroicons/react/16/solid'
 import { bindSessionView, type SessionViewService } from '@biu/web-session-view'
 import type { SlotProps } from '@biu/web-slots'
 import { ChatSelectBubble } from './chat-select-bubble.tsx'
@@ -37,9 +37,6 @@ const ChannelSidebarSections = lazySlot<SlotProps>(async () => ({
 const ChannelStage = lazySlot<SlotProps>(async () => ({
   default: (await import('./channel-view.tsx')).ChannelStage as unknown as ComponentType<SlotProps>,
 }))
-const ChannelRunInspector = lazySlot<SlotProps>(async () => ({
-  default: (await import('./channel-run-inspector.tsx')).ChannelRunInspector as unknown as ComponentType<SlotProps>,
-}))
 
 function StageChatMessageOutline(props: SlotProps) {
   return createElement(ChatMessageOutline, {
@@ -75,18 +72,6 @@ export function apply(ctx: Context) {
     key: 'chat-channel-stage',
     order: 1,
     props: () => ({ ...slotProps, pick: ctx.get('pick') as PickService | undefined }),
-  })
-  ctx.slots.place('inspector-panels', ChannelRunInspector, {
-    key: 'chat-channel-run',
-    order: 3,
-    props: () => ({
-      ...slotProps,
-      tabId: 'channel-run',
-      tabLabel: '执行详情',
-      tabIcon: CpuChipIcon,
-      requiresSession: false,
-      centerKinds: ['session', 'channel'],
-    }),
   })
   ctx.slots.place('root-overlays', ChatSelectBubble, { key: 'chat-select-bubble', order: 12 })
   ctx.slots.place('stage', ChatThread, { key: 'chat-thread', order: 1, props })

@@ -16,6 +16,7 @@ import {
   ChevronDoubleRightIcon,
   ChevronRightIcon,
   ClockIcon,
+  CpuChipIcon,
   DocumentIcon,
   DocumentPlusIcon,
   EllipsisHorizontalIcon,
@@ -53,6 +54,7 @@ import type {
 } from '../shared/channel-types.ts'
 import { ChannelComposer, type ChannelComposerHandle } from './channel-composer.tsx'
 import { ChannelFloatingSidebar, type ChannelFloatingTab } from './channel-floating-sidebar.tsx'
+import { ChannelRunInspector } from './channel-run-inspector.tsx'
 import {
   ChannelForumBoard,
   ForumStatusBadge,
@@ -348,8 +350,10 @@ export const ChannelStage = memo(function ChannelStage({
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
   const activeThreadRootId = searchParams.get('thread') || null
+  const activeTraceId = searchParams.get('trace') || null
   const detail = useChannelStore((s) => s.details[channelId])
   const activeThread = useChannelStore((s) => (activeThreadRootId ? s.threads[activeThreadRootId] : undefined))
+  const activeTraceRun = useChannelStore((s) => (activeTraceId ? s.runs[activeTraceId] : undefined))
   const typingUsersRaw = useChannelStore((s) => s.typingByChannel[channelId])
   const workspaceProfile = useWorkspaceProfile()
   const { resolveAvatar, isOnline } = useLiveWorkspaceAvatars()
@@ -531,6 +535,7 @@ export const ChannelStage = memo(function ChannelStage({
     void jumpToMessage(targetMsgParam)
     const next = new URLSearchParams(searchParams)
     next.delete('msg')
+    next.delete('trace')
     setSearchParams(next, { replace: true })
   }, [channelId, detail, jumpToMessage, searchParams, setSearchParams, targetMsgParam])
 
@@ -578,6 +583,7 @@ export const ChannelStage = memo(function ChannelStage({
     (rootMsgId: string) => {
       const next = new URLSearchParams(searchParams)
       next.set('thread', rootMsgId)
+      next.delete('trace')
       setSearchParams(next)
       void loadChannelThread(channelId, rootMsgId)
     },
@@ -587,6 +593,24 @@ export const ChannelStage = memo(function ChannelStage({
   const closeThread = useCallback(() => {
     const next = new URLSearchParams(searchParams)
     next.delete('thread')
+    next.delete('trace')
+    setSearchParams(next)
+  }, [searchParams, setSearchParams])
+
+  const openTrace = useCallback(
+    (runId: string) => {
+      if (!runId) return
+      openChannelRunTrace(channelId, runId)
+      const next = new URLSearchParams(searchParams)
+      next.set('trace', runId)
+      setSearchParams(next)
+    },
+    [channelId, searchParams, setSearchParams],
+  )
+
+  const closeTrace = useCallback(() => {
+    const next = new URLSearchParams(searchParams)
+    next.delete('trace')
     setSearchParams(next)
   }, [searchParams, setSearchParams])
 
@@ -875,7 +899,7 @@ export const ChannelStage = memo(function ChannelStage({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden" data-testid="channel-stage">
-      {/* 顶部栏：与 BIU 数据面包屑一致的扁平头部，支持 聊天 / 讨论串 二级面包屑 */}
+      {/* 顶部栏：与 BIU 数据面包屑一致的扁平头部，支持 聊天 / 讨论串 / 执行详情 多级面包屑 */}
       <header className="chat-view-header" data-biu-ignore>
         <div className="chat-view-header-left min-w-0">
           {leftHidden ? (
@@ -895,7 +919,7 @@ export const ChannelStage = memo(function ChannelStage({
             aria-label="聊天面包屑"
             data-testid="channel-breadcrumb"
           >
-            {activeThreadRootId ? (
+            {activeThreadRootId || activeTraceId ? (
               <>
                 <button
                   type="button"
@@ -918,70 +942,103 @@ export const ChannelStage = memo(function ChannelStage({
                 <span className="shrink-0 select-none text-[13px] text-(--biu-color-text-subtle)" aria-hidden>
                   /
                 </span>
-                <span
-                  className="inline-flex min-w-0 items-center gap-1.5 px-1 text-[13.5px] font-semibold text-(--biu-color-text)"
-                  data-testid="channel-thread-crumb"
-                >
-                  <ChatBubbleBottomCenterTextIcon className="size-3.5 shrink-0 text-(--biu-color-icon)" aria-hidden />
-                  <span className="truncate">{threadCrumbTitle}</span>
-                  {activeForumPostStatus ? <ForumStatusBadge status={activeForumPostStatus} /> : null}
-                  <span className="shrink-0 text-[11.5px] font-normal text-(--biu-color-text-subtle) tabular-nums">
-                    {threadReplies.length} 条回复
-                  </span>
-                </span>
-                {canManageActiveForumPost && activeForumPostStatus ? (
-                  <div className="ml-1 inline-flex shrink-0 items-center gap-1" data-testid="forum-thread-status-actions">
-                    <button
-                      type="button"
-                      disabled={updatingForumStatus}
-                      data-testid="forum-thread-toggle-resolved"
-                      className="inline-flex h-6 cursor-pointer items-center rounded-md border-0 bg-(--biu-color-bg-muted) px-2 text-[11.5px] font-medium text-(--biu-color-text) transition-colors hover:bg-(--biu-color-bg-hover) disabled:opacity-50"
-                      onClick={() =>
-                        void handleUpdateActiveForumStatus(activeForumPostStatus === 'resolved' ? 'open' : 'resolved')
-                      }
-                    >
-                      {activeForumPostStatus === 'resolved' ? '重开' : '标为已解决'}
-                    </button>
-                    <button
-                      type="button"
-                      disabled={updatingForumStatus}
-                      data-testid="forum-thread-toggle-closed"
-                      className="inline-flex h-6 cursor-pointer items-center rounded-md border-0 bg-transparent px-2 text-[11.5px] font-medium text-(--biu-color-text-muted) transition-colors hover:bg-(--biu-color-bg-hover) hover:text-(--biu-color-text) disabled:opacity-50"
-                      onClick={() =>
-                        void handleUpdateActiveForumStatus(activeForumPostStatus === 'closed' ? 'open' : 'closed')
-                      }
-                    >
-                      {activeForumPostStatus === 'closed' ? '重新打开' : '关闭帖子'}
-                    </button>
-                  </div>
+                {activeThreadRootId ? (
+                  activeTraceId ? (
+                    <>
+                      <button
+                        type="button"
+                        data-testid="channel-breadcrumb-thread"
+                        className="inline-flex h-7 max-w-[220px] shrink-0 cursor-pointer items-center gap-1.5 rounded-md border-0 bg-transparent px-1.5 text-[13.5px] font-medium text-(--biu-color-text-muted) transition-colors hover:bg-(--biu-color-bg-hover) hover:text-(--biu-color-text)"
+                        title={`返回 ${threadCrumbTitle}`}
+                        onClick={closeTrace}
+                      >
+                        <ChatBubbleBottomCenterTextIcon className="size-3.5 shrink-0 text-(--biu-color-icon)" aria-hidden />
+                        <span className="truncate">{threadCrumbTitle}</span>
+                      </button>
+                      <span className="shrink-0 select-none text-[13px] text-(--biu-color-text-subtle)" aria-hidden>
+                        /
+                      </span>
+                    </>
+                  ) : (
+                    <>
+                      <span
+                        className="inline-flex min-w-0 items-center gap-1.5 px-1 text-[13.5px] font-semibold text-(--biu-color-text)"
+                        data-testid="channel-thread-crumb"
+                      >
+                        <ChatBubbleBottomCenterTextIcon className="size-3.5 shrink-0 text-(--biu-color-icon)" aria-hidden />
+                        <span className="truncate">{threadCrumbTitle}</span>
+                        {activeForumPostStatus ? <ForumStatusBadge status={activeForumPostStatus} /> : null}
+                        <span className="shrink-0 text-[11.5px] font-normal text-(--biu-color-text-subtle) tabular-nums">
+                          {threadReplies.length} 条回复
+                        </span>
+                      </span>
+                      {canManageActiveForumPost && activeForumPostStatus ? (
+                        <div className="ml-1 inline-flex shrink-0 items-center gap-1" data-testid="forum-thread-status-actions">
+                          <button
+                            type="button"
+                            disabled={updatingForumStatus}
+                            data-testid="forum-thread-toggle-resolved"
+                            className="inline-flex h-6 cursor-pointer items-center rounded-md border-0 bg-(--biu-color-bg-muted) px-2 text-[11.5px] font-medium text-(--biu-color-text) transition-colors hover:bg-(--biu-color-bg-hover) disabled:opacity-50"
+                            onClick={() =>
+                              void handleUpdateActiveForumStatus(activeForumPostStatus === 'resolved' ? 'open' : 'resolved')
+                            }
+                          >
+                            {activeForumPostStatus === 'resolved' ? '重开' : '标为已解决'}
+                          </button>
+                          <button
+                            type="button"
+                            disabled={updatingForumStatus}
+                            data-testid="forum-thread-toggle-closed"
+                            className="inline-flex h-6 cursor-pointer items-center rounded-md border-0 bg-transparent px-2 text-[11.5px] font-medium text-(--biu-color-text-muted) transition-colors hover:bg-(--biu-color-bg-hover) hover:text-(--biu-color-text) disabled:opacity-50"
+                            onClick={() =>
+                              void handleUpdateActiveForumStatus(activeForumPostStatus === 'closed' ? 'open' : 'closed')
+                            }
+                          >
+                            {activeForumPostStatus === 'closed' ? '重新打开' : '关闭帖子'}
+                          </button>
+                        </div>
+                      ) : null}
+                      <button
+                        type="button"
+                        disabled={togglingThreadFollow}
+                        data-testid="channel-thread-follow-btn"
+                        aria-pressed={isThreadFollowed}
+                        title={
+                          isThreadFollowed
+                            ? '已关注：会显示在左侧边栏该聊天下方（点击取消关注）'
+                            : '关注讨论串后，会固定显示在左侧边栏该聊天下方'
+                        }
+                        className={`ml-1 inline-flex h-6 shrink-0 cursor-pointer items-center gap-1 rounded-md border-0 px-2 text-[11.5px] font-medium transition-colors disabled:opacity-50 ${
+                          isThreadFollowed
+                            ? 'bg-(--biu-color-bg-muted) text-(--biu-color-text) hover:bg-(--biu-color-bg-hover)'
+                            : 'bg-transparent text-(--biu-color-text-muted) hover:bg-(--biu-color-bg-hover) hover:text-(--biu-color-text)'
+                        }`}
+                        onClick={() => {
+                          if (!activeThreadRootId || togglingThreadFollow) return
+                          setTogglingThreadFollow(true)
+                          setError('')
+                          void setChannelThreadFollow(channelId, activeThreadRootId, !isThreadFollowed)
+                            .catch((err) => setError(err instanceof Error ? err.message : String(err)))
+                            .finally(() => setTogglingThreadFollow(false))
+                        }}
+                      >
+                        {isThreadFollowed ? <BellIcon className="size-3 shrink-0" /> : <BellSlashIcon className="size-3 shrink-0 opacity-75" />}
+                        <span>{isThreadFollowed ? '已关注' : '关注'}</span>
+                      </button>
+                    </>
+                  )
                 ) : null}
-                <button
-                  type="button"
-                  disabled={togglingThreadFollow}
-                  data-testid="channel-thread-follow-btn"
-                  aria-pressed={isThreadFollowed}
-                  title={
-                    isThreadFollowed
-                      ? '已关注：会显示在左侧边栏该聊天下方（点击取消关注）'
-                      : '关注讨论串后，会固定显示在左侧边栏该聊天下方'
-                  }
-                  className={`ml-1 inline-flex h-6 shrink-0 cursor-pointer items-center gap-1 rounded-md border-0 px-2 text-[11.5px] font-medium transition-colors disabled:opacity-50 ${
-                    isThreadFollowed
-                      ? 'bg-(--biu-color-bg-muted) text-(--biu-color-text) hover:bg-(--biu-color-bg-hover)'
-                      : 'bg-transparent text-(--biu-color-text-muted) hover:bg-(--biu-color-bg-hover) hover:text-(--biu-color-text)'
-                  }`}
-                  onClick={() => {
-                    if (!activeThreadRootId || togglingThreadFollow) return
-                    setTogglingThreadFollow(true)
-                    setError('')
-                    void setChannelThreadFollow(channelId, activeThreadRootId, !isThreadFollowed)
-                      .catch((err) => setError(err instanceof Error ? err.message : String(err)))
-                      .finally(() => setTogglingThreadFollow(false))
-                  }}
-                >
-                  {isThreadFollowed ? <BellIcon className="size-3 shrink-0" /> : <BellSlashIcon className="size-3 shrink-0 opacity-75" />}
-                  <span>{isThreadFollowed ? '已关注' : '关注'}</span>
-                </button>
+                {activeTraceId ? (
+                  <span
+                    className="inline-flex min-w-0 items-center gap-1.5 px-1 text-[13.5px] font-semibold text-(--biu-color-text)"
+                    data-testid="channel-trace-crumb"
+                  >
+                    <CpuChipIcon className="size-3.5 shrink-0 text-(--biu-color-icon)" aria-hidden />
+                    <span className="truncate">
+                      {activeTraceRun?.agentName ? `执行详情 · ${activeTraceRun.agentName}` : '执行详情'}
+                    </span>
+                  </span>
+                ) : null}
               </>
             ) : (
               <>
@@ -1226,6 +1283,17 @@ export const ChannelStage = memo(function ChannelStage({
         ) : null}
         <div className="absolute inset-0 z-1 flex min-h-0 overflow-hidden">
           <div className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+            {activeTraceId ? (
+              <div
+                className="flex min-h-0 flex-1 flex-col overflow-y-auto px-[var(--biu-pad-page)] py-3"
+                data-testid="channel-stage-trace"
+              >
+                <div className="mx-auto flex min-h-0 w-full max-w-[920px] flex-1 flex-col">
+                  <ChannelRunInspector channelId={channelId} runId={activeTraceId} />
+                </div>
+              </div>
+            ) : (
+            <>
             <BiuChatStage variant="center" stageRef={scrollRef}>
               {isForum && !activeThreadRootId && channel ? (
                 <ChannelForumBoard
@@ -1674,7 +1742,7 @@ export const ChannelStage = memo(function ChannelStage({
                                 type="button"
                                 className="inline-flex shrink-0 cursor-pointer items-center gap-0.5 rounded-md border border-transparent bg-transparent px-1.5 py-0.5 text-(length:--biu-chat-ui-font-size) leading-none text-(--biu-color-text-muted) hover:bg-(--biu-color-bg-hover) hover:text-(--biu-color-text)"
                                 data-testid={isAgent ? `channel-msg-trace-${msg.traceId}` : `channel-sys-trace-${msg.traceId}`}
-                                onClick={() => openChannelRunTrace(channelId, msg.traceId)}
+                                onClick={() => openTrace(msg.traceId!)}
                               >
                                 <ChevronRightIcon className="size-3.5" />
                                 <span>Details</span>
@@ -1822,7 +1890,7 @@ export const ChannelStage = memo(function ChannelStage({
                       </button>
                     </div>
                   ) : null}
-                  {/* 忙碌/排队状态条（Slack 模式：主聊天流不吐字，点击在右侧检查器看实时吐字） */}
+                  {/* 忙碌/排队状态条（Slack 模式：主聊天流不吐字，点击在页面内通过面包屑查看实时执行过程） */}
                   {activities.length > 0 ? (
                     <div className="space-y-1.5" data-testid="channel-busy-bar">
                       {activities.map((act) => (
@@ -1840,8 +1908,8 @@ export const ChannelStage = memo(function ChannelStage({
                           <button
                             type="button"
                             className="composer-goal-text cursor-pointer border-0 bg-transparent p-0 text-left hover:underline"
-                            title="点击在右侧检查器查看实时执行过程"
-                            onClick={() => openChannelRunTrace(channelId, act.runId)}
+                            title="点击查看实时执行过程"
+                            onClick={() => openTrace(act.runId)}
                           >
                             <span>{act.agentName}</span>
                             <span className="ml-2 font-normal text-(--biu-color-text-muted)">
@@ -1937,6 +2005,8 @@ export const ChannelStage = memo(function ChannelStage({
               </ChatDockStack>
             </div>
             ) : null}
+            </>
+            )}
           </div>
         </div>
 
@@ -1977,7 +2047,7 @@ export const ChannelStage = memo(function ChannelStage({
             searchHits={searchHits}
             searching={searching}
             onJumpToMessage={(msgId) => {
-              if (activeThreadRootId) closeThread()
+              if (activeThreadRootId || activeTraceId) closeThread()
               void jumpToMessage(msgId)
             }}
             pinnedMessages={pinnedMessages}
@@ -1991,7 +2061,7 @@ export const ChannelStage = memo(function ChannelStage({
             onOpenSaved={openSavedPanel}
             onJumpToSavedMessage={(item) => {
               if (item.channelId === channelId) {
-                if (activeThreadRootId) closeThread()
+                if (activeThreadRootId || activeTraceId) closeThread()
                 void jumpToMessage(item.message.id)
               } else {
                 navigate(`${channelAppPath(item.channelId)}?msg=${encodeURIComponent(item.message.id)}`)

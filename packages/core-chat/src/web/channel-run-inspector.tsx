@@ -20,14 +20,21 @@ const ROLE_BADGE: Record<'owner' | 'invoker' | 'member', string> = {
   member: '群成员 · 摘要视角',
 }
 
-export const ChannelRunInspector = memo(function ChannelRunInspector() {
-  const inspected = useChannelStore((s) => s.inspected)
-  const run = useChannelStore((s) => (s.inspected ? s.runs[s.inspected.runId] : undefined))
+export interface ChannelRunInspectorProps {
+  channelId?: string
+  runId?: string
+}
+
+export const ChannelRunInspector = memo(function ChannelRunInspector(props: ChannelRunInspectorProps) {
+  const storeInspected = useChannelStore((s) => s.inspected)
+  const targetChannelId = props.channelId || storeInspected?.channelId || ''
+  const targetRunId = props.runId || storeInspected?.runId || ''
+  const run = useChannelStore((s) => (targetRunId ? s.runs[targetRunId] : undefined))
 
   useEffect(() => {
-    if (!inspected) return
-    void loadChannelRun(inspected.channelId, inspected.runId)
-  }, [inspected?.channelId, inspected?.runId])
+    if (!targetChannelId || !targetRunId) return
+    void loadChannelRun(targetChannelId, targetRunId)
+  }, [targetChannelId, targetRunId])
 
   const mergedStream = useMemo(() => {
     if (!run) return { thinking: '', text: '' }
@@ -40,10 +47,10 @@ export const ChannelRunInspector = memo(function ChannelRunInspector() {
     return { thinking, text }
   }, [run])
 
-  if (!inspected) {
+  if (!targetChannelId || !targetRunId) {
     return (
       <div className="flex h-full items-center justify-center p-6 text-center text-[13px] text-(--biu-color-text-subtle)" data-testid="channel-run-inspector-empty">
-        点击群聊中任意一条 Agent 消息的「查看执行详情」或忙碌状态条，即可在此查看该次回复的实时吐字与工具轨迹。
+        点击群聊中任意一条 Agent 消息的「Details」或忙碌状态条，即可在此查看该次回复的实时吐字与工具轨迹。
       </div>
     )
   }

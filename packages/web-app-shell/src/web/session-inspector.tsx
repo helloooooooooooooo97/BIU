@@ -281,7 +281,7 @@ export const SessionInspector = memo(function SessionInspector({
     persistReadyRef.current = Boolean(sessionId && inspectorReady)
     hydratingRef.current = true
     const bind = sessionId && inspectorReady ? sessionInspector : readLocalInspectorBind()
-    const retired = new Set(['traj', 'usage'])
+    const retired = new Set(['traj', 'usage', 'channel-run'])
     const openedNext = (bind?.opened ?? []).filter((id) => !retired.has(slotTabId(id)))
     const rawTab = bind?.tab && !retired.has(slotTabId(bind.tab)) ? bind.tab : ''
     const tabNext = rawTab && openedNext.includes(rawTab) ? rawTab : rawTab || openedNext[0] || ''

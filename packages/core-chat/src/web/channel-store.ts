@@ -1102,10 +1102,6 @@ export function openChannelRunTrace(channelId: string, runId: string) {
   if (!channelId || !runId) return
   setState((prev) => ({ ...prev, inspected: { channelId, runId } }))
   void loadChannelRun(channelId, runId)
-  if (typeof window !== 'undefined') {
-    window.dispatchEvent(new Event('biu:inspector-open'))
-    window.dispatchEvent(new CustomEvent('biu:inspector-tab', { detail: { tabId: 'channel-run' } }))
-  }
 }
 
 function messagePreviewText(message: ChannelMessageView): string {

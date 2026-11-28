@@ -33,6 +33,7 @@ test('one plugin fills thread, trajectory, composer and approvals dock', async (
   assert.equal(ctx.slots.list('models').length, 0)
   assert.equal(ctx.slots.list('inspector-panels').some((item) => item.id === 'chat-traj'), false)
   assert.equal(ctx.slots.list('inspector-panels').some((item) => item.id === 'chat-usage'), false)
+  assert.equal(ctx.slots.list('inspector-panels').some((item) => item.id === 'chat-channel-run'), false)
 })
 
 test('composer banner and approvals share GET /api/chat/config', () => {
