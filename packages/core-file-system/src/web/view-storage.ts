@@ -7,7 +7,9 @@ import {
 import { invalidateListReads, readJson } from './db-client.ts'
 import { looksLikeFilterTree, normalizeFilterGroup, parseSortsInput } from '../query-logic.ts'
 import {
+  canEditSavedView,
   extractViewCreatorId,
+  normalizeColumnWidths,
   normalizeGroupConfig,
   normalizePageSize,
   normalizeSavedView,
@@ -258,8 +260,13 @@ export function mergeSavedViewLists(
 export function loadViews(collectionPath: string): SavedView[] {
   const base = serverViews.get(collectionPath) ?? []
   const ops = pendingOps.get(collectionPath)
-  if (!ops?.length) return base
-  return applyPendingOps(base, ops)
+  const merged = ops?.length ? applyPendingOps(base, ops) : base
+  return merged.map((view) => {
+    if (canEditSavedView(view)) return view
+    const localWidths = loadLocalColumnWidths(collectionPath, view.id)
+    if (!Object.keys(localWidths).length) return view
+    return { ...view, columnWidths: { ...view.columnWidths, ...localWidths } }
+  })
 }
 
 export function loadActiveViewId(collectionPath: string, listed: SavedView[]) {
@@ -610,6 +617,46 @@ export function upsertSavedView(collectionPath: string, view: SavedView) {
   serverViews.set(collectionPath, updated)
   noteLocalSavedViewsWrite(collectionPath)
   emitViewsStoreChange()
+}
+
+export function localColumnWidthsKey(collectionPath: string, viewId: string) {
+  return `fsdb.columnWidths:${workspaceStoragePrefix()}${collectionPath}:${viewId}`
+}
+
+export function loadLocalColumnWidths(collectionPath: string, viewId: string): Record<string, number> {
+  if (!collectionPath || !viewId) return {}
+  try {
+    const raw = readStorageString(localColumnWidthsKey(collectionPath, viewId))
+    if (!raw) return {}
+    return normalizeColumnWidths(JSON.parse(raw) as unknown)
+  } catch {
+    return {}
+  }
+}
+
+export function persistLocalColumnWidths(
+  collectionPath: string,
+  viewId: string,
+  widths: Record<string, number>,
+) {
+  if (!collectionPath || !viewId) return
+  try {
+    const key = localColumnWidthsKey(collectionPath, viewId)
+    const normalized = normalizeColumnWidths(widths)
+    if (Object.keys(normalized).length) writeStorageString(key, JSON.stringify(normalized))
+    else removeStorageKey(key)
+  } catch {
+    /* ignore */
+  }
+}
+
+export function clearLocalColumnWidths(collectionPath: string, viewId: string) {
+  if (!collectionPath || !viewId) return
+  try {
+    removeStorageKey(localColumnWidthsKey(collectionPath, viewId))
+  } catch {
+    /* ignore */
+  }
 }
 
 export function collapsedGroupsKey(collectionPath: string, viewId: string, groupBy = '') {

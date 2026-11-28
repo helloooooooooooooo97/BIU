@@ -19,10 +19,12 @@ import {
   activeViewStorageKey,
   applyUserViewOrder,
   beginPendingViewOp,
+  clearLocalColumnWidths,
   commitPendingViewOp,
   getStarredViews,
   isViewStarred,
   loadViews,
+  persistLocalColumnWidths,
   persistStarredViews,
   persistViewOrderForPath,
   pullSavedViews,
@@ -365,12 +367,18 @@ export function createBrowserViewCrud(opts: BrowserViewCrudOptions) {
     const current = latest.find((view) => view.id === targetId)
     if (!current) return
     // 已锁定 / 只读 / 临时兜底视角：筛选、排序、分组、列与排版仅在当前会话内存中临时生效，
-    // 不写 ViewStore 也不发 POST /api/db/saved-views。
+    // 不写 ViewStore 也不发 POST /api/db/saved-views；列宽作为个人阅读偏好落入 localStorage，切表或刷新后仍保留。
     if (!externalViews && !canEditSavedView(current)) {
+      if ('columnWidths' in patch && patch.columnWidths) {
+        persistLocalColumnWidths(collectionPath, targetId, patch.columnWidths)
+      }
       const localNext = latest.map((view) => (view.id === targetId ? { ...view, ...patch } : view))
       viewsRef.current = localNext
       setViews(localNext)
       return
+    }
+    if (!externalViews && 'columnWidths' in patch) {
+      clearLocalColumnWidths(collectionPath, targetId)
     }
     const syncedPatch: Partial<SavedView> =
       ('sortField' in patch || 'sortDir' in patch) && !('sorts' in patch)
