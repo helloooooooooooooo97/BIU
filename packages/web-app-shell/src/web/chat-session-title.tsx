@@ -2,6 +2,7 @@ import { apiFetch } from '@biu/biu-ui/api-client'
 import { memo, useEffect, useRef, useState } from 'react'
 import { SparklesIcon } from '@heroicons/react/16/solid'
 import { bindSessionView, type SessionViewService } from '@biu/web-session-view'
+import { ShareButton } from './data-bridge.ts'
 
 export const ChatSessionTitle = memo(function ChatSessionTitle({
   useSessionView,
@@ -108,5 +109,32 @@ export const ChatSessionTitle = memo(function ChatSessionTitle({
         }}
       />
     </div>
+  )
+})
+
+export const ChatSessionShare = memo(function ChatSessionShare({
+  useSessionView,
+  localOnly,
+}: {
+  useSessionView: ReturnType<typeof bindSessionView>
+  localOnly: boolean
+}) {
+  const sessionId = useSessionView((state) => state.sessionId)
+  const title = useSessionView((state) => {
+    const id = state.sessionId
+    if (!id) return ''
+    return state.sessions.find((item) => item.id === id)?.title ?? ''
+  })
+  if (!sessionId) return null
+  return (
+    <ShareButton
+      localOnly={localOnly}
+      target={{
+        kind: 'record',
+        collection: '/agents',
+        recordId: sessionId,
+        title: title.trim() || '未命名代理',
+      }}
+    />
   )
 })

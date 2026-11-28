@@ -1,4 +1,3 @@
-import { apiFetch } from '@biu/biu-ui/api-client'
 import { onAppEvents } from '@biu/biu-ui/app-events'
 import { installGlobalWorkspaceTransport, syncWorkspaceEndpoint } from '@biu/biu-ui/workspace-transport'
 import { lazy, memo, Suspense, useCallback, useEffect, useRef, useState, useSyncExternalStore, type CSSProperties, type ReactNode } from 'react'
@@ -50,7 +49,7 @@ import {
 } from '@biu/web-slots/app-modules'
 const ChatSidebar = lazy(() => import('./chat-sidebar.tsx').then((m) => ({ default: m.ChatSidebar })))
 import { ShellSidebarFrame } from './shell-sidebar-frame.tsx'
-import { ChatSessionTitle } from './chat-session-title.tsx'
+import { ChatSessionShare, ChatSessionTitle } from './chat-session-title.tsx'
 import { BrandCornerMascot, DanceStage } from '@biu/public-mascot'
 import { SessionInspector } from './session-inspector.tsx'
 import { SessionConfigDialog } from '@biu/web-session-view/dialog'
@@ -68,7 +67,7 @@ import {
 } from './shell-chrome.tsx'
 import { hydrateWorkspaceProfile } from '@biu/biu-ui/workspace-profile'
 import { hydrateTheme } from './theme.ts'
-import { hydratePagePrefs, overlayDataRoute } from './data-bridge.ts'
+import { getWorkspaceProfile, hydratePagePrefs, overlayDataRoute } from './data-bridge.ts'
 import { isGlobalSearchHotkey } from './search-hotkey.ts'
 import { useSlotEntries } from '@biu/web-slots'
 import type { SlotsService } from '@biu/web-slots'
@@ -322,21 +321,24 @@ function Shell(props: SlotProps) {
     })
   }, [])
   useEffect(() => {
-    if (!settingsOpen) return
     let live = true
-    void apiFetch('/api/profile')
-      .then((response) => (response.ok ? response.json() : null))
-      .then((profile: { dataLocation?: 'device' | 'cloud' } | null) => {
-        if (!live) return
-        const next = profile?.dataLocation === 'cloud' ? 'cloud' : 'device'
-        setWorkspaceLocation(next)
-        if (next === 'device') setSettingsTab((current) => (current === 'members' ? 'workspace' : current))
-      })
-      .catch(() => {
-        if (live) setWorkspaceLocation('device')
-      })
+    const syncLocation = () => {
+      void getWorkspaceProfile()
+        .then((profile) => {
+          if (!live) return
+          const next = profile?.dataLocation === 'cloud' ? 'cloud' : 'device'
+          setWorkspaceLocation(next)
+          if (next === 'device') setSettingsTab((current) => (current === 'members' ? 'workspace' : current))
+        })
+        .catch(() => {
+          if (live) setWorkspaceLocation('device')
+        })
+    }
+    syncLocation()
+    const stop = onAppEvents(['biu:account-token', 'biu:workspace-profile'], syncLocation)
     return () => {
       live = false
+      stop()
     }
   }, [settingsOpen])
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => getSidebarPersist(SIDEBAR_PERSIST.collapsed) === '1')
@@ -847,6 +849,7 @@ function Shell(props: SlotProps) {
       </div>
       <ChatSessionTitle useSessionView={useSessionView} sessionView={sessionView} />
       <div className="chat-view-header-right">
+        <ChatSessionShare useSessionView={useSessionView} localOnly={workspaceLocation === 'device'} />
         <button
           type="button"
           className="chat-view-header-expand"

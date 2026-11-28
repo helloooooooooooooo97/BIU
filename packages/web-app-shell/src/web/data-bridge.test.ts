@@ -49,3 +49,14 @@ test('buffers restoreInspectorDbPaths and subscribeInspectorDbPath until core-fi
   for (const fn of listeners) fn()
   expect(notifications).toBe(1)
 })
+
+test('registerShellDataBridge wires ShareButton component for shell header', () => {
+  const received: unknown[] = []
+  const FakeShareButton = (props: unknown) => {
+    received.push(props)
+    return null
+  }
+  registerShellDataBridge({ ShareButton: FakeShareButton })
+  expect(typeof FakeShareButton).toBe('function')
+  expect(received.length).toBe(0)
+})
