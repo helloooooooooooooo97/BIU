@@ -40,16 +40,15 @@ export type ShellColumns = {
   leftCanDock: boolean
 }
 
-/** 低于图标轨则 0（视口实在不够）；低于文字最小宽度则收到图标轨。 */
+/** 低于文字最小宽度则直接完全收起为 0（不留最小缩略图标轨）。 */
 export function clampSidebarWidth(width: number) {
   const n = Math.round(Number(width))
-  if (!Number.isFinite(n) || n < SIDEBAR_RAIL) return 0
-  if (n < SIDEBAR_MIN) return SIDEBAR_RAIL
+  if (!Number.isFinite(n) || n < SIDEBAR_MIN) return 0
   return Math.min(SIDEBAR_MAX, n)
 }
 
 export function sidebarColumnWidth(collapsed: boolean, width: number) {
-  return collapsed ? SIDEBAR_RAIL : width
+  return collapsed ? 0 : width
 }
 
 /**
@@ -107,15 +106,12 @@ export function allocateShellColumns(opts: {
     if (left > maxDockedLeft) {
       if (maxDockedLeft >= SIDEBAR_MIN) {
         left = maxDockedLeft
-      } else if (maxDockedLeft >= SIDEBAR_RAIL) {
-        left = SIDEBAR_RAIL
-        leftAutoCollapsed = true
       } else {
         left = 0
         leftAutoCollapsed = desiredLeft > 0
       }
     }
-    const leftMode: ShellLeftMode = left <= 0 ? 'hidden' : left < SIDEBAR_MIN ? 'rail' : 'docked'
+    const leftMode: ShellLeftMode = left <= 0 ? 'hidden' : 'docked'
     return {
       left,
       center: Math.max(0, available - left),
@@ -153,17 +149,14 @@ export function allocateShellColumns(opts: {
     if (available < SIDEBAR_AUTO_HIDE_BELOW) {
       left = 0
       leftAutoCollapsed = desiredLeft > 0
-    } else if (desiredLeft <= SIDEBAR_RAIL) {
-      left = desiredLeft
+    } else if (desiredLeft <= 0) {
+      left = 0
     } else {
       const maxDockedLeft = available - splitMin
       if (maxDockedLeft >= desiredLeft) {
         left = desiredLeft
       } else if (maxDockedLeft >= SIDEBAR_MIN) {
         left = maxDockedLeft
-      } else if (available >= SIDEBAR_RAIL + splitMin) {
-        left = SIDEBAR_RAIL
-        leftAutoCollapsed = true
       } else {
         left = 0
         leftAutoCollapsed = true
@@ -178,9 +171,7 @@ export function allocateShellColumns(opts: {
     ? 'none'
     : left <= 0
       ? 'hidden'
-      : left < SIDEBAR_MIN
-        ? 'rail'
-        : 'docked'
+      : 'docked'
 
   return {
     left,
@@ -275,7 +266,7 @@ export function chatColumnWidth(opts: {
   return allocateShellColumns({
     viewportWidth: opts.viewportWidth,
     leftPane: true,
-    leftWidth: opts.sidebarCollapsed ? SIDEBAR_RAIL : SIDEBAR_MAX,
+    leftWidth: opts.sidebarCollapsed ? 0 : SIDEBAR_MAX,
     inspectorOpen: opts.inspectorOpen,
     inspectorWidth: opts.inspectorWidth,
   }).center
@@ -287,7 +278,7 @@ export function inspectorWidthForExpandedChat(opts: {
   inspectorWidth: number
   sidebarCollapsed: boolean
 }) {
-  const side = opts.sidebarCollapsed ? SIDEBAR_RAIL : SIDEBAR
+  const side = opts.sidebarCollapsed ? 0 : SIDEBAR
   const maxInspector = opts.viewportWidth - RAIL - side - CHAT_OVERLAY_ENTER
   return Math.min(opts.inspectorWidth, Math.max(INSPECTOR_MIN, Math.round(maxInspector)))
 }
