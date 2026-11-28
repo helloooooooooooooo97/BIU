@@ -1363,6 +1363,13 @@ describe('Slack-style Group Channels: RBAC, Mention Dispatch, Per-Invoker Queue,
       asUser(bob.id, () => svc.recallMessage(chId, r3.id))
       assert.equal(asUser(alice.id, () => svc.listChannels().find((c) => c.id === chId)?.threads?.length ?? 0), 0)
       assert.equal(asUser(carol.id, () => svc.listChannels().find((c) => c.id === chId)?.threads?.length ?? 0), 0)
+
+      // 3. 1v1 私聊禁止硬加第 3 位人类成员；群内普通成员也能拉入其他空间成员
+      assert.throws(() => asUser(alice.id, () => svc.addMember(dm.channel.id, 'account', carol.id)), /1v1 私聊不支持添加新成员/)
+      const soloCh = asUser(alice.id, () => svc.createChannel({ name: '邀请测试群', memberAccountIds: [bob.id] }))
+      const invitedMembers = asUser(bob.id, () => svc.addMember(soloCh.channel.id, 'account', carol.id))
+      assert.equal(invitedMembers.some((m) => m.memberType === 'account' && m.memberId === carol.id), true)
+      assert.equal(asUser(carol.id, () => svc.listChannels()).some((c) => c.id === soloCh.channel.id), true)
     } finally {
       svc.dispose()
       db.close()
