@@ -2,10 +2,9 @@ import { memo, useEffect, useLayoutEffect, useRef, useState, type ReactNode, typ
 import { createPortal } from 'react-dom'
 import { computeFloatingPosition } from '@biu/biu-ui/floating-position'
 import { TOOLTIP_OVERLAY_Z, overlayZ } from '@biu/biu-ui/overlay-portal'
-import { ChevronDoubleLeftIcon, ChevronDoubleRightIcon } from '@heroicons/react/16/solid'
-import { WorkspaceAvatar } from '@biu/biu-ui/workspace-avatar'
+import { ChevronDoubleLeftIcon, ChevronDoubleRightIcon, CloudIcon, ComputerDesktopIcon } from '@heroicons/react/16/solid'
 import { chromeIcon } from './chrome-icon.ts'
-import { ShellSidePlaces, ShellSidebarAccount, ShellWorkspaceSwitcher, useActiveWorkspaceAvatar } from './shell-chrome.tsx'
+import { ShellSidePlaces, ShellSidebarAccount, ShellWorkspaceSwitcher, useActiveWorkspaceLocation } from './shell-chrome.tsx'
 import {
   isSidebarFlyoutKeepTarget,
   isSidebarFlyoutIgnoreTarget,
@@ -313,7 +312,7 @@ function RailHoverTip({ hostRef }: { hostRef: RefObject<HTMLDivElement | null> }
 }
 
 function ShellRailHead({ onExpand }: { onExpand?: () => void }) {
-  const workspaceAvatar = useActiveWorkspaceAvatar()
+  const workspaceLocation = useActiveWorkspaceLocation()
   return (
     <div className="shell-rail-head" data-biu-ignore>
       <button
@@ -324,19 +323,10 @@ function ShellRailHead({ onExpand }: { onExpand?: () => void }) {
         onClick={onExpand}
       >
         <span className="shell-rail-expand-mark" aria-hidden>
-          {workspaceAvatar ? (
-            <img
-              src={workspaceAvatar}
-              alt=""
-              className="shell-workspace-switch-icon is-avatar"
-              data-testid="sidebar-expand-workspace-avatar"
-            />
+          {workspaceLocation === 'cloud' ? (
+            <CloudIcon {...chromeIcon} className="shell-workspace-switch-icon" data-location="cloud" />
           ) : (
-            <WorkspaceAvatar
-              size={18}
-              className="shell-workspace-switch-icon is-avatar"
-              data-testid="sidebar-expand-workspace-avatar"
-            />
+            <ComputerDesktopIcon {...chromeIcon} className="shell-workspace-switch-icon" data-location="device" />
           )}
         </span>
         <span className="shell-rail-expand-chevron" aria-hidden>

@@ -1630,18 +1630,19 @@ export function ShellWorkspaceSwitcher({ onWorkspaceSettings }: { onWorkspaceSet
         data-testid="shell-workspace-switcher"
         onClick={() => setOpen((value) => !value)}
       >
-        {current.avatar?.trim() ? (
-          <img
-            src={current.avatar.trim()}
-            alt=""
-            className="shell-workspace-switch-icon is-avatar"
-            data-testid="shell-workspace-switch-avatar"
+        {current.location === 'cloud' ? (
+          <CloudIcon
+            aria-hidden
+            className="shell-workspace-switch-icon"
+            data-testid="shell-workspace-switch-icon"
+            data-location="cloud"
           />
         ) : (
-          <WorkspaceAvatar
-            size={18}
-            className="shell-workspace-switch-icon is-avatar"
-            data-testid="shell-workspace-switch-avatar"
+          <ComputerDesktopIcon
+            aria-hidden
+            className="shell-workspace-switch-icon"
+            data-testid="shell-workspace-switch-icon"
+            data-location="device"
           />
         )}
         <span className="shell-workspace-switch-copy">
@@ -1665,31 +1666,28 @@ export function ShellWorkspaceSwitcher({ onWorkspaceSettings }: { onWorkspaceSet
           data-testid="shell-workspace-menu"
         >
           <div className="shell-workspace-menu-list">
-            {workspaces.map((workspace) => {
-              const avatar = workspace.avatar?.trim()
-              return (
-                <button
-                  key={workspace.id}
-                  type="button"
-                  role="menuitemradio"
-                  aria-checked={workspace.id === active}
-                  className={`shell-workspace-menu-item${workspace.id === active ? ' is-active' : ''}`}
-                  onClick={() => switchTo(workspace.id)}
-                >
-                  {avatar ? (
-                    <img src={avatar} alt="" className="shell-workspace-menu-icon is-avatar" />
-                  ) : (
-                    <WorkspaceAvatar size={18} className="shell-workspace-menu-icon is-avatar" />
-                  )}
-                  <span className="shell-workspace-menu-copy">
-                    <strong>{workspace.name}</strong>
-                  </span>
-                  <small className="shell-workspace-menu-role">
-                    <TagChip id={workspace.role} label={workspaceRoleLabel(workspace.role)} />
-                  </small>
-                </button>
-              )
-            })}
+            {workspaces.map((workspace) => (
+              <button
+                key={workspace.id}
+                type="button"
+                role="menuitemradio"
+                aria-checked={workspace.id === active}
+                className={`shell-workspace-menu-item${workspace.id === active ? ' is-active' : ''}`}
+                onClick={() => switchTo(workspace.id)}
+              >
+                {workspace.location === 'cloud' ? (
+                  <CloudIcon aria-hidden className="shell-workspace-menu-icon" data-location="cloud" />
+                ) : (
+                  <ComputerDesktopIcon aria-hidden className="shell-workspace-menu-icon" data-location="device" />
+                )}
+                <span className="shell-workspace-menu-copy">
+                  <strong>{workspace.name}</strong>
+                </span>
+                <small className="shell-workspace-menu-role">
+                  <TagChip id={workspace.role} label={workspaceRoleLabel(workspace.role)} />
+                </small>
+              </button>
+            ))}
           </div>
           <div className="shell-workspace-menu-actions">
             <button

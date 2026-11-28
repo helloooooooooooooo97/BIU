@@ -831,7 +831,7 @@ test('ShellWorkspaceSwitcher keeps per-tab sessionStorage workspace isolated fro
   sessionStorage.clear()
 })
 
-test('ShellWorkspaceSwitcher renders workspace avatar instead of cloud icon', async () => {
+test('ShellWorkspaceSwitcher renders cloud and device icons instead of workspace avatar', async () => {
   localStorage.clear()
   sessionStorage.clear()
   localStorage.setItem('biu.account.token', 'tok_ws_icon')
@@ -843,7 +843,7 @@ test('ShellWorkspaceSwitcher renders workspace avatar instead of cloud icon', as
       return json({
         workspaces: [
           { id: 'ws_custom', name: '云端研发', role: 'owner', location: 'cloud', avatar: customAvatar },
-          { id: 'ws_default', name: '默认空间', role: 'member', location: 'cloud', avatar: '' },
+          { id: 'ws_local', name: '本机空间', role: 'owner', location: 'device', avatar: '' },
         ],
       })
     }
@@ -853,9 +853,19 @@ test('ShellWorkspaceSwitcher renders workspace avatar instead of cloud icon', as
   }) as typeof fetch
 
   render(<ShellWorkspaceSwitcher />)
-  const avatar = await screen.findByTestId('shell-workspace-switch-avatar')
-  assert.equal(avatar.tagName, 'IMG')
-  assert.equal(avatar.getAttribute('src'), customAvatar)
+  const icon = await screen.findByTestId('shell-workspace-switch-icon')
+  assert.equal(icon.tagName.toLowerCase(), 'svg')
+  assert.equal(icon.getAttribute('data-location'), 'cloud')
+  assert.equal(screen.queryByTestId('shell-workspace-switch-avatar'), null)
+
+  fireEvent.click(screen.getByTestId('shell-workspace-switcher'))
+  const menu = await screen.findByTestId('shell-workspace-menu')
+  const menuIcons = Array.from(menu.querySelectorAll('.shell-workspace-menu-icon'))
+  assert.deepEqual(
+    menuIcons.map((el) => el.getAttribute('data-location')),
+    ['cloud', 'device'],
+  )
+  assert.equal(menu.querySelectorAll('img').length, 0)
 
   cleanup()
   localStorage.clear()
