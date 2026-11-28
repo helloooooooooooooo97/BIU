@@ -491,12 +491,18 @@ html.dark .fsdb-views {
 .app-side-bar .chat-session-row:hover .chat-session-row-delete,
 .chat-sidebar-popover .chat-session-row:hover .chat-session-row-delete,
 .fsdb-views .chat-session-row:hover .chat-session-row-delete,
+.app-side-bar .chat-session-row.is-menu-open .chat-session-row-delete,
+.chat-sidebar-popover .chat-session-row.is-menu-open .chat-session-row-delete,
+.fsdb-views .chat-session-row.is-menu-open .chat-session-row-delete,
 .app-side-bar .chat-session-row-delete:focus,
 .chat-sidebar-popover .chat-session-row-delete:focus,
 .fsdb-views .chat-session-row-delete:focus,
 .app-side-bar .chat-session-row:hover .chat-session-row-star,
 .chat-sidebar-popover .chat-session-row:hover .chat-session-row-star,
 .fsdb-views .chat-session-row:hover .chat-session-row-star,
+.app-side-bar .chat-session-row.is-menu-open .chat-session-row-star,
+.chat-sidebar-popover .chat-session-row.is-menu-open .chat-session-row-star,
+.fsdb-views .chat-session-row.is-menu-open .chat-session-row-star,
 .app-side-bar .chat-session-row-star:focus,
 .chat-sidebar-popover .chat-session-row-star:focus,
 .fsdb-views .chat-session-row-star:focus {
@@ -509,9 +515,58 @@ html.dark .fsdb-views {
   color: var(--biu-color-icon-muted);
 }.app-side-bar .chat-session-row-delete:hover,
 .chat-sidebar-popover .chat-session-row-delete:hover,
-.fsdb-views .chat-session-row-delete:hover {
+.fsdb-views .chat-session-row-delete:hover,
+.app-side-bar .chat-session-row-delete.is-open,
+.chat-sidebar-popover .chat-session-row-delete.is-open,
+.fsdb-views .chat-session-row-delete.is-open {
   background: var(--biu-color-bg-hover);
+  color: var(--biu-color-text);
+}
+.sidebar-row-menu {
+  position: fixed;
+  min-width: 124px;
+  padding: 4px;
+  border: var(--biu-stroke-width) solid var(--biu-color-border-popover, var(--biu-color-border));
+  border-radius: var(--biu-radius-popover, 10px);
+  background: var(--biu-color-bg-popover, var(--biu-color-surface));
+  box-shadow: var(--biu-shadow-popover, 0 8px 24px rgba(0, 0, 0, 0.24));
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.sidebar-row-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  margin: 0;
+  border: 0;
+  border-radius: 6px;
+  padding: 6px 8px;
+  background: transparent;
+  color: var(--biu-color-text);
+  font: inherit;
+  font-size: var(--biu-font-size-4, 13px);
+  font-weight: var(--biu-font-weight-medium, 500);
+  text-align: left;
+  cursor: pointer;
+}
+.sidebar-row-menu-item:hover {
+  background: var(--biu-color-bg-hover);
+}
+.sidebar-row-menu-item.is-danger {
   color: var(--biu-color-danger);
+}
+.sidebar-row-menu-item.is-danger:hover {
+  background: var(--biu-color-danger-muted, color-mix(in srgb, var(--biu-color-danger) 14%, transparent));
+}
+.sidebar-row-menu-ico {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  flex: none;
 }.app-side-bar /* 分组添加按钮(+)：默认宽度塌陷；展开为 24×24，与收藏/删除同一套圆角底 */
 .sidebar-add,
 .chat-sidebar-popover /* 分组添加按钮(+)：默认宽度塌陷；展开为 24×24，与收藏/删除同一套圆角底 */
