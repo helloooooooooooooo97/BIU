@@ -1,4 +1,5 @@
 export * from './mascot-dance.ts'
+export * from './mascot-palette.ts'
 export * from './sidebar-mascot.tsx'
 export * from './static-mascot-mark.tsx'
 export * from './session-mascot.ts'
