@@ -137,7 +137,8 @@ export type ChannelFloatingSidebarProps = {
   onOpenDm: (accountId: string) => void
   onOpenManageMembers?: () => void
   onLeftChannel?: () => void
-  // 搜索（面板内原地展示）
+  // 聊天记录与搜索（面板内原地展示）
+  messages?: ChannelMessageView[]
   searchQuery?: string
   onSearchQueryChange?: (q: string) => void
   searchSenderId?: string
@@ -166,7 +167,7 @@ export type ChannelFloatingSidebarProps = {
 
 const PRIMARY_TABS: Array<{ id: 'roster' | 'search' | 'pins' | 'saved' | 'summary'; label: string; testId: string }> = [
   { id: 'roster', label: '成员', testId: 'channel-quick-roster' },
-  { id: 'search', label: '搜索', testId: 'channel-quick-search' },
+  { id: 'search', label: '聊天', testId: 'channel-quick-search' },
   { id: 'pins', label: '置顶', testId: 'channel-quick-pins' },
   { id: 'saved', label: '收藏', testId: 'channel-quick-saved' },
   { id: 'summary', label: '总结', testId: 'channel-quick-summarize' },
@@ -198,6 +199,7 @@ export const ChannelFloatingSidebar = memo(function ChannelFloatingSidebar({
   onOpenDm,
   onOpenManageMembers,
   onLeftChannel,
+  messages = [],
   searchQuery = '',
   onSearchQueryChange,
   searchSenderId = '',
@@ -223,6 +225,7 @@ export const ChannelFloatingSidebar = memo(function ChannelFloatingSidebar({
   const [pinned, setPinned] = useState<boolean>(readInitialPinned)
   const [hovered, setHovered] = useState(false)
   const [internalTab, setInternalTab] = useState<ChannelFloatingTab>('roster')
+  const [rosterQuery, setRosterQuery] = useState('')
   const [summaryUnreadOnly, setSummaryUnreadOnly] = useState(false)
   const [copiedSummary, setCopiedSummary] = useState(false)
   const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -255,6 +258,7 @@ export const ChannelFloatingSidebar = memo(function ChannelFloatingSidebar({
 
   useEffect(() => {
     setSummaryUnreadOnly(false)
+    setRosterQuery('')
   }, [channelId])
 
   // 打开管理视图时拉取空间成员列表
@@ -401,12 +405,35 @@ export const ChannelFloatingSidebar = memo(function ChannelFloatingSidebar({
   )
 
   const railItems = useMemo(() => {
-    const combined: ChannelMemberView[] = [...agentMembers, ...humanMembers]
+    const combined: ChannelMemberView[] = [...humanMembers, ...agentMembers]
     return {
       visible: combined.slice(0, MAX_RAIL_AVATARS),
       overflow: Math.max(0, combined.length - MAX_RAIL_AVATARS),
     }
   }, [agentMembers, humanMembers])
+
+  const filteredHumanMembers = useMemo(() => {
+    const q = rosterQuery.trim().toLowerCase()
+    if (!q) return humanMembers
+    return humanMembers.filter((m) => m.name.toLowerCase().includes(q))
+  }, [humanMembers, rosterQuery])
+
+  const filteredAgentMembers = useMemo(() => {
+    const q = rosterQuery.trim().toLowerCase()
+    if (!q) return agentMembers
+    return agentMembers.filter(
+      (ag) => ag.name.toLowerCase().includes(q) || (ag.ownerName ?? '').toLowerCase().includes(q),
+    )
+  }, [agentMembers, rosterQuery])
+
+  const recentChatMessages = useMemo(() => {
+    const filtered = messages.filter((m) => {
+      if (m.deletedAt) return false
+      if (searchSenderId && m.senderId !== searchSenderId) return false
+      return true
+    })
+    return filtered.slice(-80).reverse()
+  }, [messages, searchSenderId])
 
   const inHumans = useMemo(() => new Set(humanMembers.map((m) => m.memberId)), [humanMembers])
   const inAgents = useMemo(() => new Set(agentMembers.map((m) => m.memberId)), [agentMembers])
@@ -613,9 +640,108 @@ export const ChannelFloatingSidebar = memo(function ChannelFloatingSidebar({
                 ) : null}
               </div>
 
+              <div className="shrink-0 px-2.5 pt-0.5 pb-1">
+                <div className="relative flex items-center">
+                  <MagnifyingGlassIcon className="pointer-events-none absolute left-2.5 size-3.5 text-(--biu-color-text-subtle)" />
+                  <input
+                    type="search"
+                    value={rosterQuery}
+                    placeholder="搜索成员或 Agent…"
+                    aria-label="搜索成员或 Agent"
+                    data-testid="channel-roster-search"
+                    className="h-7 w-full rounded-[8px] border-0 bg-(--biu-color-bg-muted) pr-2.5 pl-8 text-[12px] text-(--biu-color-text) outline-none placeholder:text-(--biu-color-text-subtle) focus:ring-1 focus:ring-(--biu-color-icon-active)"
+                    onChange={(e) => setRosterQuery(e.target.value)}
+                  />
+                </div>
+              </div>
+
               <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-2 py-1">
-                {agentMembers.length > 0 ? (
-                  <div>
+                {filteredHumanMembers.length === 0 && filteredAgentMembers.length === 0 && rosterQuery.trim() ? (
+                  <div className="py-8 text-center text-[12px] text-(--biu-color-text-subtle)">
+                    未找到匹配的成员或 Agent
+                  </div>
+                ) : null}
+
+                {filteredHumanMembers.length > 0 ? (
+                  <div data-testid="channel-roster-humans-section">
+                    <div className="mb-1 px-2 text-[10.5px] font-medium tracking-wide text-(--biu-color-text-subtle)">
+                      成员
+                    </div>
+                    <div className="space-y-0.5">
+                      {filteredHumanMembers.map((member) => {
+                        const online = isOnline(member.memberId)
+                        const isMe = Boolean(myAccountId) && member.memberId === myAccountId
+                        return (
+                          <div
+                            key={`account:${member.memberId}`}
+                            data-testid={`channel-roster-member-${member.memberId}`}
+                            className="group/row flex items-center gap-2 rounded-[9px] px-2 py-1.5 transition-colors hover:bg-(--biu-color-bg-popover-hover)"
+                          >
+                            <span
+                              className="relative grid shrink-0 place-items-center"
+                              style={{ width: ROW_SLOT_PX, height: ROW_SLOT_PX }}
+                            >
+                              <RosterAvatar
+                                avatar={resolveAvatar(member.memberId, member.avatar)}
+                                seed={member.memberId}
+                                size={ROW_HUMAN_PX}
+                              />
+                              {online ? (
+                                <span
+                                  className="absolute right-0 bottom-0 size-2 rounded-full bg-emerald-500 ring-[1.5px] ring-(--biu-color-bg-popover)"
+                                  title="在线"
+                                />
+                              ) : null}
+                            </span>
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-center gap-1.5">
+                                <span className="truncate text-[13px] font-medium text-(--biu-color-text)">
+                                  {member.name}
+                                </span>
+                                {isMe ? (
+                                  <span className="shrink-0 text-[10.5px] text-(--biu-color-text-subtle)">我</span>
+                                ) : null}
+                                {!isDm && member.role === 'owner' ? (
+                                  <span className="shrink-0 text-[10.5px] text-(--biu-color-text-subtle)">群主</span>
+                                ) : null}
+                              </div>
+                              <div className="text-[11px] text-(--biu-color-text-subtle)">
+                                {online ? '在线' : '离线'}
+                              </div>
+                            </div>
+                            <div className="flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover/row:opacity-100 focus-within:opacity-100">
+                              <button
+                                type="button"
+                                data-testid={`channel-roster-mention-account-${member.memberId}`}
+                                title={`@提及 ${member.name}`}
+                                aria-label={`提及 ${member.name}`}
+                                className="inline-flex size-6 cursor-pointer items-center justify-center rounded-md border-0 bg-transparent text-(--biu-color-text-muted) hover:bg-(--biu-color-bg-muted) hover:text-(--biu-color-text)"
+                                onClick={() => onMention({ kind: 'account', id: member.memberId, label: member.name })}
+                              >
+                                <AtSymbolIcon className="size-3.5" />
+                              </button>
+                              {!isDm && !isMe ? (
+                                <button
+                                  type="button"
+                                  data-testid={`channel-roster-dm-${member.memberId}`}
+                                  title={`给 ${member.name} 发私聊`}
+                                  aria-label={`给 ${member.name} 发私聊`}
+                                  className="inline-flex size-6 cursor-pointer items-center justify-center rounded-md border-0 bg-transparent text-(--biu-color-text-muted) hover:bg-(--biu-color-bg-muted) hover:text-(--biu-color-text)"
+                                  onClick={() => onOpenDm(member.memberId)}
+                                >
+                                  <ChatBubbleLeftEllipsisIcon className="size-3.5" />
+                                </button>
+                              ) : null}
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </div>
+                ) : null}
+
+                {filteredAgentMembers.length > 0 ? (
+                  <div data-testid="channel-roster-agents-section">
                     <div className="mb-1 flex items-center justify-between px-2 text-[10.5px] font-medium tracking-wide text-(--biu-color-text-subtle)">
                       <span>Agent</span>
                       {agentMembers.length > 1 ? (
@@ -630,7 +756,7 @@ export const ChannelFloatingSidebar = memo(function ChannelFloatingSidebar({
                       ) : null}
                     </div>
                     <div className="space-y-0.5">
-                      {agentMembers.map((ag) => {
+                      {filteredAgentMembers.map((ag) => {
                         const busy = busyAgentIds.has(ag.memberId)
                         return (
                           <div
@@ -690,82 +816,6 @@ export const ChannelFloatingSidebar = memo(function ChannelFloatingSidebar({
                     </div>
                   </div>
                 ) : null}
-
-                <div>
-                  <div className="mb-1 px-2 text-[10.5px] font-medium tracking-wide text-(--biu-color-text-subtle)">
-                    成员
-                  </div>
-                  <div className="space-y-0.5">
-                    {humanMembers.map((member) => {
-                      const online = isOnline(member.memberId)
-                      const isMe = Boolean(myAccountId) && member.memberId === myAccountId
-                      return (
-                        <div
-                          key={`account:${member.memberId}`}
-                          data-testid={`channel-roster-member-${member.memberId}`}
-                          className="group/row flex items-center gap-2 rounded-[9px] px-2 py-1.5 transition-colors hover:bg-(--biu-color-bg-popover-hover)"
-                        >
-                          <span
-                            className="relative grid shrink-0 place-items-center"
-                            style={{ width: ROW_SLOT_PX, height: ROW_SLOT_PX }}
-                          >
-                            <RosterAvatar
-                              avatar={resolveAvatar(member.memberId, member.avatar)}
-                              seed={member.memberId}
-                              size={ROW_HUMAN_PX}
-                            />
-                            {online ? (
-                              <span
-                                className="absolute right-0 bottom-0 size-2 rounded-full bg-emerald-500 ring-[1.5px] ring-(--biu-color-bg-popover)"
-                                title="在线"
-                              />
-                            ) : null}
-                          </span>
-                          <div className="min-w-0 flex-1">
-                            <div className="flex items-center gap-1.5">
-                              <span className="truncate text-[13px] font-medium text-(--biu-color-text)">
-                                {member.name}
-                              </span>
-                              {isMe ? (
-                                <span className="shrink-0 text-[10.5px] text-(--biu-color-text-subtle)">我</span>
-                              ) : null}
-                              {!isDm && member.role === 'owner' ? (
-                                <span className="shrink-0 text-[10.5px] text-(--biu-color-text-subtle)">群主</span>
-                              ) : null}
-                            </div>
-                            <div className="text-[11px] text-(--biu-color-text-subtle)">
-                              {online ? '在线' : '离线'}
-                            </div>
-                          </div>
-                          <div className="flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover/row:opacity-100 focus-within:opacity-100">
-                            <button
-                              type="button"
-                              data-testid={`channel-roster-mention-account-${member.memberId}`}
-                              title={`@提及 ${member.name}`}
-                              aria-label={`提及 ${member.name}`}
-                              className="inline-flex size-6 cursor-pointer items-center justify-center rounded-md border-0 bg-transparent text-(--biu-color-text-muted) hover:bg-(--biu-color-bg-muted) hover:text-(--biu-color-text)"
-                              onClick={() => onMention({ kind: 'account', id: member.memberId, label: member.name })}
-                            >
-                              <AtSymbolIcon className="size-3.5" />
-                            </button>
-                            {!isDm && !isMe ? (
-                              <button
-                                type="button"
-                                data-testid={`channel-roster-dm-${member.memberId}`}
-                                title={`给 ${member.name} 发私聊`}
-                                aria-label={`给 ${member.name} 发私聊`}
-                                className="inline-flex size-6 cursor-pointer items-center justify-center rounded-md border-0 bg-transparent text-(--biu-color-text-muted) hover:bg-(--biu-color-bg-muted) hover:text-(--biu-color-text)"
-                                onClick={() => onOpenDm(member.memberId)}
-                              >
-                                <ChatBubbleLeftEllipsisIcon className="size-3.5" />
-                              </button>
-                            ) : null}
-                          </div>
-                        </div>
-                      )
-                    })}
-                  </div>
-                </div>
               </div>
 
               {/* 底部极简控制条（无刺眼边框，柔表面底） */}
@@ -846,9 +896,29 @@ export const ChannelFloatingSidebar = memo(function ChannelFloatingSidebar({
               </select>
               <div className="min-h-0 flex-1 space-y-1 overflow-y-auto">
                 {!searchQuery.trim() ? (
-                  <div className="py-8 text-center text-[12px] text-(--biu-color-text-subtle)">
-                    输入关键词搜索本聊天记录
-                  </div>
+                  recentChatMessages.length === 0 ? (
+                    <div className="py-8 text-center text-[12px] text-(--biu-color-text-subtle)">
+                      暂无聊天记录
+                    </div>
+                  ) : (
+                    recentChatMessages.map((msg) => (
+                      <button
+                        key={msg.id}
+                        type="button"
+                        data-testid={`channel-chat-msg-${msg.id}`}
+                        className="flex w-full cursor-pointer flex-col gap-0.5 rounded-[10px] border-0 bg-(--biu-color-bg-muted)/40 px-2.5 py-2 text-left transition-colors hover:bg-(--biu-color-bg-popover-hover)"
+                        onClick={() => onJumpToMessage?.(msg.id)}
+                      >
+                        <div className="flex items-center justify-between gap-2 text-[11px] text-(--biu-color-text-subtle)">
+                          <span className="truncate font-medium text-(--biu-color-text)">{msg.senderName}</span>
+                          <span className="shrink-0 tabular-nums">{formatCompactTime(msg.createdAt)}</span>
+                        </div>
+                        <div className="line-clamp-2 text-[12px] leading-relaxed text-(--biu-color-text-muted)">
+                          {msg.text || '[附件消息]'}
+                        </div>
+                      </button>
+                    ))
+                  )
                 ) : searching ? (
                   <div className="py-8 text-center text-[12px] text-(--biu-color-text-subtle)">搜索中…</div>
                 ) : searchHits.length === 0 ? (

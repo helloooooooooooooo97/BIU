@@ -1736,6 +1736,7 @@ export const ChannelStage = memo(function ChannelStage({
             channel={channel}
             isDm={isDm}
             members={members}
+            messages={mainMessages}
             activities={activities}
             myAccountId={myAccountId}
             canManageMembers={Boolean(detail?.canManageMembers)}
