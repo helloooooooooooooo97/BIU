@@ -48,6 +48,7 @@ export {
   TagChip,
   TagChips,
   TagChipCloseMark,
+  actionTone,
   tagTone,
   tagTextColor,
   tagWashColor,

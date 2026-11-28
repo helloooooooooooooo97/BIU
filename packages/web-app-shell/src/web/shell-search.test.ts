@@ -123,10 +123,10 @@ test('session task page plugin hits render tags left of actions', () => {
   assert.match(css, /\.shell-search-hit-icon\s*\{[^}]*color:\s*var\(--biu-color-icon\)/s)
   assert.match(css, /\.shell-search-hit\.is-active \.shell-search-hit-icon[\s\S]*?color:\s*var\(--biu-color-icon-active\)/s)
   assert.match(css, /\.shell-search-hit-action\s*\{[^}]*--biu-tag:\s*var\(--biu-color-ink-gray\)/s)
-  assert.match(css, /\.shell-search-hit-action\.is-danger\s*\{[^}]*--biu-tag:\s*var\(--biu-color-danger\)/s)
-  assert.match(css, /\.shell-search-hit-action\s*\{[^}]*border-radius:\s*var\(--biu-radius-xl\)/s)
-  assert.match(css, /\.shell-search-hit-action\s*\{[^}]*height:\s*22px/s)
-  assert.match(css, /\.shell-search-hit-action\s*\{[^}]*padding:\s*0 var\(--biu-pad-chip-x\)/s)
+  assert.match(css, /\.shell-search-hit-action\.is-danger\s*\{[^}]*--biu-tag:\s*var\(--biu-color-ink-red\)/s)
+  assert.match(css, /\.shell-search-hit-action\s*\{[^}]*border-radius:\s*var\(--biu-radius-full\)/s)
+  assert.match(css, /\.shell-search-hit-action\s*\{[^}]*height:\s*var\(--biu-space-5\)/s)
+  assert.match(css, /\.shell-search-hit-action\s*\{[^}]*padding:\s*0 9px 0 7px/s)
 })
 
 test('search hit icons follow record mark: emoji, else session mascot', () => {

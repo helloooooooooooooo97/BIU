@@ -1,6 +1,6 @@
 import { useSyncExternalStore } from 'react'
 import { BoolBox } from '@biu/biu-ui/bool-box'
-import { TAG_TONE_PURPLE, TagChip, TagChips } from '@biu/biu-ui/tag-chip'
+import { actionTone, TAG_TONE_PURPLE, TagChip, TagChips } from '@biu/biu-ui/tag-chip'
 import {
   ArchiveBoxArrowDownIcon,
   ArrowDownTrayIcon,
@@ -483,11 +483,13 @@ export function ActionCell({
   onRun?: () => void
 }) {
   const label = field.label || fieldKey
-  const glyph = actionIcon(fieldActionId(fieldKey, field), { fallback: false })
+  const actionId = fieldActionId(fieldKey, field)
+  const glyph = actionIcon(actionId, { fallback: false })
   return (
     <button
       type="button"
       className="fsdb-action-btn"
+      style={{ ['--biu-tag' as string]: actionTone(actionId) }}
       aria-label={label}
       onClick={(event) => {
         event.stopPropagation()

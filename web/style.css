@@ -3343,7 +3343,7 @@ body {
 }
 
 .shell-search-hit-action.is-danger {
-  --biu-tag: var(--biu-color-danger);
+  --biu-tag: var(--biu-color-ink-red);
 }
 
 .shell-search-hit-actions .tasks-icon-btn {

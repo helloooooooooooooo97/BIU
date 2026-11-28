@@ -1036,7 +1036,7 @@ button.fsdb-detail-title-icon:hover{background:color-mix(in srgb,var(--biu-color
 .fsdb-action-btn:not(:has(svg)){padding:0 9px}
 .fsdb-action-btn svg{width:12px;height:12px;flex:none;display:block;color:var(--biu-tag)}
 .fsdb-action-btn:hover:not(:disabled){background:color-mix(in srgb,var(--biu-tag) 34%,transparent);color:var(--biu-tag)}
-.fsdb-action-btn.is-danger{--biu-tag:var(--biu-color-danger)}
+.fsdb-action-btn.is-danger{--biu-tag:var(--biu-color-ink-red)}
 .fsdb-action-btn:disabled{opacity:.4;cursor:default}
 .fsdb-page .tasks-table td.is-cell-on{box-shadow:inset 0 0 0 2px var(--biu-color-emphasis)}
 .fsdb-page .tasks-table td.is-cell-on:not(.is-pin-col){position:relative;z-index:6}

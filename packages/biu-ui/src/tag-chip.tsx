@@ -52,6 +52,36 @@ export function tagTone(id: string) {
   return TAG_TONES[hash % TAG_TONES.length]!
 }
 
+/** 动作胶囊共用标签色彩体系（--biu-color-ink-*）：按语义映射红/绿/蓝/橙/紫，其余按 action.id 稳定落入 TAG_TONES。 */
+export function actionTone(id: string, tone?: string): string {
+  if (tone === 'danger' || id === 'uninstall' || id === 'delete' || id === 'remove' || id === 'trash') {
+    return TAG_TONE_RED
+  }
+  if (id === 'start' || id === 'play' || id === 'run' || id === 'open' || id === 'enable' || id === 'restore') {
+    return TAG_TONE_GREEN
+  }
+  if (
+    id === 'add-child' ||
+    id === 'add-subpage' ||
+    id === 'add-subtask' ||
+    id === 'chat' ||
+    id === 'report' ||
+    id === 'progress' ||
+    id === 'deliver' ||
+    id === 'send' ||
+    id === 'fork'
+  ) {
+    return TAG_TONE_BLUE
+  }
+  if (id === 'stop' || id === 'close' || id === 'pause' || id === 'disable') {
+    return TAG_TONE_ORANGE
+  }
+  if (id === 'rename' || id === 'edit' || id === 'sandbox' || id === 'pack') {
+    return TAG_TONE_PURPLE
+  }
+  return tagTone(id)
+}
+
 export function ensureTagChipStyle() {
   if (typeof document === 'undefined') return
   if (document.getElementById(STYLE_ID)) return
