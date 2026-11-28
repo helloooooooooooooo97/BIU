@@ -475,7 +475,6 @@ const CSS = `
 .fsdb-page .tasks-tree-toggle.is-empty:hover{background:transparent}
 .fsdb-page .fsdb-title-text{min-width:0;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:var(--biu-font-weight-medium)}
 .fsdb-page .fsdb-title-host{position:relative;display:flex;align-items:center;gap:6px;min-width:0;width:100%;max-width:100%;min-height:22px;flex:1;overflow:hidden}
-.fsdb-page .fsdb-title-host.has-tree-count{padding-right:24px}
 .fsdb-page .tasks-table tr:hover td:has(.tasks-row-tools-slot) .fsdb-title-host:not(:focus-within){padding-right:50px}
 .fsdb-page .fsdb-title-badges{flex:none;display:inline-flex;align-items:center;gap:2px}
 .fsdb-page .fsdb-title-scope,.fsdb-page .fsdb-title-role{--biu-tag:var(--biu-color-ink-gray);flex:none;display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;color:var(--biu-tag);opacity:.88}
@@ -494,7 +493,7 @@ const CSS = `
 .fsdb-page .tasks-table.is-wrap .fsdb-title-text{white-space:normal}
 .fsdb-page .tasks-title-aside{position:relative;display:inline-flex;align-items:center;gap:2px;pointer-events:none}
 .fsdb-page .tasks-title-zoom{position:relative;display:grid;place-items:center}
-.fsdb-page .tasks-title-zoom .tasks-tree-count,.fsdb-page .tasks-title-zoom .tasks-title-open{grid-area:1/1}
+.fsdb-page .tasks-title-zoom .tasks-title-open{grid-area:1/1}
 .fsdb-page .tasks-title-open{flex:none;color:var(--biu-color-icon);opacity:0;z-index:1;pointer-events:none}
 .fsdb-page .tasks-table td:has(.tasks-row-tools-slot):not(.is-pin-col){position:relative}
 .fsdb-page .tasks-row-tools-slot{position:absolute;top:50%;right:8px;z-index:2;display:inline-flex;align-items:center;gap:2px;width:auto;transform:translateY(-50%);overflow:visible;pointer-events:none}
@@ -504,9 +503,7 @@ const CSS = `
 .fsdb-page .tasks-row-tools{display:inline-flex;align-items:center;gap:2px;flex:none}
 .fsdb-page .tasks-row-tools-slot .tasks-row-tools{position:static;background:transparent}
 .fsdb-page .tasks-table td:has(.fsdb-title-host:focus-within) .tasks-row-tools-slot,.fsdb-page .tasks-table td:has(.fsdb-plain-input:focus) .tasks-row-tools-slot,.fsdb-page .tasks-queue-item:has(.fsdb-title-host:focus-within) .tasks-row-tools,.fsdb-page .tasks-minicard:has(.fsdb-title-host:focus-within) .tasks-row-tools{opacity:0;pointer-events:none}
-.fsdb-page .tasks-table tr:hover .tasks-tree-count,.fsdb-page .tasks-title-zoom:has(.tasks-title-open:focus-visible) .tasks-tree-count{opacity:0}
 .fsdb-page .tasks-title-open:hover{opacity:1;color:var(--biu-color-icon-active);background:var(--biu-color-bg-hover)}
-.fsdb-page .tasks-tree-count{pointer-events:none}
 .fsdb-page .tasks-table.is-truncate:not(.is-wrap) .fsdb-cell{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .fsdb-page .tasks-table.is-truncate:not(.is-wrap) td:has(.biu-tags) .fsdb-cell,.fsdb-page .tasks-table.is-truncate:not(.is-wrap) .fsdb-cell:has(.biu-tags),.fsdb-page .tasks-table.is-truncate:not(.is-wrap) td:has(.fsdb-person-list) .fsdb-cell,.fsdb-page .tasks-table.is-truncate:not(.is-wrap) .fsdb-cell:has(.fsdb-person-list),.fsdb-page .tasks-table.is-truncate:not(.is-wrap) td:has(.fsdb-ref-chips) .fsdb-cell,.fsdb-page .tasks-table.is-truncate:not(.is-wrap) .fsdb-cell:has(.fsdb-ref-chips),.fsdb-page .tasks-table.is-truncate:not(.is-wrap) td:has(.fsdb-files) .fsdb-cell,.fsdb-page .tasks-table.is-truncate:not(.is-wrap) .fsdb-cell:has(.fsdb-files){max-width:100%;overflow:hidden}
 .fsdb-page .tasks-table .fsdb-cell:has(.tasks-tags),.fsdb-page .tasks-table .fsdb-cell:has(.biu-tags),.fsdb-page .tasks-table .fsdb-cell:has(.fsdb-cellselect),.fsdb-page .tasks-table .fsdb-cell:has(.db-cell-select),.fsdb-page .tasks-table .fsdb-cell:has(.db-datetime),.fsdb-page .tasks-table .fsdb-cell:has(.fsdb-tokens),.fsdb-page .tasks-table .fsdb-cell:has(.fsdb-ref-chips),.fsdb-page .tasks-table .fsdb-cell:has(.fsdb-person-list),.fsdb-page .tasks-table .fsdb-cell:has(.fsdb-files),.fsdb-page .tasks-table .fsdb-cell:has(.fsdb-boolbtn),.fsdb-page .tasks-table .fsdb-cell:has(.fsdb-plain-input),.fsdb-page .tasks-table .fsdb-cell:has(.fsdb-thumb-btn),.fsdb-page .fsdb-proprow-v:has(.fsdb-cellselect),.fsdb-page .fsdb-proprow-v:has(.fsdb-tokens),.fsdb-page .fsdb-proprow-v:has(.fsdb-boolbtn){overflow:visible;max-height:none}
